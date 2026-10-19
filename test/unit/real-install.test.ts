@@ -26,17 +26,14 @@ describe.skipIf(!enabled)("installing the real saw", () => {
 
   it("installs the pinned release and it answers as saw", { timeout: 10 * 60_000 }, async () => {
     const noPipx = process.env["SAW_E2E_NO_PIPX"] === "1";
-    const pipxName = process.platform === "win32" ? "pipx.exe" : "pipx";
-    const pathVariable = (process.env["PATH"] ?? "")
-      .split(path.delimiter)
-      .filter((dir) => !noPipx || !defaultIsExecutableFile(path.join(dir, pipxName)))
-      .join(path.delimiter);
+    // A machine without pipx: no pipx program anywhere the installer looks, Homebrew's included.
+    const hidden = (file: string) => noPipx && path.basename(file) === "pipx" && !file.startsWith(sandbox);
     const outcome = await installSaw({
       env: {
         platform: process.platform,
         homedir: sandbox,
-        pathVariable,
-        isExecutableFile: defaultIsExecutableFile,
+        pathVariable: process.env["PATH"],
+        isExecutableFile: (file) => !hidden(file) && defaultIsExecutableFile(file),
       },
       run: noPipx
         ? (binary, args, options) => (args.join(" ").startsWith("-m pipx --version") ? runProgram(binary, ["-m", "no_such_pipx"], options) : runProgram(binary, args, options))
