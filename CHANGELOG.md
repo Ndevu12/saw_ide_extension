@@ -12,3 +12,4 @@
   installs it with pipx without asking, installing pipx first if needed; a failed install says why
   and what to run, with **Retry** and **Copy Diagnostics**. **saw: Install or Repair saw** and the
   `saw.autoInstall` setting.
+- On Windows, where saw does not run yet, says so and points to WSL instead of installing it.

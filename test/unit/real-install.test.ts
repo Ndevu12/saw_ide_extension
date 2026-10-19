@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import * as path from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
@@ -10,7 +10,8 @@ import { tempDir } from "./helpers";
 
 // Installs saw from PyPI into a sandbox, so the machine's own pipx and saw are untouched.
 // Slow and online, so only when asked for: SAW_INSTALL_E2E=1, with SAW_E2E_NO_PIPX=1 to force the pipx bootstrap.
-const enabled = process.env["SAW_INSTALL_E2E"] === "1";
+// Not on Windows, where saw does not run and the extension does not install it.
+const enabled = process.env["SAW_INSTALL_E2E"] === "1" && process.platform !== "win32";
 const sandbox = enabled ? tempDir("saw-e2e-") : "";
 
 describe.skipIf(!enabled)("installing the real saw", () => {
@@ -47,7 +48,8 @@ describe.skipIf(!enabled)("installing the real saw", () => {
     if (outcome.kind !== "installed") {
       throw new Error(JSON.stringify(outcome, null, 2));
     }
-    expect(outcome.binary).toBe(path.join(sandbox, "bin", process.platform === "win32" ? "saw.exe" : "saw"));
+    // macOS's temporary folder is reached through a symlink, which pipx resolves.
+    expect(realpathSync(outcome.binary)).toBe(realpathSync(path.join(sandbox, "bin", "saw")));
     expect(outcome.installedPipx).toBe(noPipx);
     expect(await probe(outcome.binary)).toMatchObject({ kind: "ready", version: [0, 12, 3] });
   });

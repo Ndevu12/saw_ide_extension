@@ -53,7 +53,8 @@ export class Alerts {
       return;
     }
     this.engineWarned = true;
-    const actions = engine.reason === "invalid-setting" ? ["Open Setting", "Show Log"] : ["Install saw", "Show Log"];
+    const actions =
+      engine.reason === "invalid-setting" ? ["Open Setting", "Show Log"] : engine.reason === "unsupported-platform" ? [] : ["Install saw", "Show Log"];
     const choice = await vscode.window.showWarningMessage(`${engine.message} No folder was scanned.`, ...actions);
     if (choice === "Install saw") {
       await vscode.commands.executeCommand("saw.install");

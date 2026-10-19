@@ -6,9 +6,10 @@ import { describe, expect, it } from "vitest";
 
 import { defaultIsExecutableFile, locate, probe } from "../../src/core/locate";
 import { scanFolder } from "../../src/core/scan";
-import { DISGUISED_TASK, tempDir } from "./helpers";
+import { DISGUISED_TASK, onWindows, tempDir } from "./helpers";
 
-// The contract with the real saw: skipped where it is not installed, required in CI.
+// The contract with the real saw: skipped where it is not installed, required in CI. saw does not
+// run on Windows (it imports POSIX-only modules), so there it is not tested.
 const located = locate(process.env["SAW_BIN"] ?? "", {
   platform: process.platform,
   homedir: homedir(),
@@ -18,7 +19,7 @@ const located = locate(process.env["SAW_BIN"] ?? "", {
 const binary = located.kind === "found" ? (located.candidates[0]?.binary ?? "") : "";
 const required = process.env["SAW_CONTRACT_REQUIRED"] === "1";
 
-describe.skipIf(!binary && !required)("the installed saw", () => {
+describe.skipIf(onWindows || (!binary && !required))("the installed saw", () => {
   it("is found and new enough", async () => {
     expect(located.kind).toBe("found");
     expect((await probe(binary)).kind).toBe("ready");

@@ -17,8 +17,11 @@ on each workspace folder and shows what it finds:
 
 ## Requirements
 
-Python 3.11 or later, on the machine where the files are (for Remote SSH, WSL and dev containers,
-that is the remote). Nothing else: the extension sets up saw itself.
+Linux or macOS with Python 3.11 or later, on the machine where the files are (for Remote SSH, WSL
+and dev containers, that is the remote). Nothing else: the extension sets up saw itself.
+
+saw does not run on Windows yet. On Windows, open the folder in WSL (Remote - WSL): the extension
+then runs, installs saw and scans inside WSL.
 
 ## Setting up saw
 

@@ -13,7 +13,11 @@ export type Unavailable =
   | "unrecognised"
   /** The installer already told the operator why, with what to do. */
   | "install-failed"
-  | "install-cancelled";
+  | "install-cancelled"
+  | "unsupported-platform";
+
+const WINDOWS_MESSAGE =
+  "saw does not run on Windows yet. Open this folder in WSL (Remote - WSL) to scan it: the extension sets up saw there.";
 
 export type Engine =
   | { kind: "ready"; binary: string; version: string }
@@ -57,6 +61,9 @@ export class EngineResolver {
         );
         return this.find();
       }
+      if (process.platform === "win32") {
+        return this.unsupported();
+      }
       return this.installThenFind("Install or repair was asked for.");
     })();
     return this.pending;
@@ -67,10 +74,19 @@ export class EngineResolver {
     if (found.kind === "ready" || found.reason === "invalid-setting") {
       return found;
     }
+    // saw imports POSIX-only modules at start-up, so an install on Windows could never run.
+    if (process.platform === "win32") {
+      return this.unsupported();
+    }
     if (!this.settings().autoInstall) {
       return { ...found, message: `${found.message} saw.autoInstall is off: run saw: Install or Repair saw to install it.` };
     }
     return this.installThenFind(found.message);
+  }
+
+  private unsupported(): Found {
+    this.log.warn(WINDOWS_MESSAGE);
+    return { kind: "unavailable", reason: "unsupported-platform", message: WINDOWS_MESSAGE };
   }
 
   private async installThenFind(why: string): Promise<Found> {
