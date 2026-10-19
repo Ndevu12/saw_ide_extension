@@ -1,0 +1,23 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      dev-tooling:
+        patterns: ["*"]
+    ignore:
+      # engines.vscode is the oldest editor supported; @types/vscode moves only with it.
+      - dependency-name: "@types/vscode"
+      # The extension host of VS Code 1.96 runs Node 20.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

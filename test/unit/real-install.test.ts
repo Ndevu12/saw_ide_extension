@@ -1,0 +1,54 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import * as path from "node:path";
+
+import { afterAll, describe, expect, it } from "vitest";
+
+import { installSaw } from "../../src/core/install";
+import { defaultIsExecutableFile, probe } from "../../src/core/locate";
+import { runProgram } from "../../src/core/run";
+import { tempDir } from "./helpers";
+
+// Installs saw from PyPI into a sandbox, so the machine's own pipx and saw are untouched.
+// Slow and online, so only when asked for: SAW_INSTALL_E2E=1, with SAW_E2E_NO_PIPX=1 to force the pipx bootstrap.
+const enabled = process.env["SAW_INSTALL_E2E"] === "1";
+const sandbox = enabled ? tempDir("saw-e2e-") : "";
+
+describe.skipIf(!enabled)("installing the real saw", () => {
+  const saved = { ...process.env };
+  process.env["PIPX_HOME"] = path.join(sandbox, "pipx-home");
+  process.env["PIPX_BIN_DIR"] = path.join(sandbox, "bin");
+  process.env["PIPX_MAN_DIR"] = path.join(sandbox, "man");
+  afterAll(() => {
+    process.env = saved;
+    rmSync(sandbox, { recursive: true, force: true });
+  });
+
+  it("installs the pinned release and it answers as saw", { timeout: 10 * 60_000 }, async () => {
+    const noPipx = process.env["SAW_E2E_NO_PIPX"] === "1";
+    const pipxName = process.platform === "win32" ? "pipx.exe" : "pipx";
+    const pathVariable = (process.env["PATH"] ?? "")
+      .split(path.delimiter)
+      .filter((dir) => !noPipx || !defaultIsExecutableFile(path.join(dir, pipxName)))
+      .join(path.delimiter);
+    const outcome = await installSaw({
+      env: {
+        platform: process.platform,
+        homedir: sandbox,
+        pathVariable,
+        isExecutableFile: defaultIsExecutableFile,
+      },
+      run: noPipx
+        ? (binary, args, options) => (args.join(" ").startsWith("-m pipx --version") ? runProgram(binary, ["-m", "no_such_pipx"], options) : runProgram(binary, args, options))
+        : runProgram,
+      makeTempDir: () => mkdtempSync(path.join(sandbox, "boot-")),
+      removeDir: (dir) => rmSync(dir, { recursive: true, force: true }),
+      pins: { saw: "0.12.3", pipx: "1.18.4" },
+    });
+    if (outcome.kind !== "installed") {
+      throw new Error(JSON.stringify(outcome, null, 2));
+    }
+    expect(outcome.binary).toBe(path.join(sandbox, "bin", process.platform === "win32" ? "saw.exe" : "saw"));
+    expect(outcome.installedPipx).toBe(noPipx);
+    expect(await probe(outcome.binary)).toMatchObject({ kind: "ready", version: [0, 12, 3] });
+  });
+});

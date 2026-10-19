@@ -1,0 +1,69 @@
+import * as vscode from "vscode";
+
+import type { FolderVerdict } from "../core/verdict";
+import type { Model } from "./model";
+import { VERDICT_LABEL } from "./present";
+
+const ICON: Record<FolderVerdict, string> = {
+  clean: "$(shield)",
+  residue: "$(info)",
+  suspicious: "$(warning)",
+  incomplete: "$(circle-slash)",
+  infected: "$(error)",
+};
+
+const BACKGROUND: Partial<Record<FolderVerdict, vscode.ThemeColor>> = {
+  suspicious: new vscode.ThemeColor("statusBarItem.warningBackground"),
+  incomplete: new vscode.ThemeColor("statusBarItem.warningBackground"),
+  infected: new vscode.ThemeColor("statusBarItem.errorBackground"),
+};
+
+export class StatusBar implements vscode.Disposable {
+  private readonly item = vscode.window.createStatusBarItem("saw.verdict", vscode.StatusBarAlignment.Left, 100);
+  private readonly subscription: vscode.Disposable;
+
+  constructor(private readonly model: Model) {
+    this.item.name = "saw verdict";
+    this.subscription = model.onDidChange(() => this.render());
+    this.render();
+    this.item.show();
+  }
+
+  private render(): void {
+    const engine = this.model.engine;
+    const states = this.model.states();
+    if (engine?.kind === "installing") {
+      this.item.text = "$(sync~spin) saw: installing";
+      this.item.tooltip = "saw is being installed with pipx. Folders are scanned as soon as it is ready.";
+      this.item.backgroundColor = undefined;
+      this.item.command = "saw.showOutput";
+      return;
+    }
+    if (engine?.kind === "unavailable") {
+      this.item.text = "$(circle-slash) saw: not available";
+      this.item.tooltip = `${engine.message}\nSince no scan ran, no folder is shown as clean. Click to install or repair saw.`;
+      this.item.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
+      this.item.command = engine.reason === "invalid-setting" ? "saw.showOutput" : "saw.install";
+      return;
+    }
+    this.item.command = "workbench.view.extension.saw";
+    const scanning = states.some((state) => state.scanning);
+    const overall = this.model.overall();
+    if (!overall) {
+      this.item.text = scanning ? "$(sync~spin) saw: scanning" : "$(shield) saw";
+      this.item.tooltip = scanning ? "saw is scanning this workspace." : "No scan has run yet.";
+      this.item.backgroundColor = undefined;
+      return;
+    }
+    this.item.text = `${scanning ? "$(sync~spin)" : ICON[overall]} saw: ${VERDICT_LABEL[overall]}`;
+    this.item.backgroundColor = BACKGROUND[overall];
+    this.item.tooltip = states
+      .flatMap((state) => (state.last ? [`${state.folder.name}: ${VERDICT_LABEL[state.last.verdict]}`] : []))
+      .join("\n");
+  }
+
+  dispose(): void {
+    this.subscription.dispose();
+    this.item.dispose();
+  }
+}
