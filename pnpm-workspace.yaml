@@ -1,0 +1,13 @@
+# A supply-chain scanner's own build is a target. These settings keep a compromised dev
+# dependency from running on install, or from arriving the day it is published.
+minimumReleaseAge: 1440
+trustPolicy: no-downgrade
+# Minutes. Releases older than this predate many packages adopting provenance; a takeover arrives
+# as a new release, which this still checks.
+trustPolicyIgnoreAfter: 43200
+blockExoticSubdeps: true
+strictDepBuilds: true
+allowBuilds:
+  # Only verifies marketplace signatures on install; packaging and publishing do not use it.
+  '@vscode/vsce-sign': false
+  esbuild: true

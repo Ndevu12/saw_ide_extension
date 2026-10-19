@@ -1,0 +1,186 @@
+{
+  "name": "saw",
+  "displayName": "StayAwakeBot (saw)",
+  "description": "Supply-chain worm hunting in your editor: the saw verdict for every folder you open, before you trust it.",
+  "version": "0.1.0",
+  "publisher": "ndevu12",
+  "license": "BSD-3-Clause",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ndevu12/saw_ide_extension"
+  },
+  "bugs": {
+    "url": "https://github.com/Ndevu12/saw_ide_extension/issues"
+  },
+  "homepage": "https://saw-docs.ndevuspace.com/",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "security",
+    "supply-chain",
+    "malware",
+    "worm",
+    "saw",
+    "stayawakebot"
+  ],
+  "main": "./dist/extension.js",
+  "saw": {
+    "saw": "0.12.3",
+    "pipx": "1.18.4"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Scanning works in Restricted Mode: saw only reads the folder. The settings that choose which program runs are read from your user settings only.",
+      "restrictedConfigurations": [
+        "saw.path",
+        "saw.configPath",
+        "saw.autoInstall"
+      ]
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "saw reads files from disk, so it needs a folder on this machine or on the remote it is connected to."
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "saw.scanWorkspace",
+        "title": "Scan Workspace",
+        "category": "saw",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "saw.showOutput",
+        "title": "Show Log",
+        "category": "saw"
+      },
+      {
+        "command": "saw.install",
+        "title": "Install or Repair saw",
+        "category": "saw"
+      },
+      {
+        "command": "saw.copyDiagnostics",
+        "title": "Copy Install Diagnostics",
+        "category": "saw"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "saw",
+          "title": "saw",
+          "icon": "media/saw.svg"
+        }
+      ]
+    },
+    "views": {
+      "saw": [
+        {
+          "id": "saw.findings",
+          "name": "Verdict"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "saw.findings",
+        "contents": "No scan has run yet.\n[Scan Workspace](command:saw.scanWorkspace)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "saw.scanWorkspace",
+          "when": "view == saw.findings",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "saw",
+      "properties": {
+        "saw.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Absolute path to the `saw` program. Leave empty to find it on `PATH` or in `~/.local/bin`, or to use the one this extension installs."
+        },
+        "saw.autoInstall": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "markdownDescription": "Install saw with pipx when it is missing or too old, installing pipx first when the machine has none. Needs Python 3.11 or later and access to PyPI. Turn it off where software is installed only by an administrator."
+        },
+        "saw.configPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Absolute path to your own saw config (allowlist), passed as `saw scan -c`. A config inside the scanned folder is never used."
+        },
+        "saw.scanOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "description": "Scan every workspace folder when the window opens, including folders you have not trusted yet."
+        },
+        "saw.scanOnChange": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "markdownDescription": "Scan a folder again when a file in it is saved, or when a file that can run code changes on disk (`.vscode/`, `package.json`, lockfiles, workflows)."
+        },
+        "saw.scanTimeoutSeconds": {
+          "type": "number",
+          "default": 120,
+          "minimum": 5,
+          "scope": "machine",
+          "description": "How long one scan of one folder may take before it is stopped and reported as incomplete."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "pretest:integration": "pnpm run build && tsc -p tsconfig.test.json",
+    "test:integration": "vscode-test",
+    "package": "pnpm run check-types && node esbuild.mjs --production && vsce package --no-dependencies --out saw.vsix"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "~20.19.0",
+    "@types/vscode": "~1.96.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "ovsx": "^1.3.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.60.0",
+    "vitest": "^5.0.5"
+  },
+  "packageManager": "pnpm@11.20.0"
+}
