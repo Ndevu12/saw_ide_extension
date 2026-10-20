@@ -91,7 +91,7 @@ describe("installSaw", () => {
   });
 
   it("installs pipx first from a throwaway environment when the machine has none, then removes it", async () => {
-    const { deps: d, calls, removed } = deps(["/usr/bin/python3.13", "/home/me/.local/bin/saw"], (cmd) => {
+    const { deps: d, calls, removed, steps } = deps(["/usr/bin/python3.13", "/home/me/.local/bin/saw"], (cmd) => {
       if (cmd.startsWith("/usr/bin/python3.13 -c")) return PYTHON_313;
       if (cmd === "/usr/bin/python3.13 -m pipx --version") return { exitCode: 1, stderr: "No module named pipx" };
       if (cmd === "/usr/bin/python3.13 -m venv /tmp/boot/venv") return {};
@@ -108,6 +108,9 @@ describe("installSaw", () => {
       "/tmp/boot/venv/bin/python -m pipx install --force --python /usr/bin/python3.13 --pip-args=--only-binary=:all: pipx==1.18.4",
     );
     expect(removed).toEqual(["/tmp/boot"]);
+    expect(steps).toEqual(["find-python", "find-pipx", "create-venv", "bootstrap-pipx", "install-pipx", "install-saw", "find-saw"]);
+    const failed = outcome.steps.filter((step) => !step.ok);
+    expect(failed).toMatchObject([{ command: "/usr/bin/python3.13 -m pipx --version", probe: true }]);
   });
 
   it("stops at the first failing step, still removing the throwaway environment", async () => {
@@ -148,7 +151,7 @@ describe("diagnose", () => {
     kind: "failed",
     failedStep,
     tried,
-    steps: [{ name: failedStep, command: "x", exitCode: 1, output, ok: false }],
+    steps: [{ name: failedStep, command: "x", exitCode: 1, output, ok: false, probe: false }],
   });
   const debian = { platform: "linux" as const, distro: ["ubuntu", "debian"] };
 

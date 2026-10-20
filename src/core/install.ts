@@ -19,6 +19,8 @@ export interface Step {
   exitCode: number | null;
   output: string;
   ok: boolean;
+  /** A check that is allowed to fail, such as looking for a pipx the machine may not have. */
+  probe: boolean;
 }
 
 export type InstallResult =
@@ -33,7 +35,7 @@ export interface InstallDeps {
   removeDir: (dir: string) => void;
   pins: Pins;
   signal?: AbortSignal;
-  /** Told before each step starts, for progress. */
+  /** Told when a step starts, once per step even when it runs several commands, for progress. */
   onStep?: (name: StepName) => void;
   stepTimeoutMs?: number;
 }
@@ -66,8 +68,16 @@ export async function installSaw(deps: InstallDeps): Promise<InstallResult> {
   const p = deps.env.platform === "win32" ? path.win32 : path.posix;
   const exe = (name: string) => (deps.env.platform === "win32" ? `${name}.exe` : name);
 
+  let announced: StepName | undefined;
+  const announce = (name: StepName) => {
+    if (name !== announced) {
+      announced = name;
+      deps.onStep?.(name);
+    }
+  };
+
   const step = async (name: StepName, launcher: Launcher, args: string[], options: { mayFail?: boolean } = {}): Promise<RunResult> => {
-    deps.onStep?.(name);
+    announce(name);
     const result = await deps.run(launcher.binary, [...launcher.args, ...args], {
       timeoutMs,
       ...(deps.signal ? { signal: deps.signal } : {}),
@@ -82,6 +92,7 @@ export async function installSaw(deps: InstallDeps): Promise<InstallResult> {
       exitCode: result.exitCode,
       output: tail(result.spawnError ?? (result.timedOut ? "timed out" : `${result.stdout}\n${result.stderr}`)),
       ok,
+      probe: options.mayFail === true,
     });
     if (!ok && !options.mayFail) {
       throw new StepFailed(name);
@@ -92,12 +103,12 @@ export async function installSaw(deps: InstallDeps): Promise<InstallResult> {
   let tried: string[] = [];
   let temp: string | undefined;
   try {
-    deps.onStep?.("find-python");
+    announce("find-python");
     const search = await findPython(deps.env, deps.run);
     tried = search.tried;
     const python: Python | undefined = search.found;
     if (!python) {
-      steps.push({ name: "find-python", command: "find Python 3.11+", exitCode: null, output: tried.join("\n") || "no interpreter on PATH", ok: false });
+      steps.push({ name: "find-python", command: "find Python 3.11+", exitCode: null, output: tried.join("\n") || "no interpreter on PATH", ok: false, probe: false });
       return { kind: "failed", failedStep: "find-python", steps, tried };
     }
     const system: Launcher = { binary: python.executable, args: [] };
@@ -124,7 +135,7 @@ export async function installSaw(deps: InstallDeps): Promise<InstallResult> {
     const binDir = (await step("find-saw", pipx, ["environment", "--value", "PIPX_BIN_DIR"])).stdout.trim();
     const binary = p.join(binDir, exe("saw"));
     if (!binDir || !deps.env.isExecutableFile(binary)) {
-      steps.push({ name: "find-saw", command: `check ${binary}`, exitCode: null, output: "pipx finished, but saw is not there", ok: false });
+      steps.push({ name: "find-saw", command: `check ${binary}`, exitCode: null, output: "pipx finished, but saw is not there", ok: false, probe: false });
       return { kind: "failed", failedStep: "find-saw", steps, tried };
     }
     return { kind: "installed", binary, binDir, pipx: pipx.binary, installedPipx, steps };

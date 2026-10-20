@@ -131,7 +131,7 @@ export class Installer {
     );
     for (const step of result.steps) {
       const line = `${step.ok ? "ok" : `failed (${step.exitCode ?? "did not run"})`}: ${step.command}`;
-      if (step.ok) {
+      if (step.ok || (step.probe && result.kind === "installed")) {
         this.log.debug(line);
       } else {
         this.log.warn(`${line}\n${step.output}`);
