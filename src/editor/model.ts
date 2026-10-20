@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-import type { AuditVerdict, HookStatus } from "../core/actions";
+import type { AuditDetails, AuditVerdict, HookStatus } from "../core/actions";
 import type { ScanOutcome } from "../core/scan";
 import { strongest, type FolderVerdict } from "../core/verdict";
 import type { Engine } from "./engine";
@@ -18,6 +18,8 @@ export interface AuditRecord {
   verdict: AuditVerdict;
   /** saw's own rotation-safety sentence, when the report had one. */
   sentence: string | undefined;
+  /** What `saw audit --json` said beyond the verdict, from a saw that has it. */
+  details?: AuditDetails | undefined;
   at: number;
 }
 

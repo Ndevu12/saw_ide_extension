@@ -221,7 +221,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
       case "audit": {
         const audit = this.model.machine.audit;
         const finished = this.auditRun?.finishedAt !== undefined;
-        return auditReport({ run: this.auditRun, verdict: finished ? audit?.verdict : undefined, sentence: finished ? audit?.sentence : undefined, sawVersion }, copy);
+        return auditReport({ run: this.auditRun, verdict: finished ? audit?.verdict : undefined, sentence: finished ? audit?.sentence : undefined, details: finished ? audit?.details : undefined, sawVersion }, copy);
       }
       case "hooks":
         return hooksReport({

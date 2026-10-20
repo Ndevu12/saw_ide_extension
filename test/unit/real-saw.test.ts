@@ -5,7 +5,8 @@ import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { fixArgs, HOOK_STATUS_ARGS, readFix, readHookStatus } from "../../src/core/actions";
+import { fixArgs, hookArgs, readFix, readHookStatus } from "../../src/core/actions";
+import { NO_CAPABILITIES } from "../../src/core/capabilities";
 import { defaultIsExecutableFile, locate, probe } from "../../src/core/locate";
 import { runProgram } from "../../src/core/run";
 import { scanFolder } from "../../src/core/scan";
@@ -79,7 +80,7 @@ describe.skipIf(onWindows || (!binary && !required))("the installed saw", () => 
   }, 180_000);
 
   it("answers hook status in a shape this extension reads", async () => {
-    const run = await runProgram(binary, HOOK_STATUS_ARGS, { timeoutMs: 30_000 });
+    const run = await runProgram(binary, hookArgs("status", NO_CAPABILITIES), { timeoutMs: 30_000 });
     expect(readHookStatus(`${run.stdout}\n${run.stderr}`, run.exitCode).kind).not.toBe("unknown");
   }, 60_000);
 });

@@ -31,7 +31,8 @@ And it acts, when you ask:
   the folder is scanned again when saw is done.
 - **Audit this machine.** **saw: Audit This Machine** runs `saw audit` and tells you, in saw's own
   words, whether changing your passwords and tokens is safe yet. Changing them while something on
-  the machine still watches them can set off code that deletes your files.
+  the machine still watches them can set off code that deletes your files. With a saw that
+  reports its audit as JSON, the report lists the items to confirm first, then the other findings.
 - **Scan-on-clone hooks.** The saw view shows whether saw's git hooks are in place, so every clone,
   pull and branch switch is scanned, and installs or repairs them in one click.
 

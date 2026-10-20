@@ -118,6 +118,27 @@ describe("the command reports", () => {
     expect(auditReport({ run: undefined, verdict: undefined, sentence: undefined, sawVersion: undefined }, "preview")).toContain("has not been audited");
   });
 
+  it("fix: where the clean-up is, what it removed, and work it could not save", () => {
+    const details = { partial: false, branch: "security/auto-clean-main", base: "main", removed: [".vscode/tasks.json"], uncommitted: { branch: "", files: 0, withheld: 0, unsaved: 0, unread: 0, reason: "no git identity" }, historyHoldsPayload: true, needsReview: ["postinstall in package.json"] };
+    const text = fixReport({ folderName: "w", folderPath: "/w", run, outcome: { kind: "prepared", needsReview: true, details }, sawVersion: undefined }, "preview");
+    expect(text).toContain("The local branch `security/auto-clean-main` from `main`. To review it: `git diff main...security/auto-clean-main`");
+    expect(text).toContain("**git history still holds the malicious code.**");
+    expect(text).toContain("**It could not be saved on a branch, and is on disk only.** no git identity");
+    expect(text).toContain("## Left for you to decide\n\n- postinstall in package\\.json");
+    expect(text).toContain("## Removed\n\n- `.vscode/tasks.json`");
+  });
+
+  it("audit: the items to confirm first, then the rest, what was not read and what it covers", () => {
+    const finding = (id: string, title: string) => ({ id, severity: "medium", title, detail: "", fix: "", confidence: "heuristic", process: undefined });
+    const details = { toConfirm: ["b"], findings: [finding("a", "a cron job"), finding("b", "ssh-agent holds keys")], incomplete: [{ probe: "browsers", reason: "permission denied" }], scopeNotes: ["user processes only"] };
+    const text = auditReport({ run, verdict: "to-confirm", sentence: undefined, details, sawVersion: undefined }, "preview");
+    expect(text).toContain("## Safe once you confirm the items below");
+    expect(text.indexOf("## Confirm these are yours")).toBeLessThan(text.indexOf("## Findings"));
+    expect(text).toContain("- **medium** · heuristic · ssh\\-agent holds keys");
+    expect(text).toContain("## Not read\n\n- `browsers`: permission denied");
+    expect(text).toContain("## What this audit covers\n\n- user processes only");
+  });
+
   it("hooks: the state, what to run, and the last install", () => {
     expect(hooksReport({ status: { kind: "installed", events: ["post-checkout"], problems: [] }, checkedAt: 0, change: undefined, sawVersion: undefined }, "preview"))
       .toContain("## In place");

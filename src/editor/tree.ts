@@ -155,6 +155,7 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
     }
     const looks = {
       "no-hazard": { text: "no hazard found", icon: new vscode.ThemeIcon("pass", new vscode.ThemeColor("testing.iconPassed")) },
+      "to-confirm": { text: "safe once you confirm saw's items", icon: new vscode.ThemeIcon("warning", new vscode.ThemeColor("problemsWarningIcon.foreground")) },
       "rotation-unsafe": { text: "do not change them yet", icon: new vscode.ThemeIcon("error", new vscode.ThemeColor("problemsErrorIcon.foreground")) },
       incomplete: { text: "not known to be safe", icon: new vscode.ThemeIcon("warning", new vscode.ThemeColor("problemsWarningIcon.foreground")) },
       failed: { text: "audit did not finish", icon: new vscode.ThemeIcon("circle-slash") },

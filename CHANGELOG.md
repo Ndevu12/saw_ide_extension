@@ -21,6 +21,11 @@
 - The saw view shows whether saw's scan-on-clone git hooks are in place, and installs or repairs
   them.
 - Scans again after a checkout, pull, merge or rebase.
+- Asks saw what it can do (`saw capabilities --json`) and uses the structured output of a saw that
+  has it: the audit's findings, the items to confirm first and what it could not read; each hook
+  problem with what repairs it; and, after **Fix…**, the clean-up branch, what was removed, and a
+  warning when uncommitted work could not be saved on a branch. An older saw is read as before, and
+  a report in a newer schema than the extension reads says to update the extension.
 - Installs stayawakebot 0.13.1, and moves a saw it installed earlier up to it.
 - A read-only `saw_folderVerdict` tool for AI agents in the editor: the folder's verdict from a scan
   of the latest changes, with the instruction to stop and ask you unless it is clean or residue.
