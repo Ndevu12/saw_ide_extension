@@ -6,11 +6,9 @@
 
 ### Changed
 
-- The extension is called **SAW BOT**, and its ID is now `Ndevu12.stayawakebot`, after saw's PyPI
-  package, because the Visual Studio Marketplace already has an extension named `saw`. Its view,
-  command prefix (**SAW BOT: Scan Workspace** and so on), settings section, status bar and log say
-  SAW BOT; `saw` still means the program it runs. Command IDs and `saw.*` settings are unchanged.
-  `Ndevu12.saw` 0.1.0 on Open VSX is the same extension under the old name.
+- The extension is now `Ndevu12.stayawakebot`, after saw's PyPI package, because the Visual
+  Studio Marketplace already has an extension named `saw`. Its commands, settings and the `saw`
+  program are unchanged. `Ndevu12.saw` 0.1.0 on Open VSX is the same extension under the old name.
 
 ## [0.1.0] - 2026-10-20
 

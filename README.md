@@ -1,4 +1,4 @@
-# SAW BOT: saw in VS Code-compatible editors
+# StayAwakeBot (saw) for VS Code-compatible editors
 
 The [saw](https://saw-docs.ndevuspace.com/) verdict for every folder you open, in VS Code, Cursor,
 Antigravity, Devin Desktop (formerly Windsurf) and VSCodium.
@@ -10,18 +10,18 @@ on each workspace folder and shows what it finds:
 - **Before you trust a folder.** Scanning only reads files, so it runs in Restricted Mode. When saw
   confirms malware in a folder you have not trusted, the extension tells you before you trust it.
 - **In the Problems panel.** Confirmed findings are errors, heuristic ones are warnings.
-- **In the status bar and the SAW BOT view.** Each folder's verdict: clean, suspicious, residue,
+- **In the status bar and the saw view.** Each folder's verdict: clean, suspicious, residue,
   infected, or could not scan. A folder that could not be scanned fully is never shown as clean.
 - **As things change.** A saved file, a checkout, a pull or a package install that changes
   `.vscode/`, `package.json`, a lockfile, a workflow or a git hook triggers another scan.
-- **In a report you can read.** **Open Report** (on a folder in the SAW BOT view, in the alerts, or
-  **SAW BOT: Open Report**) opens the folder's scan as a document in an editor tab: the verdict, what
+- **In a report you can read.** **Open Report** (on a folder in the saw view, in the alerts, or
+  **saw: Open Report**) opens the folder's scan as a document in an editor tab: the verdict, what
   to do, every finding with its remedy and evidence, and why a scan is not verified. Fix, Audit and
   the hook commands open their own report the same way, and it follows saw as it works.
 
 And it acts, when you ask:
 
-- **Fix a folder.** On an infected folder, **Fix…** (in the alert, the SAW BOT view or **SAW BOT: Fix
+- **Fix a folder.** On an infected folder, **Fix…** (in the alert, the saw view or **saw: Fix
   Folder…**) runs `saw fix` after you confirm. saw removes what it confirms from the checkout,
   together with the installed packages, build output and lockfile, and prepares the clean-up on a
   new local branch. It first tries to keep what you had not committed on a local
@@ -29,11 +29,11 @@ And it acts, when you ask:
   you when it does not. Nothing is pushed. It works in Restricted Mode: saw runs git with the repository's own hooks and
   settings switched off, so nothing from the folder runs. Its report opens in an editor tab, and
   the folder is scanned again when saw is done.
-- **Audit this machine.** **SAW BOT: Audit This Machine** runs `saw audit` and tells you, in saw's own
+- **Audit this machine.** **saw: Audit This Machine** runs `saw audit` and tells you, in saw's own
   words, whether changing your passwords and tokens is safe yet. Changing them while something on
   the machine still watches them can set off code that deletes your files. With a saw that
   reports its audit as JSON, the report lists the items to confirm first, then the other findings.
-- **Scan-on-clone hooks.** The SAW BOT view shows whether saw's git hooks are in place, so every clone,
+- **Scan-on-clone hooks.** The saw view shows whether saw's git hooks are in place, so every clone,
   pull and branch switch is scanned, and installs or repairs them in one click.
 
 And it answers AI agents:
@@ -90,7 +90,7 @@ shows **saw: installing** until saw is ready, and the first scan starts on its o
 
 You hear from the extension only if something needs you. If the install fails, one notification
 says why and what to run (for example, the command that installs Python on your system), with
-**Retry**, **Copy Diagnostics** for an issue report, and **Show Log**. **SAW BOT: Install or Repair
+**Retry**, **Copy Diagnostics** for an issue report, and **Show Log**. **saw: Install or Repair
 saw** reinstalls it at any time.
 
 Turn off `saw.autoInstall` where software is installed only by an administrator; the extension

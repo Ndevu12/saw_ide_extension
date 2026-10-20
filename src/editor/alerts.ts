@@ -33,7 +33,7 @@ export class Alerts {
 
   private async infected(folder: vscode.WorkspaceFolder, outcome: Settled): Promise<void> {
     const count = confirmedCount(outcome);
-    const what = `SAW BOT: ${folder.name} is INFECTED — ${count} confirmed finding${count === 1 ? "" : "s"}.`;
+    const what = `saw: ${folder.name} is INFECTED — ${count} confirmed finding${count === 1 ? "" : "s"}.`;
     const act = "saw can remove what it confirms; nothing from the folder runs while it does.";
     const choice = vscode.workspace.isTrusted
       ? await vscode.window.showErrorMessage(`${what} ${act}`, "Fix…", "Open Report")

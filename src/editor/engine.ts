@@ -90,7 +90,7 @@ export class EngineResolver {
       return this.unsupported();
     }
     if (!this.settings().autoInstall) {
-      return { ...found, message: `${found.message} saw.autoInstall is off: run SAW BOT: Install or Repair saw to install it.` };
+      return { ...found, message: `${found.message} saw.autoInstall is off: run saw: Install or Repair saw to install it.` };
     }
     return this.installThenFind(found.message);
   }
@@ -107,7 +107,7 @@ export class EngineResolver {
       case "failed":
         return { kind: "unavailable", reason: "install-failed", message: `saw could not be installed. ${outcome.diagnosis.cause}` };
       case "cancelled":
-        return { kind: "unavailable", reason: "install-cancelled", message: "Installing saw was cancelled. Run SAW BOT: Install or Repair saw to try again." };
+        return { kind: "unavailable", reason: "install-cancelled", message: "Installing saw was cancelled. Run saw: Install or Repair saw to try again." };
       case "installed":
       case "installed-elsewhere": {
         const found = await this.find();
