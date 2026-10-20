@@ -7,6 +7,7 @@ import { Controller } from "./editor/controller";
 import { Diagnostics } from "./editor/diagnostics";
 import { EngineResolver } from "./editor/engine";
 import { Installer, readPins } from "./editor/installer";
+import { SawMcpRegistration } from "./editor/mcp";
 import { Model } from "./editor/model";
 import { Reports } from "./editor/reports";
 import { readSettings } from "./editor/settings";
@@ -45,6 +46,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     reports,
     tree,
     new StatusBar(model),
+    new SawMcpRegistration(model, readSettings, log),
     vscode.window.registerTreeDataProvider("saw.findings", tree),
     vscode.commands.registerCommand("saw.scanWorkspace", () => {
       engines.reset();
