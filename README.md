@@ -35,8 +35,25 @@ And it acts, when you ask:
 Linux or macOS with Python 3.11 or later, on the machine where the files are (for Remote SSH, WSL
 and dev containers, that is the remote). Nothing else: the extension sets up saw itself.
 
-saw does not run on Windows yet. On Windows, open the folder in WSL (Remote - WSL): the extension
-then runs, installs saw and scans inside WSL.
+### Remote windows
+
+In a Remote - SSH, WSL or dev container window, the extension runs on the remote machine. It finds
+or installs saw there, scans the remote's files, and **Fix…** and the hooks act on the remote's git.
+**Audit This Machine** audits that remote machine (the server, the WSL distribution or the
+container), not the computer the editor's window is on.
+
+### Windows
+
+saw does not run on native Windows yet, so the extension does not install it there. Use WSL:
+
+1. Install WSL with Ubuntu: `wsl --install` in an administrator PowerShell, then restart.
+2. In Ubuntu, install what saw needs once: `sudo apt install python3 python3-venv pipx`. Ubuntu
+   as WSL installs it has Python but cannot create the environment saw is installed into; without
+   this step, the extension tells you to run that command.
+3. Open your project in a WSL window: in VS Code, install the WSL extension and run **WSL: Open
+   Folder in WSL…**; other editors such as Cursor have their own WSL remote. Keep the project on
+   the Linux side, for example `~/code/project` rather than `/mnt/c/…`.
+4. Install this extension in the WSL window when asked. It installs saw inside WSL and scans.
 
 ## Setting up saw
 

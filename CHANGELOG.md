@@ -12,7 +12,8 @@
   installs it with pipx without asking, installing pipx first if needed; a failed install says why
   and what to run, with **Retry** and **Copy Diagnostics**. **saw: Install or Repair saw** and the
   `saw.autoInstall` setting.
-- On Windows, where saw does not run yet, says so and points to WSL instead of installing it.
+- On Windows, where saw does not run yet, says so and points to WSL instead of installing it. The
+  README explains remote windows, and setting up WSL step by step.
 - **Fix…** on an infected folder runs `saw fix` after you confirm, in Restricted Mode too, shows
   its report in a terminal and scans the folder again. Nothing is pushed.
 - **saw: Audit This Machine** runs `saw audit` and repeats its verdict on whether changing

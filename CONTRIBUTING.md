@@ -12,11 +12,24 @@ pnpm test             # unit + contract tests (contract tests run when saw is in
 SAW_INSTALL_E2E=1 SAW_E2E_NO_PIPX=1 pnpm exec vitest run test/unit/real-install.test.ts
                       # the real install from PyPI, into a sandbox (your pipx is untouched)
 pnpm run test:integration   # in a real VS Code, the oldest version supported
+pnpm run test:linux   # the install, in WSL's Ubuntu, dev-container and bare Debian images (Docker)
 pnpm run lint && pnpm run check-types
 pnpm run package      # saw.vsix
 ```
 
 Press F5 in the editor to run the extension in a development host.
+
+## Remote windows
+
+In a remote window (Remote - SSH, WSL, Dev Containers, or Cursor's equivalents) the extension runs
+on the remote machine (`extensionKind: workspace`), so saw is found or installed there.
+`pnpm test:linux` covers the install on those machines. Before a release, also check by hand with
+`saw.vsix` installed in each kind of remote window:
+
+- the status bar shows the remote folder's verdict, and an infected folder is reported as infected;
+- `saw` is found or installed **on the remote** (`saw: Show Log` names its path), not on this machine;
+- **Fix…**, **Audit This Machine** and the hooks act on the remote's files, git and machine;
+- with no network, the install fails with the diagnosis, and no folder is reported clean.
 
 ## Rules
 
