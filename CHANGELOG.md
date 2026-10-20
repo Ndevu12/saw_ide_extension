@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-20
+
 ### Added
 
 - Scans every workspace folder with `saw scan` on startup, on save, and when a file that can run
@@ -46,3 +48,6 @@
   tries, and the confirmation warns when git has no name and email for the folder, so it cannot.
 - The log of a successful install no longer shows the expected "no pipx yet" check as a warning,
   or a step twice.
+
+[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Ndevu12/saw_ide_extension/releases/tag/v0.1.0
