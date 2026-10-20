@@ -39,6 +39,12 @@ describe("parsePayload", () => {
     expect(() => parsePayload("[]")).toThrow(ContractError);
   });
 
+  it("reads a schema it knows, and refuses a newer one rather than misreading it", () => {
+    const versioned = (schema_version: unknown) => JSON.stringify({ ...JSON.parse(report([target()])), schema_version });
+    expect(parsePayload(versioned(1)).results).toHaveLength(1);
+    expect(() => parsePayload(versioned(2))).toThrow(/update the extension/);
+  });
+
   it("refuses a verdict, confidence or severity it does not know, rather than guessing", () => {
     expect(() => parsePayload(report([target({ verdict: "probably-fine" })]))).toThrow(/verdict/);
     expect(() => parsePayload(report([target({ findings: [finding({ confidence: "maybe" })] })]))).toThrow(/confidence/);

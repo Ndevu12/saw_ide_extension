@@ -1,22 +1,12 @@
 import * as vscode from "vscode";
 
-import {
-  AUDIT_ARGS,
-  auditVerdict,
-  canFix,
-  FIX_SINCE,
-  fixArgs,
-  gitIdentity,
-  HOOK_STATUS_ARGS,
-  readFix,
-  readHookStatus,
-  rotationSentence,
-} from "../core/actions";
+import { auditArgs, canFix, FIX_SINCE, fixArgs, gitIdentity, hookArgs, readAudit, readFix, readHookJson, type FixDetails } from "../core/actions";
+import { FEATURES, supports } from "../core/capabilities";
 import type { CommandRun } from "../core/reports";
 import { runProgram, type RunResult } from "../core/run";
 import { plain } from "../core/text";
 import type { Controller } from "./controller";
-import type { EngineResolver } from "./engine";
+import type { Engine, EngineResolver } from "./engine";
 import type { AuditRecord, Model } from "./model";
 import { VERDICT_LABEL } from "./present";
 import type { Reports } from "./reports";
@@ -31,6 +21,17 @@ const SAID_LIMIT = 1024 * 1024;
  * What saw does on the operator's request: fix a folder, audit the machine, keep its git hooks in
  * place. Each runs in the background behind a progress notification, and its report opens in the editor.
  */
+/** A warning when saw could not keep the operator's uncommitted work on a branch. */
+function unsavedWork(details: FixDetails | undefined): string | undefined {
+  const work = details?.uncommitted;
+  if (!work || (work.branch && !work.unsaved)) {
+    return undefined;
+  }
+  return work.branch
+    ? ` ${work.unsaved} uncommitted file(s) could not be saved on ${plain(work.branch, 120)} and are on disk only.`
+    : ` Your uncommitted work could not be saved on a branch${work.reason ? ` (${plain(work.reason, 200)})` : ""}: it is on disk only.`;
+}
+
 export class Actions {
   constructor(
     private readonly model: Model,
@@ -47,11 +48,11 @@ export class Actions {
     }
   }
 
-  private async binary(): Promise<string | undefined> {
+  private async ready(): Promise<Extract<Engine, { kind: "ready" }> | undefined> {
     const engine = await this.engines.resolve();
     this.model.setEngine(engine);
     if (engine.kind === "ready") {
-      return engine.binary;
+      return engine;
     }
     void vscode.window.showWarningMessage(engine.message);
     return undefined;
@@ -77,7 +78,7 @@ export class Actions {
       void vscode.window.showWarningMessage(engine.message);
       return;
     }
-    if (!canFix(engine.version)) {
+    if (!canFix(engine.version, engine.capabilities)) {
       const update = await vscode.window.showWarningMessage(
         `saw ${engine.version} is too old to fix a folder from the editor; it needs ${FIX_SINCE} or later.`,
         "Install or Repair saw",
@@ -129,8 +130,10 @@ export class Actions {
     switch (outcome.kind) {
       case "prepared": {
         const more = outcome.needsReview ? " Part of it needs you: the report says what." : "";
-        const choice2 = await vscode.window.showInformationMessage(
-          `saw cleaned ${folder.name} and prepared the clean-up on a local branch.${more} Review the change before you push it.`,
+        const where = outcome.details?.branch ? ` on the local branch ${plain(outcome.details.branch, 120)}` : " on a local branch";
+        const notify = unsavedWork(outcome.details) ? vscode.window.showWarningMessage : vscode.window.showInformationMessage;
+        const choice2 = await notify(
+          `saw cleaned ${folder.name} and prepared the clean-up${where}.${more}${unsavedWork(outcome.details) ?? ""} Review the change before you push it.`,
           "Show Report",
           "Source Control",
         );
@@ -155,20 +158,21 @@ export class Actions {
       showReport();
       return;
     }
-    const binary = await this.binary();
-    if (!binary) {
+    const engine = await this.ready();
+    if (!engine) {
       return;
     }
     this.model.setMachine({ auditing: true });
     const report: CommandRun = { startedAt: Date.now(), said: "" };
     this.reports.auditStarted(report);
     showReport();
-    const run = await this.run("saw audit", binary, AUDIT_ARGS, ["stdout", "stderr"], report);
+    const json = supports(engine.capabilities, FEATURES.auditJson, "audit");
+    const run = await this.run("saw audit", engine.binary, auditArgs(engine.capabilities), json ? ["stderr"] : ["stdout", "stderr"], report);
     this.model.setMachine({ auditing: false });
     if (run.cancelled) {
       return;
     }
-    const audit: AuditRecord = { verdict: auditVerdict(run.exitCode), sentence: rotationSentence(run.stdout), at: Date.now() };
+    const audit: AuditRecord = { ...readAudit(run.stdout, run.stderr, run.exitCode, json), at: Date.now() };
     this.model.setMachine({ audit });
     this.reports.auditFinished();
     await this.memento.update(LAST_AUDIT, audit);
@@ -184,6 +188,11 @@ export class Actions {
       case "incomplete":
         void vscode.window
           .showWarningMessage(`saw audit could not read all of this machine, so changing credentials is not known to be safe.${said}`, "Show Report")
+          .then(show);
+        return;
+      case "to-confirm":
+        void vscode.window
+          .showWarningMessage(`saw audit: confirm that the items saw lists are yours before you change any password or token.${said}`, "Show Report")
           .then(show);
         return;
       case "no-hazard":
@@ -203,23 +212,30 @@ export class Actions {
     if (engine.kind !== "ready") {
       return;
     }
-    const run = await runProgram(engine.binary, HOOK_STATUS_ARGS, { timeoutMs: 30_000, maxOutputBytes: 256 * 1024 });
-    const hooks = readHookStatus(`${run.stdout}\n${run.stderr}`, run.exitCode);
+    const run = await runProgram(engine.binary, hookArgs("status", engine.capabilities), { timeoutMs: 30_000, maxOutputBytes: 256 * 1024 });
+    const hooks = readHookJson(run.stdout, run.stderr, run.exitCode);
     this.log.info(`scan-on-clone hooks: ${hooks.kind}${hooks.kind === "installed" && hooks.problems.length ? ` (${hooks.problems.length} problem(s))` : ""}`);
     this.model.setMachine({ hooks });
   }
 
   async hooks(subcommand: "install" | "repair"): Promise<void> {
-    const binary = await this.binary();
-    if (!binary) {
+    const engine = await this.ready();
+    if (!engine) {
       return;
     }
     const report: CommandRun = { startedAt: Date.now(), said: "" };
     this.reports.hooksChangeStarted(subcommand, report);
     const showReport = () => void this.reports.open(this.reports.machineUri("hooks"));
     showReport();
-    await this.run(`saw hook ${subcommand}`, binary, ["hook", subcommand, "--no-stream"], ["stdout", "stderr"], report);
-    await this.refreshHooks();
+    const json = supports(engine.capabilities, FEATURES.hookStatusJson, "hook-status");
+    const run = await this.run(`saw hook ${subcommand}`, engine.binary, hookArgs(subcommand, engine.capabilities), json ? ["stderr"] : ["stdout", "stderr"], report);
+    // With --json, install and repair print the status as it stands after their change.
+    const after = json && !run.cancelled ? readHookJson(run.stdout, run.stderr, run.exitCode) : undefined;
+    if (after && after.kind !== "unknown") {
+      this.model.setMachine({ hooks: after });
+    } else {
+      await this.refreshHooks();
+    }
     const hooks = this.model.machine.hooks;
     if (hooks?.kind === "installed" && !hooks.problems.length) {
       void vscode.window.showInformationMessage("saw's scan-on-clone hooks are in place: clones, pulls and branch switches are scanned.");

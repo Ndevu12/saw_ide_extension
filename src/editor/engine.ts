@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 
 import * as vscode from "vscode";
 
+import { probeCapabilities, type Capabilities } from "../core/capabilities";
 import { defaultIsExecutableFile, locate, probe, type Probed } from "../core/locate";
 import { atLeast, formatVersion, parseVersion } from "../core/version";
 import type { Installer } from "./installer";
@@ -20,7 +21,7 @@ const WINDOWS_MESSAGE =
   "saw does not run on Windows yet. Open this folder in WSL (Remote - WSL) to scan it: the extension sets up saw there.";
 
 export type Engine =
-  | { kind: "ready"; binary: string; version: string }
+  | { kind: "ready"; binary: string; version: string; capabilities: Capabilities }
   | { kind: "installing" }
   | { kind: "unavailable"; reason: Unavailable; message: string };
 
@@ -137,8 +138,10 @@ export class EngineResolver {
       const probed: Probed = await probe(candidate.binary);
       if (probed.kind === "ready") {
         const version = formatVersion(probed.version);
-        this.log.info(`Using saw ${version} at ${probed.binary} (found via ${candidate.from}).`);
-        return { kind: "ready", binary: probed.binary, version };
+        const capabilities = await probeCapabilities(probed.binary);
+        const features = [...capabilities.features].join(", ");
+        this.log.info(`Using saw ${version} at ${probed.binary} (found via ${candidate.from}). Features: ${features || "none it can name"}.`);
+        return { kind: "ready", binary: probed.binary, version, capabilities };
       }
       const message =
         probed.kind === "too-old"

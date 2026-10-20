@@ -1,6 +1,8 @@
 // The shape of `saw scan --json`, as `stayawake.bots.security.models.ScanReport.to_payload` emits it.
 // Only the fields this extension reads are declared; everything else is ignored, so saw may add fields.
 
+import { schemaProblem } from "./capabilities";
+
 export const SEVERITIES = ["low", "medium", "high", "critical"] as const;
 export type Severity = (typeof SEVERITIES)[number];
 
@@ -127,6 +129,10 @@ export function parsePayload(stdout: string): ScanPayload {
   }
   if (!isObject(raw)) {
     throw new ContractError("the report is not a JSON object");
+  }
+  const unreadable = schemaProblem("scan", raw);
+  if (unreadable) {
+    throw new ContractError(unreadable);
   }
   return {
     generatedAt: text(raw["generated_at"], "generated_at"),

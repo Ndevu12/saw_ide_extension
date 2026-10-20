@@ -1,4 +1,4 @@
-import type { AuditVerdict, FixOutcome, HookStatus } from "./actions";
+import type { AuditDetails, AuditVerdict, FixDetails, FixOutcome, HookStatus } from "./actions";
 import type { Finding, TargetResult } from "./contract";
 import { block, inline, prose, webLink } from "./markdown";
 import type { ScanOutcome } from "./scan";
@@ -218,6 +218,48 @@ export function scanReport(input: ScanReportInput, copy: Copy): string {
 
 // --- fix ------------------------------------------------------------------------------------------
 
+const MAX_LISTED = 50;
+
+function listed(items: string[], render: (item: string) => string): string[] {
+  const more = items.length - MAX_LISTED;
+  return [...items.slice(0, MAX_LISTED).map((item) => `- ${render(item)}`), ...(more > 0 ? [`- *and ${more} more*`] : [])];
+}
+
+/** Where the clean-up is, what it removed, and what became of the operator's own work. */
+function fixDetails(details: FixDetails): string[] {
+  const out: string[] = [];
+  if (details.branch) {
+    const base = details.base ? ` from ${inline(details.base, 120)}` : "";
+    out.push("## Where the clean-up is", "", `The local branch ${inline(details.branch, 120)}${base}. To review it: ${inline(`git diff ${details.base || "HEAD"}...${details.branch}`, 300)}`, "");
+  }
+  if (details.partial) {
+    out.push("**saw could clean only part of what it found.** Read saw's report below for what is left.", "");
+  }
+  if (details.historyHoldsPayload) {
+    out.push("**git history still holds the malicious code.** Removing it from the checkout does not remove it from the history: do not push old commits, and consider a fresh clone once the clean-up is merged.", "");
+  }
+  const work = details.uncommitted;
+  if (work) {
+    out.push("## Your uncommitted work", "");
+    if (work.branch) {
+      out.push(`Saved on the local branch ${inline(work.branch, 120)}: ${work.files} file(s).`);
+      if (work.withheld) out.push(`- ${work.withheld} file(s) kept out of it because saw found them malicious.`);
+      if (work.unsaved) out.push(`- ${work.unsaved} file(s) could not be saved and are on disk only.`);
+      if (work.unread) out.push(`- ${work.unread} file(s) could not be read.`);
+    } else {
+      out.push(`**It could not be saved on a branch, and is on disk only.**${work.reason ? ` ${prose(work.reason, 400)}` : ""}`);
+    }
+    out.push("");
+  }
+  if (details.needsReview.length) {
+    out.push("## Left for you to decide", "", ...listed(details.needsReview, (item) => prose(item, 400)), "");
+  }
+  if (details.removed.length) {
+    out.push("## Removed", "", ...listed(details.removed, (item) => inline(item, 300)), "");
+  }
+  return out;
+}
+
 export interface FixReportInput {
   folderName: string;
   folderPath: string;
@@ -253,6 +295,9 @@ export function fixReport(input: FixReportInput, copy: Copy): string {
     advice = [`saw could not fix this folder: ${prose(outcome?.kind === "failed" ? outcome.cause : "saw fix printed no result", 400)}`];
   }
   out.push(`## ${title}`, "", ...advice.map((line) => `- ${line}`), `- ${AUDIT_HINT}`, "");
+  if (outcome?.kind === "prepared" && outcome.details) {
+    out.push(...fixDetails(outcome.details));
+  }
   const finished = run.finishedAt === undefined ? "" : `, took ${seconds(run.finishedAt - run.startedAt)}`;
   out.push(`- Folder: ${inline(input.folderPath, 400)}`, `- Started ${when(run.startedAt)}${finished}${sawVersion(input.sawVersion)}`, "");
   out.push("## saw's report", "", said(run), "", footer(copy, "`saw fix --json` and saw's own report"));
@@ -266,11 +311,13 @@ export interface AuditReportInput {
   verdict: AuditVerdict | undefined;
   /** saw's own rotation-safety sentence. */
   sentence: string | undefined;
+  details?: AuditDetails | undefined;
   sawVersion: string | undefined;
 }
 
 const AUDIT_TITLE: Record<AuditVerdict, string> = {
   "no-hazard": "No hazard found",
+  "to-confirm": "Safe once you confirm the items below",
   "rotation-unsafe": "Do not change your passwords or tokens yet",
   incomplete: "Not known to be safe",
   failed: "The audit did not finish",
@@ -278,10 +325,40 @@ const AUDIT_TITLE: Record<AuditVerdict, string> = {
 
 const AUDIT_ADVICE: Record<AuditVerdict, string> = {
   "no-hazard": "saw found nothing on this machine that makes changing credentials unsafe. Check anything saw's report below asks you to confirm.",
+  "to-confirm": "saw found nothing that makes changing credentials unsafe, provided the items below are yours. If any is not, treat this as an incident: do not change anything yet.",
   "rotation-unsafe": "Something on this machine still watches your credentials. Act on saw's report below first, then audit again before you change anything.",
   incomplete: "saw could not read all of this machine, so changing credentials is not known to be safe. saw's report below says what it could not read.",
   failed: "This machine was not checked. saw's report below may say why; run **saw: Audit This Machine** again.",
 };
+
+function auditFinding(f: AuditDetails["findings"][number]): string[] {
+  const head = [f.severity && `**${prose(f.severity, 20)}**`, f.confidence && prose(f.confidence, 20), f.title ? prose(f.title, 300) : inline(f.id, 120)].filter(Boolean).join(" · ");
+  const lines = [`- ${head}`];
+  if (f.detail) lines.push(`  ${prose(f.detail, 800)}`);
+  if (f.process) lines.push(`  Process ${f.process.pid}: ${inline(f.process.exe, 300)}`);
+  if (f.fix) lines.push(`  To deal with it: ${inline(f.fix, 300)}`);
+  return lines;
+}
+
+/** saw's audit findings, the ones to confirm first, then what it could not read and what it covered. */
+function auditDetails(details: AuditDetails): string[] {
+  const out: string[] = [];
+  const confirm = details.findings.filter((f) => details.toConfirm.includes(f.id));
+  const rest = details.findings.filter((f) => !details.toConfirm.includes(f.id));
+  if (confirm.length) {
+    out.push("## Confirm these are yours", "", ...confirm.flatMap(auditFinding), "");
+  }
+  if (rest.length) {
+    out.push("## Findings", "", ...rest.slice(0, MAX_LISTED).flatMap(auditFinding), ...(rest.length > MAX_LISTED ? [`- *and ${rest.length - MAX_LISTED} more in saw's report*`] : []), "");
+  }
+  if (details.incomplete.length) {
+    out.push("## Not read", "", ...details.incomplete.map((i) => `- ${inline(i.probe, 120)}: ${prose(i.reason, 400)}`), "");
+  }
+  if (details.scopeNotes.length) {
+    out.push("## What this audit covers", "", ...details.scopeNotes.map((note) => `- ${prose(note, 400)}`), "");
+  }
+  return out;
+}
 
 export function auditReport(input: AuditReportInput, copy: Copy): string {
   const out = ["# saw audit: this machine", ""];
@@ -299,6 +376,9 @@ export function auditReport(input: AuditReportInput, copy: Copy): string {
     out.push(`## ${AUDIT_TITLE[verdict]}`, "", AUDIT_ADVICE[verdict], "");
     if (input.sentence) {
       out.push(`> ${prose(input.sentence, 600)}`, "");
+    }
+    if (input.details) {
+      out.push(...auditDetails(input.details));
     }
   }
   const finished = run.finishedAt === undefined ? "" : `, took ${seconds(run.finishedAt - run.startedAt)}`;

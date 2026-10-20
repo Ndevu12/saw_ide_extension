@@ -20,9 +20,10 @@ core/                   no `vscode` import (lint-enforced), unit-tested
   python                find Python 3.11+, as its base interpreter rather than a venv's copy
   install               pipx (bootstrapped if missing) → `pipx install stayawakebot==<pin>`
   diagnose              failed install → cause + fix, per OS and distribution
+  capabilities          `saw capabilities --json` → the features and schemas this saw has
   run                   start a program without a shell, from a neutral cwd, with timeout/cancel
   scan                  `saw scan <folder> --json --no-stream [--config]` → outcome
-  actions               `saw fix --json`, `saw audit`, `saw hook status` → what each said
+  actions               `saw fix --json`, `saw audit [--json]`, `saw hook status [--json]` → what each said
   contract              validate the JSON report (unknown fields ignored, unknown values refused)
   verdict               report + exit status → clean | residue | suspicious | incomplete | infected
   schedule              one run per folder, debounced, with exactly one follow-up
@@ -108,12 +109,25 @@ storage, so nothing appears in `git status` and a cloned repository cannot plant
 The kept copies withhold evidence, so storage never holds copies of malicious code; the preview
 shows it from memory. A saved copy is shown, marked as such, only until this window has its own.
 
+**The extension asks saw what it can do, and falls back to what every saw it supports has.** When
+it finds saw it runs `saw capabilities --json` once. A saw without that command (0.13.x) has no
+features, so the extension uses the text readings below. A feature whose document saw writes in a
+newer `schema_version` than the extension knows is treated as missing, and a document that arrives
+in a newer schema is refused with "update the extension", never misread.
+
 **What each action reports is read from the narrowest stable output.**
-- `fix --json` (JSON on stdout, the report on stderr) for prepared, skipped or failed.
-- `audit`'s exit status (3 unsafe to rotate, 2 incomplete) for how loudly to speak, and saw's own
-  "Rotation safety:" sentence for what to say. Status 0 can still mean "safe once you confirm the
-  items listed", so the extension never paraphrases it as "safe".
-- `hook status`'s first line and its ⚠ lines. Anything else reads as unknown, never as installed.
+- `fix --json` (JSON on stdout, the report on stderr) for prepared, skipped or failed. From a saw
+  that writes them, also the clean-up branch and its base, what was removed, where uncommitted work
+  went (or why it could not be saved), whether history still holds the payload, and what needs the
+  operator.
+- `audit --json` when saw has it: the rotation verdict, saw's sentence, the items to confirm, the
+  findings, what it could not read and what it covers. The exit status (3 unsafe to rotate, 2
+  incomplete) still counts: the more alarming of the two wins. Without `--json`, the exit status
+  for how loudly to speak and saw's own "Rotation safety:" sentence for what to say. Status 0 can
+  still mean "safe once you confirm the items listed", so the extension never paraphrases it as "safe".
+- `hook status --json` when saw has it, and the same document from `hook install --json` and
+  `hook repair --json` after their change. Without it, `hook status`'s first line and its ⚠ lines.
+  Anything else reads as unknown, never as installed.
 
 **A notification never holds up a scan.** Alerts are shown without being awaited: a scan job that
 waited for the operator to answer one would leave every later scan of that folder queued behind it.
@@ -132,7 +146,7 @@ read-only so an agent can never trigger `fix`, `audit` or `hook` on its own.
 
 ## Next
 
-- From saw: `--json` for `audit` and `hook status`, line numbers on more findings, a
-  `schema_version` in the report, a long-running mode, and an MCP server so agents in VS Code and
-  Cursor can ask for a verdict.
+- Show saw's `--progress=jsonl` steps while it runs, and register `saw mcp` with Cursor, both when
+  the installed saw has them.
+- From saw: line numbers on more findings, and a long-running mode.
 - From saw: running on native Windows (it imports `pwd` at start-up).

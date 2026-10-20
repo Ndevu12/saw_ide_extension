@@ -4,20 +4,24 @@ import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { auditVerdict, canFix, fixArgs, gitIdentity, readFix, readHookStatus, rotationSentence } from "../../src/core/actions";
+import { auditArgs, auditVerdict, canFix, fixArgs, gitIdentity, hookArgs, readAudit, readFix, readHookJson, readHookStatus, rotationSentence } from "../../src/core/actions";
+import { NO_CAPABILITIES, readCapabilities } from "../../src/core/capabilities";
 import { runProgram } from "../../src/core/run";
 import { lines } from "../../src/core/text";
 import { fakeSaw, onWindows, tempDir } from "./helpers";
 
-const fixReport = (remediation: string, cause = "") =>
-  JSON.stringify({ results: [{ repository: "/work/repo", remediation, cause, pull_request: null, url: "" }] });
+const fixReport = (remediation: string, cause = "", more: Record<string, unknown> = {}) =>
+  JSON.stringify({ results: [{ repository: "/work/repo", remediation, cause, pull_request: null, url: "", ...more }] });
+
+const sawWith = (...features: string[]) => readCapabilities(JSON.stringify({ features }), 0);
 
 describe("saw fix", () => {
   it("is run only by a saw that reports what it did", () => {
-    expect(canFix("0.13.0")).toBe(true);
-    expect(canFix("1.0.0")).toBe(true);
-    expect(canFix("0.12.3")).toBe(false);
-    expect(canFix("dev")).toBe(false);
+    expect(canFix("0.13.0", NO_CAPABILITIES)).toBe(true);
+    expect(canFix("1.0.0", NO_CAPABILITIES)).toBe(true);
+    expect(canFix("0.12.3", NO_CAPABILITIES)).toBe(false);
+    expect(canFix("dev", NO_CAPABILITIES)).toBe(false);
+    expect(canFix("dev", sawWith("fix.json"))).toBe(true);
   });
 
   it("never publishes: no --pr, and the report as JSON", () => {
@@ -28,6 +32,44 @@ describe("saw fix", () => {
   it("reads a prepared clean-up, and whether part of it is left for the operator", () => {
     expect(readFix(fixReport("prepared"), 0)).toEqual({ kind: "prepared", needsReview: false });
     expect(readFix(fixReport("prepared"), 2)).toEqual({ kind: "prepared", needsReview: true });
+  });
+
+  it("reads where the clean-up is and what became of uncommitted work, from a saw that says", () => {
+    const outcome = readFix(
+      fixReport("prepared", "", {
+        partial: false,
+        branch: "security/auto-clean-main",
+        base: "main",
+        removed: [".vscode/tasks.json", 42],
+        uncommitted: { branch: "saw/wip-main", files: 3, withheld: 1, unsaved: 0, unread: 0, reason: "" },
+        history_holds_payload: false,
+        needs_review: [],
+      }),
+      0,
+    );
+    expect(outcome).toEqual({
+      kind: "prepared",
+      needsReview: false,
+      details: {
+        partial: false,
+        branch: "security/auto-clean-main",
+        base: "main",
+        removed: [".vscode/tasks.json"],
+        uncommitted: { branch: "saw/wip-main", files: 3, withheld: 1, unsaved: 0, unread: 0, reason: "" },
+        historyHoldsPayload: false,
+        needsReview: [],
+      },
+    });
+  });
+
+  it("needs the operator when saw cleaned only part, history still holds the payload, or it lists items", () => {
+    expect(readFix(fixReport("prepared", "", { partial: true }), 0)).toMatchObject({ needsReview: true });
+    expect(readFix(fixReport("prepared", "", { history_holds_payload: true }), 0)).toMatchObject({ needsReview: true });
+    expect(readFix(fixReport("prepared", "", { needs_review: ["package.json postinstall"] }), 0)).toMatchObject({ needsReview: true });
+  });
+
+  it("refuses a fix report newer than it reads", () => {
+    expect(readFix(JSON.stringify({ schema_version: 99, results: [] }), 0)).toMatchObject({ kind: "failed", cause: expect.stringMatching(/update the extension/) });
   });
 
   it("reads nothing to fix as nothing changed", () => {
@@ -91,6 +133,71 @@ describe("saw audit", () => {
     const report = "\nCRITICAL\n  ✓ Rotation safety: safe once you confirm the item(s) below are yours.\nmore\n";
     expect(rotationSentence(report)).toBe("Rotation safety: safe once you confirm the item(s) below are yours.");
     expect(rotationSentence("no verdict here")).toBeUndefined();
+  });
+});
+
+describe("saw audit --json", () => {
+  const audit = (verdict: string, more: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      schema_version: 1,
+      rotation: { verdict, sentence: "safe once you confirm the item(s) below are yours.", to_confirm: ["ssh-agent"] },
+      findings: [{ id: "ssh-agent", severity: "medium", title: "ssh-agent holds keys", detail: "", fix: "ssh-add -D", confidence: "heuristic", process: { pid: 42, exe: "/usr/bin/ssh-agent" } }],
+      incomplete: [{ probe: "browser-extensions", reason: "permission denied" }],
+      scope_notes: ["user processes only"],
+      ...more,
+    });
+
+  it("is asked for only from a saw that has it", () => {
+    expect(auditArgs(NO_CAPABILITIES)).toEqual(["audit", "--no-stream"]);
+    expect(auditArgs(sawWith("audit.json"))).toEqual(["audit", "--json", "--no-stream"]);
+  });
+
+  it("reads the verdict, saw's sentence and what it found", () => {
+    const result = readAudit(audit("safe-once-confirmed"), "", 0, true);
+    expect(result.verdict).toBe("to-confirm");
+    expect(result.sentence).toBe("Rotation safety: safe once you confirm the item(s) below are yours.");
+    expect(result.details).toEqual({
+      toConfirm: ["ssh-agent"],
+      findings: [{ id: "ssh-agent", severity: "medium", title: "ssh-agent holds keys", detail: "", fix: "ssh-add -D", confidence: "heuristic", process: { pid: 42, exe: "/usr/bin/ssh-agent" } }],
+      incomplete: [{ probe: "browser-extensions", reason: "permission denied" }],
+      scopeNotes: ["user processes only"],
+    });
+  });
+
+  it("takes the more alarming of the JSON and the exit status", () => {
+    expect(readAudit(audit("safe"), "", 3, true).verdict).toBe("rotation-unsafe");
+    expect(readAudit(audit("unsafe"), "", 0, true).verdict).toBe("rotation-unsafe");
+    expect(readAudit(audit("safe"), "", 2, true).verdict).toBe("incomplete");
+  });
+
+  it("falls back to the exit status and saw's text when the JSON is missing, unknown or newer", () => {
+    const text = "  ✓ Rotation safety: safe — nothing found.\n";
+    expect(readAudit(text, "", 0, false)).toEqual({ verdict: "no-hazard", sentence: "Rotation safety: safe — nothing found.", details: undefined });
+    expect(readAudit("", text, 3, true)).toEqual({ verdict: "rotation-unsafe", sentence: "Rotation safety: safe — nothing found.", details: undefined });
+    expect(readAudit(audit("maybe"), "", 0, true).details).toBeUndefined();
+    expect(readAudit(audit("safe", { schema_version: 2 }), "", 0, true).details).toBeUndefined();
+  });
+});
+
+describe("saw hook status --json", () => {
+  const status = (more: Record<string, unknown>) => JSON.stringify({ schema_version: 1, installed: true, events: ["post-checkout"], via: "core.hooksPath", disabled_by_env: false, problems: [], ...more });
+
+  it("is asked for only from a saw that has it", () => {
+    expect(hookArgs("status", NO_CAPABILITIES)).toEqual(["hook", "status", "--no-stream"]);
+    expect(hookArgs("repair", sawWith("hook.status.json"))).toEqual(["hook", "repair", "--json", "--no-stream"]);
+  });
+
+  it("reads the hooks, and each problem with what repairs it", () => {
+    expect(readHookJson(status({}), "", 0)).toEqual({ kind: "installed", events: ["post-checkout"], problems: [] });
+    const problems = readHookJson(status({ disabled_by_env: true, problems: [{ code: "drift", message: "2 files differ", repair: "saw hook repair" }] }), "", 0);
+    expect(problems).toEqual({ kind: "installed", events: ["post-checkout"], problems: ["SAW_HOOK_DISABLED is set, so the hooks do nothing.", "2 files differ (saw hook repair)"] });
+    expect(readHookJson(status({ installed: false }), "", 0)).toEqual({ kind: "not-installed" });
+  });
+
+  it("reads an older saw's text, and calls an unknown or newer document unknown", () => {
+    expect(readHookJson("scan-on-clone: not installed\n", "", 0)).toEqual({ kind: "not-installed" });
+    expect(readHookJson(status({ installed: "yes" }), "", 0).kind).toBe("unknown");
+    expect(readHookJson(status({ schema_version: 2 }), "", 0).kind).toBe("unknown");
   });
 });
 
