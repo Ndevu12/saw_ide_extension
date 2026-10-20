@@ -1,3 +1,4 @@
+import { runProgram } from "./run";
 import { EXIT } from "./verdict";
 import { atLeast, parseVersion } from "./version";
 
@@ -52,6 +53,22 @@ export function readFix(stdout: string, exitCode: number | null): FixOutcome {
       // A pull request, patch or issue: only with --pr, which this extension never passes.
       return { kind: "failed", cause: `saw fix published a ${remediation}, which was not asked for` };
   }
+}
+
+/** Whether git can name who commits in a folder: without that, saw cannot put uncommitted work on a branch. */
+export type GitIdentity = "known" | "missing" | "unknown";
+
+const NO_IDENTITY = /identity unknown|empty ident|unable to auto-detect/i;
+
+/** Ask git as `git commit-tree` would. `git var` only reads configuration, so nothing in the folder runs. */
+export async function gitIdentity(folder: string, git = "git"): Promise<GitIdentity> {
+  for (const variable of ["GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT"]) {
+    const run = await runProgram(git, ["-C", folder, "var", variable], { timeoutMs: 10_000, maxOutputBytes: 64 * 1024 });
+    if (run.exitCode !== 0) {
+      return NO_IDENTITY.test(run.stderr) ? "missing" : "unknown";
+    }
+  }
+  return "known";
 }
 
 export const AUDIT_ARGS = ["audit", "--no-stream"] as const;

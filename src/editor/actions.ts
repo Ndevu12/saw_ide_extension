@@ -6,6 +6,7 @@ import {
   canFix,
   FIX_SINCE,
   fixArgs,
+  gitIdentity,
   HOOK_STATUS_ARGS,
   readFix,
   readHookStatus,
@@ -81,6 +82,12 @@ export class Actions {
       }
       return;
     }
+    const identity = await gitIdentity(folder.uri.fsPath);
+    const unsaved =
+      identity === "missing"
+        ? "\n\nGit has no name and email for this folder, so saw cannot put your uncommitted work on a branch: " +
+          "it stays on disk only. To keep it on a branch, cancel and set user.name and user.email first."
+        : "";
     const choice = await vscode.window.showWarningMessage(
       `Fix ${folder.name} with saw?`,
       {
@@ -88,8 +95,9 @@ export class Actions {
         detail:
           "saw removes what it confirms as malicious from this checkout, together with the installed packages, " +
           "the generated build output and the lockfile, and prepares the clean-up on a new local branch. " +
-          "What you have not committed is kept on a local saw/uncommitted-… branch first. " +
-          "Nothing is pushed or published, and no code from this folder runs.",
+          "First it tries to keep what you have not committed on a local saw/uncommitted-… branch; its report says if it could not. " +
+          "Nothing is pushed or published, and no code from this folder runs." +
+          unsaved,
       },
       "Fix",
     );

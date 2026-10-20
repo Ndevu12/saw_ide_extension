@@ -25,3 +25,5 @@
 ### Fixed
 
 - A notification left open no longer holds up the next scan of its folder.
+- The **Fix…** confirmation no longer promises that uncommitted work is saved on a branch: saw
+  tries, and the confirmation warns when git has no name and email for the folder, so it cannot.

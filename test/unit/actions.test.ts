@@ -1,9 +1,13 @@
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import * as path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import { auditVerdict, canFix, fixArgs, readFix, readHookStatus, rotationSentence } from "../../src/core/actions";
+import { auditVerdict, canFix, fixArgs, gitIdentity, readFix, readHookStatus, rotationSentence } from "../../src/core/actions";
 import { runProgram } from "../../src/core/run";
 import { forTerminal } from "../../src/core/text";
-import { fakeSaw, onWindows } from "./helpers";
+import { fakeSaw, onWindows, tempDir } from "./helpers";
 
 const fixReport = (remediation: string, cause = "") =>
   JSON.stringify({ results: [{ repository: "/work/repo", remediation, cause, pull_request: null, url: "" }] });
@@ -43,6 +47,34 @@ describe("saw fix", () => {
 
   it("refuses a published fix, which this extension never asks for", () => {
     expect(readFix(fixReport("pr"), 0).kind).toBe("failed");
+  });
+});
+
+describe("who git says commits in a folder", () => {
+  const unknownIdentity = "Committer identity unknown\n\n*** Please tell me who you are.\n\nfatal: empty ident name (for <me@host.(none)>) not allowed\n";
+
+  it.skipIf(onWindows)("is missing when git cannot name an author, as on a machine with no git identity", async () => {
+    expect(await gitIdentity("/work/repo", fakeSaw({ stderr: unknownIdentity, exit: 128 }))).toBe("missing");
+  });
+
+  it.skipIf(onWindows)("is known when git names one, and asks without a shell", async () => {
+    const argsFile = path.join(tempDir(), "args.json");
+    expect(await gitIdentity("/work/a b; touch x", fakeSaw({ stdout: "Me <me@example.com> 1 +0000\n", argsFile }))).toBe("known");
+    expect(JSON.parse(readFileSync(argsFile, "utf8"))).toEqual(["-C", "/work/a b; touch x", "var", "GIT_COMMITTER_IDENT"]);
+  });
+
+  it.skipIf(onWindows)("is unknown, not missing, when git fails for another reason or is not there", async () => {
+    expect(await gitIdentity("/work/repo", fakeSaw({ stderr: "fatal: not a git repository\n", exit: 128 }))).toBe("unknown");
+    expect(await gitIdentity("/work/repo", path.join(tempDir(), "no-git"))).toBe("unknown");
+  });
+
+  it("reads an identity set only in the repository, as saw's commit does", async () => {
+    const repo = tempDir();
+    const git = (...args: string[]) => execFileSync("git", ["-c", "init.templateDir=", ...args], { cwd: repo });
+    git("init", "-q");
+    git("config", "user.name", "Repo Only");
+    git("config", "user.email", "repo@example.com");
+    expect(await gitIdentity(repo)).toBe("known");
   });
 });
 
