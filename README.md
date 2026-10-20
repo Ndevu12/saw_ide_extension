@@ -20,8 +20,9 @@ And it acts, when you ask:
 - **Fix a folder.** On an infected folder, **Fix…** (in the alert, the saw view or **saw: Fix
   Folder…**) runs `saw fix` after you confirm. saw removes what it confirms from the checkout,
   together with the installed packages, build output and lockfile, and prepares the clean-up on a
-  new local branch; what you had not committed is kept on a local `saw/uncommitted-…` branch.
-  Nothing is pushed. It works in Restricted Mode: saw runs git with the repository's own hooks and
+  new local branch. It first tries to keep what you had not committed on a local
+  `saw/uncommitted-…` branch, which needs git to know your name and email; the confirmation warns
+  you when it does not. Nothing is pushed. It works in Restricted Mode: saw runs git with the repository's own hooks and
   settings switched off, so nothing from the folder runs. The report stays in a terminal, and the
   folder is scanned again when saw is done.
 - **Audit this machine.** **saw: Audit This Machine** runs `saw audit` and tells you, in saw's own
