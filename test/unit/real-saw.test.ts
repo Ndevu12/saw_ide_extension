@@ -1,10 +1,13 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { fixArgs, HOOK_STATUS_ARGS, readFix, readHookStatus } from "../../src/core/actions";
 import { defaultIsExecutableFile, locate, probe } from "../../src/core/locate";
+import { runProgram } from "../../src/core/run";
 import { scanFolder } from "../../src/core/scan";
 import { DISGUISED_TASK, onWindows, tempDir } from "./helpers";
 
@@ -50,4 +53,30 @@ describe.skipIf(onWindows || (!binary && !required))("the installed saw", () => 
     const outcome = await scanFolder({ binary, folder: path.join(tempDir(), "gone"), configPath: "", timeoutMs: 60_000 });
     expect(outcome.kind === "cancelled" ? "cancelled" : outcome.verdict).toBe("incomplete");
   }, 90_000);
+
+  it("fixes an infected repository on a local branch, keeping what was not committed", async () => {
+    const repo = tempDir();
+    // No template: this machine's own git hooks stay out of the test repository.
+    const git = (...args: string[]) => execFileSync("git", ["-c", "init.templateDir=", "-c", "core.hooksPath=/dev/null", ...args], { cwd: repo, encoding: "utf8" });
+    git("init", "-q", "-b", "main");
+    mkdirSync(path.join(repo, ".vscode"));
+    writeFileSync(path.join(repo, ".vscode", "tasks.json"), DISGUISED_TASK);
+    writeFileSync(path.join(repo, ".vscode", "a.woff2"), "console.log(1)\n");
+    writeFileSync(path.join(repo, "index.js"), "console.log('hello');\n");
+    git("add", "-A");
+    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "init");
+    writeFileSync(path.join(repo, "notes.txt"), "not committed\n");
+
+    const run = await runProgram(binary, fixArgs(repo, ""), { timeoutMs: 120_000 });
+    expect(readFix(run.stdout, run.exitCode)).toMatchObject({ kind: "prepared" });
+    expect(existsSync(path.join(repo, ".vscode", "tasks.json"))).toBe(false);
+    const branches = git("branch", "--format=%(refname:short)");
+    expect(branches).toMatch(/^security\/auto-clean/m);
+    expect(branches).toMatch(/^saw\/uncommitted-/m);
+  }, 180_000);
+
+  it("answers hook status in a shape this extension reads", async () => {
+    const run = await runProgram(binary, HOOK_STATUS_ARGS, { timeoutMs: 30_000 });
+    expect(readHookStatus(`${run.stdout}\n${run.stderr}`, run.exitCode).kind).not.toBe("unknown");
+  }, 60_000);
 });

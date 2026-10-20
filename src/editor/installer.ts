@@ -74,6 +74,10 @@ export class Installer {
     this.context.environmentVariableCollection.description = "Adds the folder pipx installed saw into, so `saw` runs in the terminal.";
   }
 
+  get pinnedSaw(): string {
+    return this.pins.saw;
+  }
+
   /** The saw this extension installed earlier, in any window, if it is still there. */
   installedBinary(): string | undefined {
     const remembered = this.remembered();

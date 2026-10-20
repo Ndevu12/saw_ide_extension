@@ -1,11 +1,14 @@
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
+import { StringDecoder } from "node:string_decoder";
 
 export interface RunOptions {
   timeoutMs: number;
   signal?: AbortSignal;
   /** Bytes kept per stream; a report beyond this fails rather than being read partially. */
   maxOutputBytes?: number;
+  /** Told the output as it arrives, for a terminal that shows progress. */
+  onOutput?: (text: string, stream: "stdout" | "stderr") => void;
 }
 
 export interface RunResult {
@@ -97,7 +100,16 @@ export function runProgram(binary: string, args: readonly string[], options: Run
       }
       out.push(chunk);
     });
+    const decoders = { stdout: new StringDecoder("utf8"), stderr: new StringDecoder("utf8") };
+    const tell = (stream: "stdout" | "stderr", chunk: Buffer) => {
+      const text = options.onOutput && decoders[stream].write(chunk);
+      if (text) {
+        options.onOutput?.(text, stream);
+      }
+    };
+    child.stdout.on("data", (chunk: Buffer) => tell("stdout", chunk));
     child.stderr.on("data", (chunk: Buffer) => {
+      tell("stderr", chunk);
       errBytes += chunk.length;
       if (errBytes <= limit) {
         err.push(chunk);

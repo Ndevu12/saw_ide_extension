@@ -34,15 +34,18 @@ export class Alerts {
   private async infected(folder: vscode.WorkspaceFolder, outcome: Settled): Promise<void> {
     const count = confirmedCount(outcome);
     const what = `saw: ${folder.name} is INFECTED — ${count} confirmed finding${count === 1 ? "" : "s"}.`;
-    const act = "Run `saw fix` in it to remove what saw confirms.";
+    const act = "saw can remove what it confirms; nothing from the folder runs while it does.";
     const choice = vscode.workspace.isTrusted
-      ? await vscode.window.showErrorMessage(`${what} ${act}`, "Show Findings")
+      ? await vscode.window.showErrorMessage(`${what} ${act}`, "Fix…", "Show Findings")
       : await vscode.window.showWarningMessage(
           `${what} Do not trust this folder: Restricted Mode keeps its tasks and debug configurations from running. ${act}`,
           { modal: true },
+          "Fix…",
           "Show Findings",
         );
-    if (choice === "Show Findings") {
+    if (choice === "Fix…") {
+      await vscode.commands.executeCommand("saw.fixFolder", folder);
+    } else if (choice === "Show Findings") {
       await vscode.commands.executeCommand("workbench.view.extension.saw");
     }
   }

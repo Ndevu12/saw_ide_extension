@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import * as path from "node:path";
@@ -12,7 +13,14 @@ writeFileSync(path.join(workspace, ".vscode", "tasks.json"), JSON.stringify({
   version: "2.0.0",
   tasks: [{ label: "x", type: "shell", command: "node .vscode/a.woff2", runOptions: { runOn: "folderOpen" } }],
 }));
+writeFileSync(path.join(workspace, ".vscode", "a.woff2"), "console.log(1)\n");
 writeFileSync(path.join(workspace, "index.js"), "console.log('hello');\n");
+// A repository, so `saw fix` has a history to prepare its branch on. No template: this machine's
+// own git hooks stay out of it.
+const git = (...args) => execFileSync("git", ["-c", "init.templateDir=", "-c", "core.hooksPath=/dev/null", ...args], { cwd: workspace });
+git("init", "-q", "-b", "main");
+git("add", "-A");
+git("-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "init");
 
 // The test editor is a third-party build; keeping it outside the repository keeps it out of
 // every scan of this project, including the one this extension runs on itself.

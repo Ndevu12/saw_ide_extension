@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 
+import { Actions } from "./editor/actions";
 import { Alerts } from "./editor/alerts";
 import { Controller } from "./editor/controller";
 import { Diagnostics } from "./editor/diagnostics";
@@ -25,7 +26,12 @@ export function activate(context: vscode.ExtensionContext): SawApi {
   const alerts = new Alerts();
   const controller = new Controller(model, engines, diagnostics, alerts, readSettings, log);
   const tree = new FindingsTree(model);
+  const actions = new Actions(model, engines, controller, readSettings, log, context.globalState);
   installer.exposeToTerminals();
+  const folderOf = (arg: unknown): vscode.WorkspaceFolder | undefined => {
+    const node = arg as { state?: { folder?: vscode.WorkspaceFolder }; uri?: vscode.Uri } | undefined;
+    return node?.state?.folder ?? (node?.uri ? vscode.workspace.getWorkspaceFolder(node.uri) : undefined);
+  };
 
   context.subscriptions.push(
     log,
@@ -46,8 +52,13 @@ export function activate(context: vscode.ExtensionContext): SawApi {
       model.setEngine(engine);
       if (engine.kind === "ready") {
         controller.requestAll({ immediate: true });
+        void actions.refreshHooks();
       }
     }),
+    vscode.commands.registerCommand("saw.fixFolder", (arg?: unknown) => actions.fixFolder(folderOf(arg))),
+    vscode.commands.registerCommand("saw.auditMachine", () => actions.auditMachine()),
+    vscode.commands.registerCommand("saw.installHooks", () => actions.hooks("install")),
+    vscode.commands.registerCommand("saw.repairHooks", () => actions.hooks("repair")),
     vscode.commands.registerCommand("saw.copyDiagnostics", async () => {
       const report = installer.diagnostics();
       if (!report) {
@@ -73,6 +84,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
   } else {
     void engines.resolve().then((engine) => model.setEngine(engine));
   }
+  void actions.refreshHooks();
   return { model, controller };
 }
 

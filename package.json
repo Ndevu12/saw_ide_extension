@@ -32,7 +32,7 @@
   ],
   "main": "./dist/extension.js",
   "saw": {
-    "saw": "0.12.3",
+    "saw": "0.13.0",
     "pipx": "1.18.4"
   },
   "extensionKind": [
@@ -78,6 +78,27 @@
         "command": "saw.copyDiagnostics",
         "title": "Copy Install Diagnostics",
         "category": "saw"
+      },
+      {
+        "command": "saw.fixFolder",
+        "title": "Fix Folder…",
+        "category": "saw",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "saw.auditMachine",
+        "title": "Audit This Machine",
+        "category": "saw"
+      },
+      {
+        "command": "saw.installHooks",
+        "title": "Install Scan-on-Clone Hooks",
+        "category": "saw"
+      },
+      {
+        "command": "saw.repairHooks",
+        "title": "Repair Scan-on-Clone Hooks",
+        "category": "saw"
       }
     ],
     "viewsContainers": {
@@ -109,6 +130,17 @@
           "command": "saw.scanWorkspace",
           "when": "view == saw.findings",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "saw.fixFolder",
+          "when": "view == saw.findings && viewItem == folder.infected",
+          "group": "inline"
+        },
+        {
+          "command": "saw.fixFolder",
+          "when": "view == saw.findings && viewItem == folder.infected"
         }
       ]
     },

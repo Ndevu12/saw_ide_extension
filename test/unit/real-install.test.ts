@@ -1,9 +1,9 @@
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import * as path from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { installSaw } from "../../src/core/install";
+import { installSaw, type Pins } from "../../src/core/install";
 import { defaultIsExecutableFile, probe } from "../../src/core/locate";
 import { runProgram } from "../../src/core/run";
 import { tempDir } from "./helpers";
@@ -12,6 +12,7 @@ import { tempDir } from "./helpers";
 // Slow and online, so only when asked for: SAW_INSTALL_E2E=1, with SAW_E2E_NO_PIPX=1 to force the pipx bootstrap.
 // Not on Windows, where saw does not run and the extension does not install it.
 const enabled = process.env["SAW_INSTALL_E2E"] === "1" && process.platform !== "win32";
+const pins = (JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as { saw: Pins }).saw;
 const sandbox = enabled ? tempDir("saw-e2e-") : "";
 
 describe.skipIf(!enabled)("installing the real saw", () => {
@@ -40,7 +41,7 @@ describe.skipIf(!enabled)("installing the real saw", () => {
         : runProgram,
       makeTempDir: () => mkdtempSync(path.join(sandbox, "boot-")),
       removeDir: (dir) => rmSync(dir, { recursive: true, force: true }),
-      pins: { saw: "0.12.3", pipx: "1.18.4" },
+      pins,
     });
     if (outcome.kind !== "installed") {
       throw new Error(JSON.stringify(outcome, null, 2));
@@ -48,6 +49,6 @@ describe.skipIf(!enabled)("installing the real saw", () => {
     // macOS's temporary folder is reached through a symlink, which pipx resolves.
     expect(realpathSync(outcome.binary)).toBe(realpathSync(path.join(sandbox, "bin", "saw")));
     expect(outcome.installedPipx).toBe(noPipx);
-    expect(await probe(outcome.binary)).toMatchObject({ kind: "ready", version: [0, 12, 3] });
+    expect(await probe(outcome.binary)).toMatchObject({ kind: "ready", version: pins.saw.split(".").map(Number) });
   });
 });

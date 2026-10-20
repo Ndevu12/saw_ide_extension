@@ -7,6 +7,9 @@ import type { FolderState, Model } from "./model";
 import { findingMessage, VERDICT_ICON, VERDICT_LABEL } from "./present";
 
 type Node =
+  | { kind: "machine" }
+  | { kind: "audit" }
+  | { kind: "hooks" }
   | { kind: "folder"; state: FolderState }
   | { kind: "reason"; text: string }
   | { kind: "finding"; target: string; finding: Finding; advisory: boolean }
@@ -31,7 +34,14 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
 
   getChildren(node?: Node): Node[] {
     if (!node) {
-      return this.model.states().map((state) => ({ kind: "folder", state }));
+      return [...this.model.states().map((state): Node => ({ kind: "folder", state })), { kind: "machine" }];
+    }
+    if (node.kind === "machine") {
+      return [{ kind: "audit" }, { kind: "hooks" }];
+    }
+    if (node.kind === "hooks") {
+      const hooks = this.model.machine.hooks;
+      return hooks?.kind === "installed" ? hooks.problems.map((text) => ({ kind: "note", text })) : [];
     }
     if (node.kind === "notes") {
       return node.notes.map((text) => ({ kind: "note", text }));
@@ -61,10 +71,23 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
 
   getTreeItem(node: Node): vscode.TreeItem {
     switch (node.kind) {
+      case "machine": {
+        const item = new vscode.TreeItem("This machine", vscode.TreeItemCollapsibleState.Expanded);
+        item.iconPath = new vscode.ThemeIcon("device-desktop");
+        return item;
+      }
+      case "audit":
+        return this.auditItem();
+      case "hooks":
+        return this.hooksItem();
       case "folder": {
         const { state } = node;
         const item = new vscode.TreeItem(state.folder.name, vscode.TreeItemCollapsibleState.Expanded);
-        if (state.scanning) {
+        item.contextValue = state.last?.verdict === "infected" && !state.fixing ? "folder.infected" : "folder";
+        if (state.fixing) {
+          item.description = "fixing…";
+          item.iconPath = new vscode.ThemeIcon("sync~spin");
+        } else if (state.scanning) {
           item.description = "scanning…";
           item.iconPath = new vscode.ThemeIcon("sync~spin");
         } else if (state.last) {
@@ -111,6 +134,67 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
         item.tooltip = plain(node.text, 2000);
         return item;
       }
+    }
+  }
+
+  private auditItem(): vscode.TreeItem {
+    const { audit, auditing } = this.model.machine;
+    const item = new vscode.TreeItem("Changing credentials");
+    item.command = { command: "saw.auditMachine", title: "Audit This Machine" };
+    if (auditing) {
+      item.description = "auditing…";
+      item.iconPath = new vscode.ThemeIcon("sync~spin");
+      return item;
+    }
+    if (!audit) {
+      item.description = "not audited yet";
+      item.iconPath = new vscode.ThemeIcon("circle-outline");
+      item.tooltip = "Run saw audit before you change any password or token: changing them first can set off code that deletes your files.";
+      return item;
+    }
+    const looks = {
+      "no-hazard": { text: "no hazard found", icon: new vscode.ThemeIcon("pass", new vscode.ThemeColor("testing.iconPassed")) },
+      "rotation-unsafe": { text: "do not change them yet", icon: new vscode.ThemeIcon("error", new vscode.ThemeColor("problemsErrorIcon.foreground")) },
+      incomplete: { text: "not known to be safe", icon: new vscode.ThemeIcon("warning", new vscode.ThemeColor("problemsWarningIcon.foreground")) },
+      failed: { text: "audit did not finish", icon: new vscode.ThemeIcon("circle-slash") },
+    }[audit.verdict];
+    item.description = looks.text;
+    item.iconPath = looks.icon;
+    item.tooltip = `${audit.sentence ? `${plain(audit.sentence, 600)}\n` : ""}Audited ${new Date(audit.at).toLocaleString()}. Click to audit again.`;
+    return item;
+  }
+
+  private hooksItem(): vscode.TreeItem {
+    const hooks = this.model.machine.hooks;
+    const item = new vscode.TreeItem("Scan-on-clone hooks");
+    if (!hooks) {
+      item.description = "checking…";
+      return item;
+    }
+    switch (hooks.kind) {
+      case "installed":
+        if (hooks.problems.length) {
+          item.description = "need repair";
+          item.iconPath = new vscode.ThemeIcon("warning", new vscode.ThemeColor("problemsWarningIcon.foreground"));
+          item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+          item.command = { command: "saw.repairHooks", title: "Repair" };
+        } else {
+          item.description = "in place";
+          item.iconPath = new vscode.ThemeIcon("pass", new vscode.ThemeColor("testing.iconPassed"));
+          item.tooltip = `Clones, pulls and branch switches are scanned (${hooks.events.join(", ")}).`;
+        }
+        return item;
+      case "not-installed":
+        item.description = "not installed — click to install";
+        item.iconPath = new vscode.ThemeIcon("circle-outline");
+        item.tooltip = "saw can scan every repository as it is cloned, pulled or switched, before anything in it runs.";
+        item.command = { command: "saw.installHooks", title: "Install" };
+        return item;
+      case "unknown":
+        item.description = "unknown";
+        item.iconPath = new vscode.ThemeIcon("question");
+        item.tooltip = plain(hooks.detail, 600);
+        return item;
     }
   }
 
