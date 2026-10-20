@@ -1,5 +1,9 @@
 # Contributing
 
+Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) first: how the code is laid out, how a scan and an
+action run, and where the security boundaries are. What saw itself does is documented at
+[saw-docs.ndevuspace.com](https://saw-docs.ndevuspace.com/).
+
 ## Setup
 
 Node 22 or later, pnpm 11 (`corepack enable` or `npm i -g pnpm`), and saw on `PATH`
@@ -19,6 +23,16 @@ pnpm run package      # saw.vsix
 ```
 
 Press F5 in the editor to run the extension in a development host.
+
+## Tooling
+
+- **TypeScript 7** (`@typescript/native`, the native compiler) runs `pnpm run check-types`.
+  typescript-eslint still needs the TypeScript 6 API, so the `typescript` package is aliased to
+  `@typescript/typescript6` for lint only.
+- **esbuild** bundles `src/extension.ts` into `dist/extension.js`; nothing else ships.
+- **`pnpm-workspace.yaml`** holds the install policy (minimum release age, trust policy, no exotic
+  sub-dependencies, explicit build allowlist) and the overrides for mocha's `diff` and
+  `serialize-javascript`, which `@vscode/test-cli` still pulls in. Keep both when upgrading.
 
 ## Remote windows
 
@@ -78,26 +92,34 @@ installed in each kind of remote window:
 
 ## Releasing
 
-Bump `version` in `package.json`, move the `[Unreleased]` changelog entries under a
-`## [X.Y.Z] - YYYY-MM-DD` heading, merge, then tag the merge commit on `main` and push the tag
-(`git tag vX.Y.Z && git push origin vX.Y.Z`). The release workflow packages once and publishes the
-same `.vsix` to the Visual Studio Marketplace (`VSCE_PAT`) and Open VSX (`OVSX_PAT`), each only
-when its secret is configured.
+The extension is `ndevu12.stayawakebot`, after saw's PyPI package; the display name is
+**StayAwakeBot (saw)**. One `.vsix` goes to both registries, so both get the same build.
 
-It refuses to release when the tag is not on `main`, does not match `package.json`, has no
+1. Bump `version` in `package.json` and move the `[Unreleased]` changelog entries under a
+   `## [X.Y.Z] - YYYY-MM-DD` heading, in one pull request.
+2. After it merges, tag the merge commit on `main` with a signed tag, and push it:
+
+   ```bash
+   git tag -s vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z
+   ```
+
+3. The release workflow packages once, then waits for approval in the `release` environment. Once
+   approved, it publishes the `.vsix` to each registry whose token is set (`OVSX_PAT` for Open VSX,
+   `VSCE_PAT` for the Visual Studio Marketplace), and attaches `stayawakebot-X.Y.Z.vsix` and its
+   SHA-256 checksum to a GitHub Release with generated notes.
+4. While `VSCE_PAT` is not set, upload that `.vsix` to the Marketplace by hand at
+   [marketplace.visualstudio.com/manage](https://marketplace.visualstudio.com/manage/publishers/ndevu12).
+
+The workflow refuses to release when the tag is not on `main`, does not match `package.json`, has no
 changelog section, or when neither token is set.
 
-One-time setup, before the first release:
+### Registry setup
 
-- **Open VSX:** sign in at [open-vsx.org](https://open-vsx.org) with GitHub, sign the publisher
-  agreement, create an access token, then create the namespace with
-  `pnpm exec ovsx create-namespace ndevu12 -p <token>` and
-  [claim ownership of it](https://github.com/EclipseFdn/open-vsx.org/issues/new?template=claim-namespace-ownership.yml)
-  so the extension shows as verified. See
-  [Publishing Extensions](https://github.com/EclipseFdn/open-vsx.org/wiki/Publishing-Extensions).
-- **Visual Studio Marketplace:** create the publisher `ndevu12` at
-  [marketplace.visualstudio.com/manage](https://marketplace.visualstudio.com/manage) and an Azure
-  DevOps personal access token with the Marketplace (Manage) scope.
-- **Secrets:** add the tokens as `OVSX_PAT` and `VSCE_PAT` to the `release` environment
-  (Settings → Environments), not as repository secrets, and require a reviewer there so a pushed tag
-  waits for approval before it publishes.
+- **Open VSX:** the `ndevu12` namespace exists, and its
+  [ownership claim](https://github.com/EclipseFdn/open-vsx.org/issues/14490) asks for the old
+  `ndevu12.saw` listing to be deprecated. Open VSX scans each upload before it lists it, and its API
+  paths are case-sensitive (`/api/Ndevu12/stayawakebot`).
+- **Visual Studio Marketplace:** the publisher is `ndevu12`. For automatic publishing, create an Azure
+  DevOps personal access token with the Marketplace (Manage) scope and add it as `VSCE_PAT`.
+- **Secrets** belong to the `release` environment (Settings → Environments), not the repository, and
+  that environment requires a reviewer, so a pushed tag waits for approval before it publishes.

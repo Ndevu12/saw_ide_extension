@@ -1,168 +1,138 @@
 # Architecture
 
-A thin TypeScript client over the saw CLI. saw does all detection; the extension decides when to
-scan, and shows what saw reported.
+The extension is a thin TypeScript client over the [saw](https://saw-docs.ndevuspace.com/) CLI.
+saw does all detection. The extension decides when to run saw, reads what saw reports, and shows
+it in the editor.
+
+## Layout
 
 ```text
-extension.ts            composition root
-editor/                 VS Code adapters
-  controller            scan a folder on request, hand the outcome to the views
-  actions               fix a folder, audit the machine, scan-on-clone hook status/install/repair
-  reports               saw-report: documents in the Markdown preview; copies in extension storage
-  triggers              save, checkout/pull (.git/HEAD, ORIG_HEAD), file watchers, folder changes
-  engine                find and version-check saw once per settings change; install it when missing
-  installer             progress, cross-window lock, failure notification, diagnostics report
-  model                 folder states; every view renders from it
-  agentTool             saw_folderVerdict language-model tool: waits for a current scan, read-only
-  mcp                   offer `saw mcp` to agents: Cursor's MCP API, or VS Code's MCP provider
-  diagnostics · statusBar · tree · alerts · settings · present
-core/                   no `vscode` import (lint-enforced), unit-tested
-  locate                saw candidates: setting alone, else PATH (absolute entries), ~/.local/bin, installed
-  python                find Python 3.11+, as its base interpreter rather than a venv's copy
-  install               pipx (bootstrapped if missing) → `pipx install stayawakebot==<pin>`
-  diagnose              failed install → cause + fix, per OS and distribution
-  capabilities          `saw capabilities --json` → the features and schemas this saw has
-  progress              `--progress=jsonl` events on stderr → "step (3/9)"; everything else passed on
-  run                   start a program without a shell, from a neutral cwd, with timeout/cancel
-  scan                  `saw scan <folder> --json --no-stream [--config]` → outcome
-  actions               `saw fix --json`, `saw audit [--json]`, `saw hook status [--json]` → what each said
-  contract              validate the JSON report (unknown fields ignored, unknown values refused)
-  verdict               report + exit status → clean | residue | suspicious | incomplete | infected
-  schedule              one run per folder, debounced, with exactly one follow-up
-  text                  plain-text rendering of bytes from scanned files
-  agent                 the verdict as told to an AI agent, with the instruction to stop; no evidence
-  mcp                   how to start `saw mcp`, when this saw has it
-  markdown              Markdown that keeps scanned text literal: code spans, blocks, https links
-  reports               scan, fix, audit and hook reports, with or without evidence
+src/
+  extension.ts          composition root: builds the parts below and registers commands
+  editor/               VS Code adapters
+    controller          scan a folder on request, hand the outcome to the views
+    triggers            save, checkout/pull (.git/HEAD, ORIG_HEAD), file watchers, folder changes
+    engine              find and version-check saw once per settings change; install it when missing
+    installer           install progress, cross-window lock, failure notification, diagnostics
+    actions             fix a folder, audit the machine, scan-on-clone hook status/install/repair
+    reports             the saw-report: file system that serves reports to the Markdown preview
+    model               folder and machine state; every view renders from it
+    agentTool           the saw_folderVerdict language-model tool
+    mcp                 offers `saw mcp` to the editor's agents
+    changes             opens a fix's clean-up as a diff through the Git extension
+    diagnostics · statusBar · tree · alerts · settings · present
+  core/                 no `vscode` import (lint-enforced), unit-tested
+    locate              saw candidates: the setting alone, else PATH (absolute entries), ~/.local/bin
+    python · install    find Python 3.11+, then pipx (bootstrapped if missing) → stayawakebot==<pin>
+    diagnose            a failed install → its cause and fix, per OS and distribution
+    run                 start a program without a shell, from a neutral cwd, with timeout and cancel
+    capabilities        `saw capabilities --json` → the features and schemas this saw has
+    scan                `saw scan <folder> --json --no-stream [--config]` → outcome
+    contract            validate the scan report (unknown fields ignored, unknown values refused)
+    verdict             report + exit status → clean | residue | suspicious | incomplete | infected
+    actions             read what `fix`, `audit` and `hook` reported
+    progress            `--progress=jsonl` events on stderr → the current step
+    schedule            one run per folder, debounced, with exactly one follow-up
+    reports · markdown  reports as Markdown, with scanned text kept literal
+    agent · mcp         what agents are told, and how to start saw's MCP server
+    text · docs         plain-text rendering of scanned bytes; links to saw's documentation
 ```
 
-## Decisions
+## How a scan flows
 
-**One `.vsix`, two registries.** VS Code installs from the Visual Studio Marketplace; Cursor,
-Antigravity, Devin Desktop and VSCodium install from Open VSX. The release publishes the same file
-to both.
+1. A **trigger** (startup, a save, a change to a file that can run code, a checkout or pull) asks
+   the **controller** to scan a workspace folder.
+2. The **schedule** debounces requests and runs one scan per folder at a time, with at most one
+   follow-up queued behind it.
+3. The **engine** resolves saw to an absolute path, installing it first when it is missing.
+4. **scan** runs `saw scan <folder> --json` without a shell. **contract** validates the JSON, and
+   **verdict** combines it with the exit status. Anything that could not answer, such as a failed
+   start, a timeout or unreadable output, is `incomplete`, never clean.
+5. The outcome goes into the **model**. The status bar, the saw view, the Problems panel, alerts
+   and reports all render from the model.
 
-**`engines.vscode: ^1.96.0`.** Forks run an older editor than upstream, and their galleries hide an
-extension that requires a newer one. The integration tests run on 1.96.0 and on current stable.
+The whole folder is always scanned, because saw judges a file by where it sits:
+`.vscode/tasks.json` scanned alone reads clean, while the folder containing it reads infected.
 
-**Spawn the CLI per scan.** A small repository scans in about 0.4 s, most of it Python start-up.
-A long-running `saw` mode (or a language server) is the next step if that becomes the bottleneck;
-`core/scan` is the only place that would change.
+## How an action runs
 
-**Always scan the whole folder.** saw judges a file by where it sits: `.vscode/tasks.json` scanned
-alone reads clean, the folder containing it reads infected.
+**Fix…**, **Audit This Machine** and the hook commands run saw in the background behind a
+cancellable progress notification. saw's output is collected as it arrives, and the action's
+report follows it live. When saw finishes, **actions** reads its result: the JSON where saw writes
+it, otherwise its exit status and its own words. A fix ends with a rescan of the folder.
 
-**The verdict comes from the report.** saw exits clean on a suspicious result, and prints nothing on
-stdout when it cannot start a scan, so the exit status alone is not a verdict.
+Installing saw never asks, because it changes nothing the operator owns. Fixing always asks: it
+deletes files from the checkout, so it runs only from an explicit **Fix…** and a modal that says
+what will change. The extension never passes `--pr`, so nothing is pushed or published.
 
-**Restricted Mode is supported.** Scanning reads only. Every setting is machine-scoped, and the two
-that choose what runs are also listed in `restrictedConfigurations`.
+## Finding and installing saw
 
-**The extension installs saw itself.** The install command is known, so asking the operator to run
-it is a step they should not need. It is not prompted for; the operator hears only when it fails,
-with the cause and the fix. The order follows what works without administrator rights on every
-platform, including PEP 668 systems that refuse `pip install --user`:
+The engine uses, in order:
 
-1. a `saw` that is found and new enough is used as it is;
-2. pipx on PATH, in `~/.local/bin`, or as `python -m pipx`;
-3. otherwise pipx from a temporary venv installs a permanent pipx (`pipx install pipx`), then the
-   venv is deleted;
-4. `pipx install --force --python <base python> --pip-args=--only-binary=:all: stayawakebot==<pin>`.
+1. the `saw.path` setting, when set, and nothing else;
+2. a `saw` on `PATH` or in `~/.local/bin` that is new enough;
+3. otherwise it installs saw: pipx on `PATH`, in `~/.local/bin` or as `python -m pipx`. If none
+   exists, a temporary venv installs a permanent pipx and is then deleted. Then
+   `pipx install --python <base python> --pip-args=--only-binary=:all: stayawakebot==<pin>` runs.
 
-**Installs are pinned.** `package.json` `"saw"` names the stayawakebot and pipx releases, and CI runs
-the contract tests against that stayawakebot. Installing whatever is newest would push a bad or
-hijacked PyPI release onto every machine with the extension, and could break the report contract.
-Wheels only: no package's build script runs. Bumping the pin is its own pull request, unless a
-feature needs the newer release (0.13.0 for `fix --json`). A saw this extension installed is moved
-to the pin when it falls behind; one the operator installed is left alone.
+This works without administrator rights on every platform, including PEP 668 systems that refuse
+`pip install --user`. Only wheels are installed, so no package's build script runs.
 
-**One install per machine at a time.** A lock directory in the extension's global storage keeps two
-windows from running pipx at once; the second waits and then uses what the first installed. Where
-saw went is recorded there too, and integrated terminals get that folder on `PATH` through the
-extension's environment collection, rather than by editing shell profiles.
+- **Pinned:** the release installed is pinned in `package.json` (`"saw"`). A saw the extension
+  installed is moved to the pin when it falls behind; one the operator installed is left alone.
+- **One install at a time:** a lock directory in global storage keeps two windows from installing
+  at once.
+- **Terminals:** integrated terminals get saw's folder on `PATH` through the extension's
+  environment collection, rather than by editing shell profiles.
+- **Remote windows:** with `extensionKind: workspace`, the extension runs where the files are. A
+  remote folder is scanned, fixed and audited by the saw installed on the remote.
 
-**`extensionKind: workspace`.** The extension runs where the files are, so remote folders are
-scanned by the saw installed on the remote.
+## Reading saw's output
 
-**Installing never asks; fixing always does.** Installing saw changes nothing the operator owns.
-`saw fix` deletes files from their checkout, so it runs only from an explicit **Fix…** and a modal
-that says what it will change. It never takes `--pr`: publishing stays on the command line.
+When the engine finds saw, it runs `saw capabilities --json` once. Each feature the extension uses
+beyond plain scanning is read only when saw lists it in a schema the extension knows:
 
-**Fix works in Restricted Mode.** An infected folder is exactly the one not to trust, so fixing
-must not require trust. That is safe because saw, not the workspace, runs: saw starts git with an
-empty hooks folder, `core.fsmonitor` off, no external diff, pager or editor, and no transport
-protocols, so nothing the repository configures runs.
+- `audit --json`, `hook … --json` and the fuller `fix --json` record;
+- `--progress=jsonl`;
+- `saw mcp`.
 
-**Reports are documents the extension builds, not saw's terminal output.** saw stays focused on
-detection; the extension turns its JSON (and, until `audit` and `hook` have JSON, its own words)
-into Markdown and shows it in the editor's Markdown preview, through a read-only `saw-report:` file
-system. Actions run in the background, without a shell, behind a progress notification that can
-stop them, and their report follows saw as it works. With no TTY, `saw fix` asks nothing and leaves
-what it is unsure of for review, which its report names.
+Otherwise the extension reads the output every supported saw has. A document in a newer
+`schema_version` than the extension knows is refused with "update the extension", never misread.
 
-**Scanned text stays literal in a report.** File names, descriptions, evidence and saw's own output
-can come from whoever wrote the scanned folder. They reach Markdown only as code spans, fenced
-blocks or fully escaped text, so they cannot make a link, an image (which would tell an attacker the
-report was opened) or HTML. The only links are to plain https pages. Reports do not link to files:
-the saw view and the Problems panel open a finding at its line.
+| Command | Read from | Fallback |
+| --- | --- | --- |
+| `scan` | the JSON report on stdout, with the exit status | none: an unreadable report is `incomplete` |
+| `fix` | the JSON record on stdout; saw's report on stderr | — |
+| `audit` | the JSON when available; the more alarming of it and the exit status wins | the exit status (3 unsafe to rotate, 2 incomplete) and saw's own "Rotation safety:" sentence |
+| `hook` | the status JSON, also printed by install and repair | the first line of `hook status` and its ⚠ lines; anything else is unknown, never installed |
 
-**Reports are kept in the extension's own storage, never in the project.** Folder reports go in
-workspace storage, keyed by a hash of the folder, and machine reports (audit, hooks) in global
-storage, so nothing appears in `git status` and a cloned repository cannot plant or fake a report.
-The kept copies withhold evidence, so storage never holds copies of malicious code; the preview
-shows it from memory. A saved copy is shown, marked as such, only until this window has its own.
+Progress events are requested only where saw's human report is not shown, because saw keeps that
+report off stderr while they are on. A verdict never comes from progress.
 
-**The extension asks saw what it can do, and falls back to what every saw it supports has.** When
-it finds saw it runs `saw capabilities --json` once. A saw without that command (0.13.x) has no
-features, so the extension uses the text readings below. A feature whose document saw writes in a
-newer `schema_version` than the extension knows is treated as missing, and a document that arrives
-in a newer schema is refused with "update the extension", never misread.
+## Security boundaries
 
-**What each action reports is read from the narrowest stable output.**
-- `fix --json` (JSON on stdout, the report on stderr) for prepared, skipped or failed. From a saw
-  that writes them, also the clean-up branch and its base, what was removed, where uncommitted work
-  went (or why it could not be saved), whether history still holds the payload, and what needs the
-  operator.
-- `audit --json` when saw has it: the rotation verdict, saw's sentence, the items to confirm, the
-  findings, what it could not read and what it covers. The exit status (3 unsafe to rotate, 2
-  incomplete) still counts: the more alarming of the two wins. Without `--json`, the exit status
-  for how loudly to speak and saw's own "Rotation safety:" sentence for what to say. Status 0 can
-  still mean "safe once you confirm the items listed", so the extension never paraphrases it as "safe".
-- `hook status --json` when saw has it, and the same document from `hook install --json` and
-  `hook repair --json` after their change. Without it, `hook status`'s first line and its ⚠ lines.
-  Anything else reads as unknown, never as installed.
-
-**Progress is asked for only where saw's human report is not shown.** With `--progress=jsonl`,
-saw writes events to stderr and keeps its report off it. So the extension passes the flag to
-background scans, and to audits only when saw also has `audit --json`, which carries what the
-report shows. Fix and the hook commands keep their human report. The step is shown in the status
-bar, the saw view and the audit's notification; a verdict never comes from it. Unknown events are
-ignored, and any other stderr line (a traceback) is kept as saw's words.
-
-**A notification never holds up a scan.** Alerts are shown without being awaited: a scan job that
-waited for the operator to answer one would leave every later scan of that folder queued behind it.
-
-**Two TypeScript compilers, for now.** `tsc` is TypeScript 7 (the `@typescript/native` alias),
-which type-checks and builds the tests. TypeScript 7 has no JavaScript API yet, so `typescript`
-is Microsoft's `@typescript/typescript6` package, which typescript-eslint reads. Drop the alias
-once typescript-eslint supports TypeScript 7. `pnpm-workspace.yaml` likewise lifts mocha's
-`diff` and `serialize-javascript` past their advisories until `@vscode/test-cli` moves to mocha 12.
-
-**Agents get the verdict, not the evidence.** The `saw_folderVerdict` tool answers from the same
-model as the views, after any scan that is due has run, and fails closed: no current answer reads
-as "stop". It leaves out finding evidence and flattens file names, because both come from the
-scanned folder and would otherwise put an attacker's text into the agent's prompt. It stays
-read-only so an agent can never trigger `fix`, `audit` or `hook` on its own.
-
-**saw serves MCP, not the extension.** When `saw capabilities` lists `mcp`, the extension tells
-the editor how to start `saw mcp` with the saw it uses, and follows that saw: it registers again
-when the program changes, and withdraws it when saw goes or the setting is turned off. Cursor gets
-it through `vscode.cursor.mcp.registerServer`, and nowhere else, so it is not listed twice. VS
-Code 1.101 and later get it from an MCP server definition provider. Both APIs are found at run
-time, since the 1.96 types have neither. In a remote Cursor window it is not registered: where
-Cursor would start the server there is not documented.
-
-## Next
-
-- From saw: line numbers on more findings, and a long-running mode.
-- From saw: running on native Windows (it imports `pwd` at start-up).
+- **Nothing from the workspace chooses what runs.** saw is resolved to an absolute path from user
+  settings, `PATH` or known install locations, and started without a shell from a neutral
+  directory. Every setting is machine-scoped, and the ones that choose what runs are listed in
+  `restrictedConfigurations`.
+- **Restricted Mode is supported**, including for Fix, because an infected folder is exactly the
+  one not to trust. saw, not the workspace, runs git: it uses an empty hooks folder,
+  `core.fsmonitor` off, no external diff, pager or editor, and no transport protocols.
+- **Scanned text stays literal.** File names, descriptions, evidence and saw's output can come from
+  whoever wrote the scanned folder. They reach Markdown only as code spans, fenced blocks or fully
+  escaped text, so they cannot form a link, an image or HTML. The only links are to plain https
+  pages.
+- **Reports live in the extension's own storage, never in the project.** Folder reports go in
+  workspace storage, keyed by a hash of the folder; machine reports (audit, hooks) go in global
+  storage. A cloned repository cannot plant or fake a report. The kept copies withhold evidence;
+  the preview shows it from memory.
+- **Agents get the verdict, not the evidence.** `saw_folderVerdict` answers from the model after
+  any due scan has run, and fails closed: with no current answer, it says stop. It leaves out
+  evidence and flattens file names, so a scanned file cannot put text into an agent's prompt. It is
+  read-only and cannot start `fix`, `audit` or `hook`.
+- **saw serves MCP, not the extension.** When saw lists `mcp`, the extension tells the editor how to
+  start `saw mcp` with the saw it uses. Cursor gets it through `vscode.cursor.mcp.registerServer`,
+  and VS Code 1.101 and later through an MCP server definition provider. Both APIs are detected at
+  run time.
+- **A notification never holds up a scan.** Alerts are not awaited, so an unanswered notification
+  cannot queue later scans behind it.

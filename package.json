@@ -106,6 +106,12 @@
         "command": "saw.repairHooks",
         "title": "Repair Scan-on-Clone Hooks",
         "category": "saw"
+      },
+      {
+        "command": "saw.openDocumentation",
+        "title": "Open saw Documentation",
+        "category": "saw",
+        "icon": "$(question)"
       }
     ],
     "mcpServerDefinitionProviders": [
@@ -158,7 +164,7 @@
     "viewsWelcome": [
       {
         "view": "saw.findings",
-        "contents": "No scan has run yet.\n[Scan Workspace](command:saw.scanWorkspace)"
+        "contents": "No scan has run yet.\n[Scan Workspace](command:saw.scanWorkspace)\nNew to saw? Read [what each verdict means](https://saw-docs.ndevuspace.com/latest/explanation/verdicts/) or the [saw documentation](https://saw-docs.ndevuspace.com/)."
       }
     ],
     "menus": {
@@ -167,6 +173,11 @@
           "command": "saw.scanWorkspace",
           "when": "view == saw.findings",
           "group": "navigation"
+        },
+        {
+          "command": "saw.openDocumentation",
+          "when": "view == saw.findings",
+          "group": "navigation@9"
         }
       ],
       "view/item/context": [
@@ -215,7 +226,7 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "Absolute path to your own saw config (allowlist), passed as `saw scan -c`. A config inside the scanned folder is never used."
+          "markdownDescription": "Absolute path to your own saw config (allowlist), passed as `saw scan -c`. A config inside the scanned folder is never used. See [saw's configuration reference](https://saw-docs.ndevuspace.com/latest/reference/configuration/)."
         },
         "saw.scanOnStartup": {
           "type": "boolean",

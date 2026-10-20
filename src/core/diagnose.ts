@@ -64,19 +64,19 @@ export function diagnose(result: Extract<InstallResult, { kind: "failed" }>, hos
     const old = result.tried.some((line) => /Python 3\.(\d+)/.test(line));
     return {
       cause: old ? "The Python on this machine is older than 3.11, which saw needs." : "Python 3.11 or later is not installed on this machine.",
-      fix: `Install it (${INSTALL_PYTHON[os]}), then run saw: Install saw.`,
+      fix: `Install it (${INSTALL_PYTHON[os]}), then run saw: Install or Repair saw.`,
     };
   }
   if (NO_NETWORK.test(output)) {
     return {
       cause: "PyPI could not be reached from this machine, so nothing was downloaded.",
-      fix: "Check the network or proxy settings for pip (pip config list), then run saw: Install saw.",
+      fix: "Check the network or proxy settings for pip (pip config list), then run saw: Install or Repair saw.",
     };
   }
   if (result.failedStep === "create-venv" && NO_VENV.test(output)) {
     return {
       cause: "This Python cannot create virtual environments, which installing pipx needs.",
-      fix: `Install the venv module or pipx from your package manager (${INSTALL_PYTHON[os]}), then run saw: Install saw.`,
+      fix: `Install the venv module or pipx from your package manager (${INSTALL_PYTHON[os]}), then run saw: Install or Repair saw.`,
     };
   }
   if (NO_WHEEL.test(output)) {

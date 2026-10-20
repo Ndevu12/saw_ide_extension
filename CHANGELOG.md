@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- **saw: Open saw Documentation**, also in the saw view's title bar, opens
+  [saw's documentation](https://saw-docs.ndevuspace.com/). Each report ends with a link to the page
+  that explains it, and the saw view links to what each verdict means.
+
+### Changed
+
+- The README is a user guide: what each feature does, the verdicts, commands, settings, remote
+  windows, privacy, and troubleshooting, with screenshots and links to saw's documentation.
+
 ## [0.1.1] - 2026-10-20
 
 ### Changed
