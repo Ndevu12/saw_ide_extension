@@ -85,7 +85,7 @@ suite("saw extension", () => {
     const preview = vscode.window.tabGroups.all.flatMap((group) => group.tabs).find((tab) => tab.input instanceof vscode.TabInputWebview && /markdown\.preview/.test(tab.input.viewType));
     assert.ok(preview, "the report opened in the Markdown preview");
     const html = await vscode.commands.executeCommand<string>("markdown.api.render", text);
-    assert.doesNotMatch(html, /<img|<script|<iframe|on\w+=/i, html);
+    assert.doesNotMatch(html, /<img|<script|<iframe|\son\w+=/i, html);
     for (const [, href] of html.matchAll(/href="([^"]*)"/g)) {
       assert.match(href ?? "", /^https:/, `only https links: ${href}`);
     }
