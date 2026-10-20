@@ -80,6 +80,12 @@
         "category": "saw"
       },
       {
+        "command": "saw.openReport",
+        "title": "Open Report",
+        "category": "saw",
+        "icon": "$(book)"
+      },
+      {
         "command": "saw.fixFolder",
         "title": "Fix Folder…",
         "category": "saw",
@@ -157,6 +163,15 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "saw.openReport",
+          "when": "view == saw.findings && viewItem =~ /^(folder|audit|hooks)/",
+          "group": "inline"
+        },
+        {
+          "command": "saw.openReport",
+          "when": "view == saw.findings && viewItem =~ /^(folder|audit|hooks)/"
+        },
         {
           "command": "saw.fixFolder",
           "when": "view == saw.findings && viewItem == folder.infected",

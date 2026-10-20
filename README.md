@@ -14,6 +14,10 @@ on each workspace folder and shows what it finds:
   infected, or could not scan. A folder that could not be scanned fully is never shown as clean.
 - **As things change.** A saved file, a checkout, a pull or a package install that changes
   `.vscode/`, `package.json`, a lockfile, a workflow or a git hook triggers another scan.
+- **In a report you can read.** **Open Report** (on a folder in the saw view, in the alerts, or
+  **saw: Open Report**) opens the folder's scan as a document in an editor tab: the verdict, what
+  to do, every finding with its remedy and evidence, and why a scan is not verified. Fix, Audit and
+  the hook commands open their own report the same way, and it follows saw as it works.
 
 And it acts, when you ask:
 
@@ -23,8 +27,8 @@ And it acts, when you ask:
   new local branch. It first tries to keep what you had not committed on a local
   `saw/uncommitted-…` branch, which needs git to know your name and email; the confirmation warns
   you when it does not. Nothing is pushed. It works in Restricted Mode: saw runs git with the repository's own hooks and
-  settings switched off, so nothing from the folder runs. The report stays in a terminal, and the
-  folder is scanned again when saw is done.
+  settings switched off, so nothing from the folder runs. Its report opens in an editor tab, and
+  the folder is scanned again when saw is done.
 - **Audit this machine.** **saw: Audit This Machine** runs `saw audit` and tells you, in saw's own
   words, whether changing your passwords and tokens is safe yet. Changing them while something on
   the machine still watches them can set off code that deletes your files.
@@ -104,7 +108,7 @@ which program runs or switch the scan off.
 
 It never changes your files on its own: only **Fix…**, after you confirm, does. It never pushes or
 opens a pull request. The extension sends nothing anywhere: saw scans offline. The only download is the install from PyPI.
-The install does not edit your shell profile: the extension's terminals get pipx's folder on `PATH`;
+The install does not edit your shell profile: terminals opened in the editor get pipx's folder on `PATH`;
 for other terminals, run `pipx ensurepath` once.
 
 ## Development

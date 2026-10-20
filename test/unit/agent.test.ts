@@ -14,6 +14,8 @@ const found = (overrides: Partial<Finding> = {}): Finding => ({
   evidence: "node .vscode/a.woff2",
   remediation: "delete",
   advisoryOnly: false,
+  fixAdvice: null,
+  reference: null,
   ...overrides,
 });
 

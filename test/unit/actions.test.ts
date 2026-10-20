@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { auditVerdict, canFix, fixArgs, gitIdentity, readFix, readHookStatus, rotationSentence } from "../../src/core/actions";
 import { runProgram } from "../../src/core/run";
-import { forTerminal } from "../../src/core/text";
+import { lines } from "../../src/core/text";
 import { fakeSaw, onWindows, tempDir } from "./helpers";
 
 const fixReport = (remediation: string, cause = "") =>
@@ -121,9 +121,13 @@ describe("saw hook status", () => {
   });
 });
 
-describe("terminal output", () => {
-  it("keeps lines and drops the escape sequences a terminal would act on", () => {
-    expect(forTerminal("a\nb\r\n\u001b]0;pwned\u0007c\u202e")).toBe("a\r\nb\r\n\uFFFD]0;pwned\uFFFDc\uFFFD");
+describe("saw's own report, as a report shows it", () => {
+  it("keeps lines, drops colour and replaces every other control character", () => {
+    expect(lines("a\nb\r\n\u001b[31mred\u001b[0m \u001b]0;pwned\u0007c\u202e\n\n")).toBe("a\nb\nred \uFFFD]0;pwned\uFFFDc\uFFFD");
+  });
+
+  it("is bounded", () => {
+    expect(lines("x".repeat(12), 10)).toBe("xxxxxxxxxx\n… (2 more characters not shown)");
   });
 
   it.skipIf(onWindows)("hands over output as it comes, without splitting a character", async () => {

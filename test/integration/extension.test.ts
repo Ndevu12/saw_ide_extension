@@ -1,4 +1,6 @@
 import * as assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 
 import * as vscode from "vscode";
 
@@ -73,6 +75,34 @@ suite("saw extension", () => {
     assert.doesNotMatch(text, /a\.woff2/, "evidence from the folder is left out");
   });
 
+  test("opens the scan report in the editor, and keeps a copy without evidence outside the project", async () => {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    assert.ok(folder);
+    await vscode.commands.executeCommand("saw.openReport", folder);
+    const uri = api.reports.scanUri(folder);
+    const shown = await until(() => vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString()), 30_000);
+    const text = shown.getText();
+    const preview = vscode.window.tabGroups.all.flatMap((group) => group.tabs).find((tab) => tab.input instanceof vscode.TabInputWebview && /markdown\.preview/.test(tab.input.viewType));
+    assert.ok(preview, "the report opened in the Markdown preview");
+    const html = await vscode.commands.executeCommand<string>("markdown.api.render", text);
+    assert.doesNotMatch(html, /<img|<script|<iframe|\son\w+=/i, html);
+    for (const [, href] of html.matchAll(/href="([^"]*)"/g)) {
+      assert.match(href ?? "", /^https:/, `only https links: ${href}`);
+    }
+    assert.match(text, /## Infected/, text);
+    assert.match(text, /vscode-task-runs-font/, text);
+    assert.match(text, /node \.vscode\/a\.woff2/, "the preview shows the evidence");
+
+    const saved = api.reports.scanPath(folder);
+    assert.ok(saved, "the test window has workspace storage");
+    assert.ok(!saved.startsWith(folder.uri.fsPath), saved);
+    const copy = await until(() => (existsSync(saved) ? readFileSync(saved, "utf8") : undefined), 30_000);
+    assert.match(copy, /## Infected/);
+    assert.doesNotMatch(copy, /a\.woff2/, "the saved copy withholds evidence");
+    const status = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: folder.uri.fsPath, encoding: "utf8" });
+    assert.equal(status, "", "nothing was written into the project");
+  });
+
   test("fixes the infected folder once the operator confirms, then scans it again", async () => {
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder);
@@ -97,6 +127,9 @@ suite("saw extension", () => {
         throw new Error(`still ${JSON.stringify({ fixing: state.fixing, scanning: state.scanning, verdict: state.last?.verdict, asked })}`);
       });
       assert.deepEqual(asked, [`Fix ${folder.name} with saw?`]);
+      const fix = await vscode.workspace.openTextDocument(api.reports.fixUri(folder));
+      assert.match(fix.getText(), /## Clean-up prepared/, fix.getText());
+      assert.match(fix.getText(), /## saw's report\n\n`{3,}text\nSecurity fix/, fix.getText());
       assert.notEqual(last?.verdict, "infected", JSON.stringify(last?.reasons));
       const tasks = vscode.Uri.joinPath(folder.uri, ".vscode", "tasks.json");
       await assert.rejects(Promise.resolve(vscode.workspace.fs.stat(tasks)), "the confirmed task file is gone");
