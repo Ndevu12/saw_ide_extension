@@ -60,7 +60,8 @@ if (version === "latest" || !existsSync(server)) {
   rmSync(cache, { recursive: true, force: true });
   mkdirSync(cache, { recursive: true });
   const tarball = path.join(cache, "vscode-server.tar.gz");
-  execFileSync("curl", ["-fsSL", "-o", tarball, `https://update.code.visualstudio.com/${version}/server-linux-x64-web/stable`]);
+  // The download is large and is sometimes cut off part way.
+  execFileSync("curl", ["-fsSL", "--retry", "5", "--retry-all-errors", "--retry-delay", "5", "-o", tarball, `https://update.code.visualstudio.com/${version}/server-linux-x64-web/stable`]);
   execFileSync("tar", ["xzf", tarball, "-C", cache]);
 }
 

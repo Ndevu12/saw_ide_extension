@@ -281,7 +281,7 @@ export function fixReport(input: FixReportInput, copy: Copy): string {
     title = "Stopped";
     advice = [stopped, "The folder is scanned again. Look in Source Control for anything saw had already changed."];
   } else if (outcome?.kind === "prepared") {
-    title = "Clean-up prepared";
+    title = outcome.details?.partial ? "Clean-up prepared, in part" : "Clean-up prepared";
     advice = [
       "saw removed what it confirmed from the checkout and prepared the clean-up on a new local branch. Nothing was pushed.",
       ...(outcome.needsReview ? ["Part of it needs you: saw's report below says what."] : []),

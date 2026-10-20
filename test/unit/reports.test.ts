@@ -128,6 +128,12 @@ describe("the command reports", () => {
     expect(text).toContain("## Removed\n\n- `.vscode/tasks.json`");
   });
 
+  it("fix: says in its title when saw cleaned only part of the folder", () => {
+    const details = { partial: true, branch: "", base: "", removed: [], uncommitted: undefined, historyHoldsPayload: false, needsReview: [] };
+    expect(fixReport({ folderName: "w", folderPath: "/w", run, outcome: { kind: "prepared", needsReview: true, details }, sawVersion: undefined }, "preview"))
+      .toContain("## Clean-up prepared, in part");
+  });
+
   it("audit: the items to confirm first, then the rest, what was not read and what it covers", () => {
     const finding = (id: string, title: string) => ({ id, severity: "medium", title, detail: "", fix: "", confidence: "heuristic", process: undefined });
     const details = { toConfirm: ["b"], findings: [finding("a", "a cron job"), finding("b", "ssh-agent holds keys")], incomplete: [{ probe: "browsers", reason: "permission denied" }], scopeNotes: ["user processes only"] };
