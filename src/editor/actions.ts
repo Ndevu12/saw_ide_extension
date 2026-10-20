@@ -7,6 +7,7 @@ import type { CommandRun } from "../core/reports";
 import { runProgram, type RunResult } from "../core/run";
 import { plain } from "../core/text";
 import type { Controller } from "./controller";
+import { openFixChanges } from "./changes";
 import type { Engine, EngineResolver } from "./engine";
 import type { AuditRecord, Model } from "./model";
 import { VERDICT_LABEL } from "./present";
@@ -130,14 +131,23 @@ export class Actions {
     this.log.info(`${folder.name}: saw fix ${outcome.kind}${outcome.kind === "failed" ? `: ${outcome.cause}` : ""}.`);
     switch (outcome.kind) {
       case "prepared": {
+        const { details } = outcome;
         const more = outcome.needsReview ? " Part of it needs you: the report says what." : "";
-        const where = outcome.details?.branch ? ` on the local branch ${plain(outcome.details.branch, 120)}` : " on a local branch";
-        const notify = unsavedWork(outcome.details) ? vscode.window.showWarningMessage : vscode.window.showInformationMessage;
+        const where = details?.branch ? ` on the local branch ${plain(details.branch, 120)}` : " on a local branch";
+        const cleaned = details?.partial ? `saw cleaned part of ${folder.name}` : `saw cleaned ${folder.name}`;
+        const unsaved = unsavedWork(details);
+        const notify = unsaved || details?.partial ? vscode.window.showWarningMessage : vscode.window.showInformationMessage;
+        const changes = details?.branch && details.base ? { base: details.base, branch: details.branch } : undefined;
         const choice2 = await notify(
-          `saw cleaned ${folder.name} and prepared the clean-up${where}.${more}${unsavedWork(outcome.details) ?? ""} Review the change before you push it.`,
+          `${cleaned} and prepared the clean-up${where}.${more}${unsaved ?? ""} Review the change before you push it.`,
+          ...(changes ? ["Open Changes"] : []),
           "Show Report",
           "Source Control",
         );
+        if (choice2 === "Open Changes" && changes && !(await openFixChanges(folder, changes.base, changes.branch, this.log))) {
+          // The report gives the git diff command to run instead.
+          showReport();
+        }
         if (choice2 === "Show Report") showReport();
         if (choice2 === "Source Control") await vscode.commands.executeCommand("workbench.view.scm");
         return;

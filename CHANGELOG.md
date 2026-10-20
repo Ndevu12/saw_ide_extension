@@ -24,7 +24,8 @@
 - Asks saw what it can do (`saw capabilities --json`) and uses the structured output of a saw that
   has it: the audit's findings, the items to confirm first and what it could not read; each hook
   problem with what repairs it; and, after **Fix…**, the clean-up branch, what was removed, and a
-  warning when uncommitted work could not be saved on a branch. An older saw is read as before, and
+  warning when uncommitted work could not be saved on a branch. **Open Changes** opens the
+  clean-up as one diff against the branch it started from, and a partial clean-up says so. An older saw is read as before, and
   a report in a newer schema than the extension reads says to update the extension.
 - With a saw that reports its progress (`--progress=jsonl`), the status bar, the saw view and the
   audit's notification show which step saw is on, and how many remain.
