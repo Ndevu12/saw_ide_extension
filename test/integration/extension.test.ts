@@ -24,7 +24,7 @@ suite("saw extension", () => {
   let api: SawApi;
 
   suiteSetup(async () => {
-    const extension = vscode.extensions.getExtension<SawApi>("ndevu12.saw");
+    const extension = vscode.extensions.getExtension<SawApi>("ndevu12.stayawakebot");
     assert.ok(extension, "the extension is installed in the test host");
     api = await extension.activate();
   });
