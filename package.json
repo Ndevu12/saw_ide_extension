@@ -32,7 +32,7 @@
   ],
   "main": "./dist/extension.js",
   "saw": {
-    "saw": "0.13.0",
+    "saw": "0.13.1",
     "pipx": "1.18.4"
   },
   "extensionKind": [
