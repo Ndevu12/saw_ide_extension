@@ -1,7 +1,7 @@
 name: release
 
-# A `v*` tag packages the extension once and publishes that same file to both registries:
-# the Visual Studio Marketplace (VS Code) and Open VSX (Cursor, Antigravity, Devin Desktop, VSCodium).
+# A `v*` tag packages the extension once, publishes that same file to the Visual Studio Marketplace
+# (VS Code) and Open VSX (Cursor, Antigravity, Devin Desktop, VSCodium), and attaches it to a GitHub Release.
 on:
   push:
     tags: ["v*.*.*"]
@@ -75,3 +75,27 @@ jobs:
         run: pnpm exec vsce publish --packagePath saw.vsix --skip-duplicate
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vsix
+      - name: Create the GitHub Release with the published package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          asset="saw-${GITHUB_REF_NAME#v}.vsix"
+          mv saw.vsix "$asset"
+          sha256sum "$asset" > "$asset.sha256"
+          # A release made by hand gets the files rather than a second release.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$asset" "$asset.sha256" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$asset" "$asset.sha256" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+          fi
