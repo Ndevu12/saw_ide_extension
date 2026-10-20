@@ -54,6 +54,26 @@ on the remote machine (`extensionKind: workspace`), so saw is found or installed
 
 ## Releasing
 
-Bump `version` in `package.json`, move the changelog entries under it, merge, and push a `vX.Y.Z`
-tag. The release workflow packages once and publishes the same `.vsix` to the Visual Studio
-Marketplace (`VSCE_PAT`) and Open VSX (`OVSX_PAT`), each only when its secret is configured.
+Bump `version` in `package.json`, move the `[Unreleased]` changelog entries under a
+`## [X.Y.Z] - YYYY-MM-DD` heading, merge, then tag the merge commit on `main` and push the tag
+(`git tag vX.Y.Z && git push origin vX.Y.Z`). The release workflow packages once and publishes the
+same `.vsix` to the Visual Studio Marketplace (`VSCE_PAT`) and Open VSX (`OVSX_PAT`), each only
+when its secret is configured.
+
+It refuses to release when the tag is not on `main`, does not match `package.json`, has no
+changelog section, or when neither token is set.
+
+One-time setup, before the first release:
+
+- **Open VSX:** sign in at [open-vsx.org](https://open-vsx.org) with GitHub, sign the publisher
+  agreement, create an access token, then create the namespace with
+  `pnpm exec ovsx create-namespace ndevu12 -p <token>` and
+  [claim ownership of it](https://github.com/EclipseFdn/open-vsx.org/issues/new?template=claim-namespace-ownership.yml)
+  so the extension shows as verified. See
+  [Publishing Extensions](https://github.com/EclipseFdn/open-vsx.org/wiki/Publishing-Extensions).
+- **Visual Studio Marketplace:** create the publisher `ndevu12` at
+  [marketplace.visualstudio.com/manage](https://marketplace.visualstudio.com/manage) and an Azure
+  DevOps personal access token with the Marketplace (Manage) scope.
+- **Secrets:** add the tokens as `OVSX_PAT` and `VSCE_PAT` to the `release` environment
+  (Settings → Environments), not as repository secrets, and require a reviewer there so a pushed tag
+  waits for approval before it publishes.
