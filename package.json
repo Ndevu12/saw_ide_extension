@@ -101,6 +101,30 @@
         "category": "saw"
       }
     ],
+    "languageModelTools": [
+      {
+        "name": "saw_folderVerdict",
+        "displayName": "saw folder verdict",
+        "toolReferenceName": "sawVerdict",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(shield)",
+        "tags": [
+          "security",
+          "supply-chain"
+        ],
+        "userDescription": "Ask saw whether a workspace folder shows signs of a supply-chain worm before anything in it is installed or run.",
+        "modelDescription": "Returns saw's supply-chain worm verdict (clean, residue, suspicious, not verified, or infected) for a workspace folder, with its strongest findings. Call it before you install dependencies (npm, pnpm, yarn, pip, poetry, cargo, go and the like), run scripts, tasks, tests or builds, or start a server in a folder, and again after pulling or checking out other code. If the verdict is infected, suspicious, not verified or unknown, do not do any of those things: stop, tell the user the verdict and findings, and ask how to continue. It is read-only: it never changes files and never runs anything from the folder. It may take up to a few minutes when the folder changed since the last scan.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "folder": {
+              "type": "string",
+              "description": "The workspace folder's name, or a path inside it (absolute, or relative to a workspace folder). Leave it out to get every open workspace folder."
+            }
+          }
+        }
+      }
+    ],
     "viewsContainers": {
       "activitybar": [
         {

@@ -61,6 +61,18 @@ suite("saw extension", () => {
     assert.equal(confirmed.source, "saw");
   });
 
+  test("tells an AI agent the folder is infected and to stop, without passing on evidence", async () => {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    assert.ok(folder);
+    assert.ok(vscode.lm.tools.some((tool) => tool.name === "saw_folderVerdict"), "the tool is registered");
+    const result = await vscode.lm.invokeTool("saw_folderVerdict", { input: { folder: folder.name }, toolInvocationToken: undefined });
+    const text = result.content.map((part) => (part instanceof vscode.LanguageModelTextPart ? part.value : "")).join("");
+    assert.match(text, /Verdict: INFECTED/, text);
+    assert.match(text, /STOP\./, text);
+    assert.match(text, /\.vscode\/tasks\.json/, text);
+    assert.doesNotMatch(text, /a\.woff2/, "evidence from the folder is left out");
+  });
+
   test("fixes the infected folder once the operator confirms, then scans it again", async () => {
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder);

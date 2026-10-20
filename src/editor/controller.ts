@@ -5,11 +5,12 @@ import { Scheduler } from "../core/schedule";
 import type { Alerts } from "./alerts";
 import type { Diagnostics } from "./diagnostics";
 import type { EngineResolver } from "./engine";
-import type { Model } from "./model";
+import type { FolderState, Model } from "./model";
 import { VERDICT_LABEL } from "./present";
 import type { Settings } from "./settings";
 
 const DEBOUNCE_MS = 1500;
+const SETTLE_POLL_MS = 250;
 
 /** Scans workspace folders on request, one run per folder at a time, and hands each result to the views. */
 export class Controller implements vscode.Disposable {
@@ -44,6 +45,21 @@ export class Controller implements vscode.Disposable {
     if (folder) {
       this.request(folder);
     }
+  }
+
+  /**
+   * The folder's state once no scan or fix of it is due or running, scanning it first when it has
+   * no result yet. Returns whatever the state is when `signal` aborts.
+   */
+  async settled(folder: vscode.WorkspaceFolder, signal: AbortSignal): Promise<FolderState> {
+    const key = folder.uri.toString();
+    if (!this.model.get(folder).last && !this.scheduler.isBusy(key)) {
+      this.request(folder, { immediate: true });
+    }
+    while (!signal.aborted && (this.scheduler.isBusy(key) || this.model.get(folder).fixing)) {
+      await new Promise((resolve) => setTimeout(resolve, SETTLE_POLL_MS));
+    }
+    return this.model.get(folder);
   }
 
   forget(folder: vscode.WorkspaceFolder): void {

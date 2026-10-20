@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import { Actions } from "./editor/actions";
+import { FOLDER_VERDICT_TOOL, FolderVerdictTool } from "./editor/agentTool";
 import { Alerts } from "./editor/alerts";
 import { Controller } from "./editor/controller";
 import { Diagnostics } from "./editor/diagnostics";
@@ -78,6 +79,10 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     }),
     ...registerTriggers(controller, readSettings),
   );
+  // Forks of VS Code may leave out the language-model API; scanning does not depend on it.
+  if (typeof vscode.lm?.registerTool === "function") {
+    context.subscriptions.push(vscode.lm.registerTool(FOLDER_VERDICT_TOOL, new FolderVerdictTool(model, controller, readSettings)));
+  }
 
   if (readSettings().scanOnStartup && vscode.workspace.workspaceFolders?.length) {
     controller.requestAll({ immediate: true });
