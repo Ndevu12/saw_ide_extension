@@ -59,12 +59,15 @@ describe.skipIf(onWindows || (!binary && !required))("the installed saw", () => 
     // No template: this machine's own git hooks stay out of the test repository.
     const git = (...args: string[]) => execFileSync("git", ["-c", "init.templateDir=", "-c", "core.hooksPath=/dev/null", ...args], { cwd: repo, encoding: "utf8" });
     git("init", "-q", "-b", "main");
+    // saw commits the uncommitted work as the operator, so the repository needs an identity.
+    git("config", "user.name", "t");
+    git("config", "user.email", "t@example.com");
     mkdirSync(path.join(repo, ".vscode"));
     writeFileSync(path.join(repo, ".vscode", "tasks.json"), DISGUISED_TASK);
     writeFileSync(path.join(repo, ".vscode", "a.woff2"), "console.log(1)\n");
     writeFileSync(path.join(repo, "index.js"), "console.log('hello');\n");
     git("add", "-A");
-    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "init");
+    git("commit", "-q", "-m", "init");
     writeFileSync(path.join(repo, "notes.txt"), "not committed\n");
 
     const run = await runProgram(binary, fixArgs(repo, ""), { timeoutMs: 120_000 });
