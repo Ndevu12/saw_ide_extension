@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import type { FolderVerdict } from "../core/verdict";
-import type { Model } from "./model";
+import type { FolderState, Model } from "./model";
 import { VERDICT_LABEL } from "./present";
 
 const ICON: Record<FolderVerdict, string> = {
@@ -17,6 +17,11 @@ const BACKGROUND: Partial<Record<FolderVerdict, vscode.ThemeColor>> = {
   incomplete: new vscode.ThemeColor("statusBarItem.warningBackground"),
   infected: new vscode.ThemeColor("statusBarItem.errorBackground"),
 };
+
+function scanningTooltip(states: FolderState[]): string {
+  const steps = states.filter((state) => state.scanning && state.progress).map((state) => `${state.folder.name}: ${state.progress}`);
+  return ["saw is scanning this workspace.", ...steps].join("\n");
+}
 
 export class StatusBar implements vscode.Disposable {
   private readonly item = vscode.window.createStatusBarItem("saw.verdict", vscode.StatusBarAlignment.Left, 100);
@@ -49,17 +54,23 @@ export class StatusBar implements vscode.Disposable {
     }
     this.item.command = "workbench.view.extension.saw";
     const scanning = states.some((state) => state.scanning);
+    const progress = states.find((state) => state.scanning && state.progress)?.progress;
     const overall = this.model.overall();
     if (!overall) {
-      this.item.text = scanning ? "$(sync~spin) saw: scanning" : "$(shield) saw";
-      this.item.tooltip = scanning ? "saw is scanning this workspace." : "No scan has run yet.";
+      this.item.text = scanning ? `$(sync~spin) saw: scanning${progress ? `: ${progress}` : ""}` : "$(shield) saw";
+      this.item.tooltip = scanning ? scanningTooltip(states) : "No scan has run yet.";
       this.item.backgroundColor = undefined;
       return;
     }
     this.item.text = `${scanning ? "$(sync~spin)" : ICON[overall]} saw: ${VERDICT_LABEL[overall]}`;
     this.item.backgroundColor = BACKGROUND[overall];
     this.item.tooltip = states
-      .flatMap((state) => (state.last ? [`${state.folder.name}: ${VERDICT_LABEL[state.last.verdict]}`] : []))
+      .flatMap((state) => {
+        if (state.scanning && state.progress) {
+          return [`${state.folder.name}: scanning: ${state.progress}`];
+        }
+        return state.last ? [`${state.folder.name}: ${VERDICT_LABEL[state.last.verdict]}`] : [];
+      })
       .join("\n");
   }
 

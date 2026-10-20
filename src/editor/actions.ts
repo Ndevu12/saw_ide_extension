@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 
 import { auditArgs, canFix, FIX_SINCE, fixArgs, gitIdentity, hookArgs, readAudit, readFix, readHookJson, type FixDetails } from "../core/actions";
 import { FEATURES, supports } from "../core/capabilities";
+import { describeProgress, PROGRESS_ARGS, ProgressLines } from "../core/progress";
 import type { CommandRun } from "../core/reports";
 import { runProgram, type RunResult } from "../core/run";
 import { plain } from "../core/text";
@@ -167,8 +168,12 @@ export class Actions {
     this.reports.auditStarted(report);
     showReport();
     const json = supports(engine.capabilities, FEATURES.auditJson, "audit");
-    const run = await this.run("saw audit", engine.binary, auditArgs(engine.capabilities), json ? ["stderr"] : ["stdout", "stderr"], report);
-    this.model.setMachine({ auditing: false });
+    // With progress on, saw keeps its human report off stderr; JSON carries what the report shows instead.
+    const progress = json && supports(engine.capabilities, FEATURES.progress);
+    const args = [...auditArgs(engine.capabilities), ...(progress ? PROGRESS_ARGS : [])];
+    const onProgress = progress ? (text: string | undefined) => this.model.setMachine({ auditProgress: text }) : undefined;
+    const run = await this.run("saw audit", engine.binary, args, json ? ["stderr"] : ["stdout", "stderr"], report, onProgress);
+    this.model.setMachine({ auditing: false, auditProgress: undefined });
     if (run.cancelled) {
       return;
     }
@@ -244,22 +249,48 @@ export class Actions {
     }
   }
 
-  /** Run saw in the background, collecting its own report from `streams` into `report` as it comes. */
-  private run(title: string, binary: string, args: readonly string[], streams: ReadonlyArray<"stdout" | "stderr">, report: CommandRun): Thenable<RunResult> {
-    return vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: true }, async (_progress, token) => {
+  /**
+   * Run saw in the background, collecting its own report from `streams` into `report` as it comes.
+   * With `onProgress`, saw was asked for `--progress=jsonl`: its events go to the notification and
+   * `onProgress`, and only the rest of stderr into the report.
+   */
+  private run(
+    title: string,
+    binary: string,
+    args: readonly string[],
+    streams: ReadonlyArray<"stdout" | "stderr">,
+    report: CommandRun,
+    onProgress?: (text: string | undefined) => void,
+  ): Thenable<RunResult> {
+    return vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: true }, async (notification, token) => {
       const abort = new AbortController();
       const cancelled = token.onCancellationRequested(() => abort.abort());
+      const collect = (text: string) => {
+        if (report.said.length < SAID_LIMIT) {
+          report.said += text;
+          this.reports.progressed();
+        }
+      };
+      const events =
+        onProgress &&
+        new ProgressLines((progress) => {
+          const text = progress ? describeProgress(progress) : undefined;
+          onProgress(text);
+          notification.report({ message: text ?? "" });
+        }, collect);
       try {
         const result = await runProgram(binary, args, {
           timeoutMs: ACTION_TIMEOUT_MS,
           signal: abort.signal,
           onOutput: (text, stream) => {
-            if (streams.includes(stream) && report.said.length < SAID_LIMIT) {
-              report.said += text;
-              this.reports.progressed();
+            if (events && stream === "stderr") {
+              events.feed(text);
+            } else if (streams.includes(stream)) {
+              collect(text);
             }
           },
         });
+        events?.end();
         report.finishedAt = Date.now();
         const stopped = result.cancelled ? "cancelled" : result.timedOut ? "timed-out" : result.spawnError ? "not-started" : undefined;
         if (stopped) {

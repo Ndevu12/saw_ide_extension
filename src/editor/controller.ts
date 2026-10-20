@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 
+import { describeProgress } from "../core/progress";
+import { FEATURES, supports } from "../core/capabilities";
 import { scanFolder } from "../core/scan";
 import { Scheduler } from "../core/schedule";
 import type { Alerts } from "./alerts";
@@ -90,6 +92,7 @@ export class Controller implements vscode.Disposable {
       configPath: settings.configPath,
       timeoutMs: settings.timeoutMs,
       signal,
+      ...(supports(engine.capabilities, FEATURES.progress) ? { onProgress: (p) => this.model.setProgress(folder, p ? describeProgress(p) : undefined) } : {}),
     });
     if (outcome.kind === "cancelled") {
       this.model.setScanning(folder, false);

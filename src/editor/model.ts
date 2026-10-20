@@ -11,6 +11,8 @@ export interface FolderState {
   folder: vscode.WorkspaceFolder;
   scanning: boolean;
   fixing: boolean;
+  /** What saw says it is doing, while it scans; from a saw with `--progress=jsonl`. */
+  progress: string | undefined;
   last: Settled | undefined;
 }
 
@@ -26,6 +28,8 @@ export interface AuditRecord {
 /** What saw last said about this machine rather than a folder. */
 export interface MachineState {
   auditing: boolean;
+  /** What saw says it is doing, while it audits. */
+  auditProgress: string | undefined;
   audit: AuditRecord | undefined;
   hooks: HookStatus | undefined;
 }
@@ -37,7 +41,7 @@ export class Model implements vscode.Disposable {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChange = this.changed.event;
 
-  readonly machine: MachineState = { auditing: false, audit: undefined, hooks: undefined };
+  readonly machine: MachineState = { auditing: false, auditProgress: undefined, audit: undefined, hooks: undefined };
 
   get engine(): Engine | undefined {
     return this.engineState;
@@ -66,21 +70,32 @@ export class Model implements vscode.Disposable {
     const key = folder.uri.toString();
     let state = this.folders.get(key);
     if (!state) {
-      state = { folder, scanning: false, fixing: false, last: undefined };
+      state = { folder, scanning: false, fixing: false, progress: undefined, last: undefined };
       this.folders.set(key, state);
     }
     return state;
   }
 
   setScanning(folder: vscode.WorkspaceFolder, scanning: boolean): void {
-    this.get(folder).scanning = scanning;
+    const state = this.get(folder);
+    state.scanning = scanning;
+    state.progress = undefined;
     this.changed.fire();
+  }
+
+  setProgress(folder: vscode.WorkspaceFolder, progress: string | undefined): void {
+    const state = this.get(folder);
+    if (state.scanning && state.progress !== progress) {
+      state.progress = progress;
+      this.changed.fire();
+    }
   }
 
   setOutcome(folder: vscode.WorkspaceFolder, outcome: Settled): void {
     const state = this.get(folder);
     state.last = outcome;
     state.scanning = false;
+    state.progress = undefined;
     this.changed.fire();
   }
 

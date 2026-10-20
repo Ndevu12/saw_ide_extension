@@ -13,6 +13,10 @@ describe("scanArgs", () => {
     expect(scanArgs("/work/repo", "")).toEqual(["scan", "/work/repo", "--json", "--no-stream"]);
     expect(scanArgs("/work/repo", " /home/me/saw.yml ")).toEqual(["scan", "/work/repo", "--json", "--no-stream", "--config", "/home/me/saw.yml"]);
   });
+
+  it("asks for progress events only when told to", () => {
+    expect(scanArgs("/work/repo", "", true)).toEqual(["scan", "/work/repo", "--json", "--no-stream", "--progress=jsonl"]);
+  });
 });
 
 describe.skipIf(onWindows)("scanFolder", () => {
@@ -27,6 +31,21 @@ describe.skipIf(onWindows)("scanFolder", () => {
     const binary = fakeSaw({ stdout: report([target()]), argsFile });
     await scanFolder(request(binary, { folder: "/work/a b; touch injected", configPath: "/home/me/$(id).yml" }));
     expect(JSON.parse(readFileSync(argsFile, "utf8"))).toEqual(["scan", "/work/a b; touch injected", "--json", "--no-stream", "--config", "/home/me/$(id).yml"]);
+  });
+
+  it("hands on saw's progress, ends it, and still takes the verdict only from the report", async () => {
+    const events = [{ event: "start", steps: 2 }, { event: "step", label: "reading installed packages", index: 1, of: 2 }, { event: "step", label: "verdict: clean", index: 2, of: 2 }, { event: "done", exit: 0 }];
+    const binary = fakeSaw({ stdout: report([target({ verdict: "infected", findings: [finding()] })]), stderr: events.map((e) => JSON.stringify(e)).join("\n") + "\n", exit: 1 });
+    const seen: unknown[] = [];
+    const outcome = await scanFolder(request(binary, { onProgress: (p: unknown) => seen.push(p) }));
+    expect(outcome).toMatchObject({ kind: "scanned", verdict: "infected" });
+    expect(seen).toEqual([{ label: "reading installed packages", index: 1, of: 2 }, { label: "verdict: clean", index: 2, of: 2 }, null, null]);
+  });
+
+  it("quotes saw without its progress events when the scan fails", async () => {
+    const binary = fakeSaw({ stderr: `${JSON.stringify({ event: "step", label: "x", index: 1, of: 2 })}\nerror: boom\n`, exit: 2 });
+    const outcome = await scanFolder(request(binary, { onProgress: () => undefined }));
+    expect(outcome.kind === "failed" && outcome.reasons[0]).toMatch(/saw said: error: boom$/);
   });
 
   it("is incomplete, and quotes saw, when nothing was printed", async () => {

@@ -21,6 +21,7 @@ core/                   no `vscode` import (lint-enforced), unit-tested
   install               pipx (bootstrapped if missing) → `pipx install stayawakebot==<pin>`
   diagnose              failed install → cause + fix, per OS and distribution
   capabilities          `saw capabilities --json` → the features and schemas this saw has
+  progress              `--progress=jsonl` events on stderr → "step (3/9)"; everything else passed on
   run                   start a program without a shell, from a neutral cwd, with timeout/cancel
   scan                  `saw scan <folder> --json --no-stream [--config]` → outcome
   actions               `saw fix --json`, `saw audit [--json]`, `saw hook status [--json]` → what each said
@@ -129,6 +130,13 @@ in a newer schema is refused with "update the extension", never misread.
   `hook repair --json` after their change. Without it, `hook status`'s first line and its ⚠ lines.
   Anything else reads as unknown, never as installed.
 
+**Progress is asked for only where saw's human report is not shown.** With `--progress=jsonl`,
+saw writes events to stderr and keeps its report off it. So the extension passes the flag to
+background scans, and to audits only when saw also has `audit --json`, which carries what the
+report shows. Fix and the hook commands keep their human report. The step is shown in the status
+bar, the saw view and the audit's notification; a verdict never comes from it. Unknown events are
+ignored, and any other stderr line (a traceback) is kept as saw's words.
+
 **A notification never holds up a scan.** Alerts are shown without being awaited: a scan job that
 waited for the operator to answer one would leave every later scan of that folder queued behind it.
 
@@ -146,7 +154,6 @@ read-only so an agent can never trigger `fix`, `audit` or `hook` on its own.
 
 ## Next
 
-- Show saw's `--progress=jsonl` steps while it runs, and register `saw mcp` with Cursor, both when
-  the installed saw has them.
+- Register `saw mcp` with Cursor when the installed saw has it.
 - From saw: line numbers on more findings, and a long-running mode.
 - From saw: running on native Windows (it imports `pwd` at start-up).
