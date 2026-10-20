@@ -73,7 +73,7 @@ children.push(
 );
 
 // The extension's log and its saved scan report are written on the server, in the server's data folder.
-const logOf = () => files(path.join(DATA, "data", "logs")).find((file) => file.endsWith(path.join("ndevu12.saw", "saw.log")));
+const logOf = () => files(path.join(DATA, "data", "logs")).find((file) => file.endsWith(path.join("ndevu12.stayawakebot", "saw.log")));
 const reportOf = () => files(path.join(DATA, "data", "User", "workspaceStorage")).find((file) => file.endsWith("scan.md"));
 const VERDICT = /^## (Clean|Residue|Suspicious|Not verified|Infected)$/m;
 
@@ -102,7 +102,7 @@ const projectChanged = git("status", "--porcelain", "--untracked-files=all").tri
 
 // The actions a person starts from the window, each judged by the report it leaves on the server.
 // Audit and the hooks act on the machine saw runs on, so their reports are in global storage.
-const globalReport = (kind) => path.join(DATA, "data", "User", "globalStorage", "ndevu12.saw", "reports", `${kind}.md`);
+const globalReport = (kind) => path.join(DATA, "data", "User", "globalStorage", "ndevu12.stayawakebot", "reports", `${kind}.md`);
 const fixReportOf = () => files(path.join(DATA, "data", "User", "workspaceStorage")).find((file) => path.basename(path.dirname(file)) === "fixes");
 
 async function finished(find, done, timeoutMs = 240_000) {

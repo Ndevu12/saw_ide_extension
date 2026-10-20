@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-20
+
+### Changed
+
+- The extension is now `Ndevu12.stayawakebot`, after saw's PyPI package, because the Visual
+  Studio Marketplace already has an extension named `saw`. Its commands, settings and the `saw`
+  program are unchanged. `Ndevu12.saw` 0.1.0 on Open VSX is the same extension under the old name.
+
 ## [0.1.0] - 2026-10-20
 
 ### Added
@@ -49,5 +57,6 @@
 - The log of a successful install no longer shows the expected "no pipx yet" check as a warning,
   or a step twice.
 
-[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Ndevu12/saw_ide_extension/releases/tag/v0.1.0

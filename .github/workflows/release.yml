@@ -90,7 +90,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          asset="saw-${GITHUB_REF_NAME#v}.vsix"
+          asset="stayawakebot-${GITHUB_REF_NAME#v}.vsix"
           mv saw.vsix "$asset"
           sha256sum "$asset" > "$asset.sha256"
           # A release made by hand gets the files rather than a second release.
