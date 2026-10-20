@@ -196,6 +196,7 @@
     "test:watch": "vitest",
     "pretest:integration": "pnpm run build && tsc -p tsconfig.test.json",
     "test:integration": "vscode-test",
+    "test:linux": "node test/linux/run.mjs",
     "package": "pnpm run check-types && node esbuild.mjs --production && vsce package --no-dependencies --out saw.vsix"
   },
   "devDependencies": {
