@@ -7,6 +7,10 @@ trustPolicy: no-downgrade
 trustPolicyIgnoreAfter: 43200
 blockExoticSubdeps: true
 strictDepBuilds: true
+overrides:
+  # @vscode/test-cli still requires mocha 11, which pins releases with known advisories.
+  mocha>diff: ^8.0.3
+  mocha>serialize-javascript: ^7.1.2
 allowBuilds:
   # Only verifies marketplace signatures on install; packaging and publishing do not use it.
   '@vscode/vsce-sign': false

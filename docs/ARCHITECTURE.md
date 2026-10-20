@@ -101,6 +101,12 @@ asks nothing and leaves what it is unsure of for review, which its report names.
 **A notification never holds up a scan.** Alerts are shown without being awaited: a scan job that
 waited for the operator to answer one would leave every later scan of that folder queued behind it.
 
+**Two TypeScript compilers, for now.** `tsc` is TypeScript 7 (the `@typescript/native` alias),
+which type-checks and builds the tests. TypeScript 7 has no JavaScript API yet, so `typescript`
+is Microsoft's `@typescript/typescript6` package, which typescript-eslint reads. Drop the alias
+once typescript-eslint supports TypeScript 7. `pnpm-workspace.yaml` likewise lifts mocha's
+`diff` and `serialize-javascript` past their advisories until `@vscode/test-cli` moves to mocha 12.
+
 ## Next
 
 - From saw: `--json` for `audit` and `hook status`, line numbers on more findings, a
