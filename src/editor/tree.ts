@@ -88,7 +88,7 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
           item.description = "fixing…";
           item.iconPath = new vscode.ThemeIcon("sync~spin");
         } else if (state.scanning) {
-          item.description = "scanning…";
+          item.description = state.progress ? `scanning: ${state.progress}` : "scanning…";
           item.iconPath = new vscode.ThemeIcon("sync~spin");
         } else if (state.last) {
           item.description = VERDICT_LABEL[state.last.verdict];
@@ -138,12 +138,12 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
   }
 
   private auditItem(): vscode.TreeItem {
-    const { audit, auditing } = this.model.machine;
+    const { audit, auditing, auditProgress } = this.model.machine;
     const item = new vscode.TreeItem("Changing credentials");
     item.contextValue = "audit";
     item.command = { command: "saw.auditMachine", title: "Audit This Machine" };
     if (auditing) {
-      item.description = "auditing…";
+      item.description = auditProgress ? `auditing: ${auditProgress}` : "auditing…";
       item.iconPath = new vscode.ThemeIcon("sync~spin");
       return item;
     }

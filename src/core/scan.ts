@@ -1,4 +1,5 @@
 import { ContractError, parsePayload, type ScanPayload } from "./contract";
+import { PROGRESS_ARGS, ProgressLines, withoutEvents, type Progress } from "./progress";
 import { runProgram } from "./run";
 import { judge, type FolderVerdict } from "./verdict";
 
@@ -9,6 +10,8 @@ export interface ScanRequest {
   configPath: string;
   timeoutMs: number;
   signal?: AbortSignal;
+  /** Where saw is, from a saw with `--progress=jsonl`; `null` once it is done. Without this, no progress is asked for. */
+  onProgress?: (progress: Progress | null) => void;
 }
 
 export type ScanOutcome =
@@ -27,8 +30,8 @@ export type ScanOutcome =
     }
   | { kind: "cancelled" };
 
-export function scanArgs(folder: string, configPath: string): string[] {
-  const args = ["scan", folder, "--json", "--no-stream"];
+export function scanArgs(folder: string, configPath: string, progress = false): string[] {
+  const args = ["scan", folder, "--json", "--no-stream", ...(progress ? PROGRESS_ARGS : [])];
   if (configPath.trim()) {
     args.push("--config", configPath.trim());
   }
@@ -41,10 +44,14 @@ function lastLines(text: string, count: number): string {
 
 export async function scanFolder(request: ScanRequest): Promise<ScanOutcome> {
   const started = Date.now();
-  const run = await runProgram(request.binary, scanArgs(request.folder, request.configPath), {
+  const progress = request.onProgress && new ProgressLines(request.onProgress);
+  const run = await runProgram(request.binary, scanArgs(request.folder, request.configPath, !!progress), {
     timeoutMs: request.timeoutMs,
     ...(request.signal ? { signal: request.signal } : {}),
+    ...(progress ? { onOutput: (text: string, stream: "stdout" | "stderr") => stream === "stderr" && progress.feed(text) } : {}),
   });
+  progress?.end();
+  request.onProgress?.(null);
   const durationMs = Date.now() - started;
   if (run.cancelled) {
     return { kind: "cancelled" };
@@ -64,7 +71,7 @@ export async function scanFolder(request: ScanRequest): Promise<ScanOutcome> {
     payload = parsePayload(run.stdout);
   } catch (error) {
     const why = error instanceof ContractError ? error.message : String(error);
-    const said = lastLines(run.stderr, 3);
+    const said = lastLines(progress ? withoutEvents(run.stderr) : run.stderr, 3);
     return failed(said ? `${why}. saw said: ${said}` : why);
   }
   const { verdict, reasons } = judge(payload, run.exitCode);
