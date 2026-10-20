@@ -21,7 +21,7 @@
 - The saw view shows whether saw's scan-on-clone git hooks are in place, and installs or repairs
   them.
 - Scans again after a checkout, pull, merge or rebase.
-- Installs stayawakebot 0.13.0, and moves a saw it installed earlier up to it.
+- Installs stayawakebot 0.13.1, and moves a saw it installed earlier up to it.
 - A read-only `saw_folderVerdict` tool for AI agents in the editor: the folder's verdict from a scan
   of the latest changes, with the instruction to stop and ask you unless it is clean or residue.
 - Reports you can read in an editor tab: **Open Report** shows a folder's scan, and Fix, Audit and
