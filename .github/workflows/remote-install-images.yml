@@ -1,4 +1,4 @@
-name: linux-images
+name: remote-install-images
 
 # Installs saw through the extension's installer in the Linux images a remote window lands on
 # (WSL's Ubuntu, dev containers, a Debian without Python). The images are taken by tag on purpose:
@@ -12,9 +12,10 @@ on:
       - "src/core/locate.ts"
       - "src/core/diagnose.ts"
       - "src/core/run.ts"
-      - "test/linux/**"
+      - "test/remote/install-images/**"
+      - "test/remote/scenarios.mjs"
       - "package.json"
-      - ".github/workflows/linux-images.yml"
+      - ".github/workflows/remote-install-images.yml"
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:
@@ -23,11 +24,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: linux-images-${{ github.ref }}
+  group: remote-install-images-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  images:
+  install-images:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -40,4 +41,4 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:linux
+      - run: pnpm test:remote:install-images

@@ -4,11 +4,11 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { homedir, tmpdir } from "node:os";
 import * as path from "node:path";
 
-import { diagnose, parseOsRelease } from "../../src/core/diagnose";
-import { installSaw, type Pins } from "../../src/core/install";
-import { defaultIsExecutableFile, probe } from "../../src/core/locate";
-import { runProgram } from "../../src/core/run";
-import { scanFolder } from "../../src/core/scan";
+import { diagnose, parseOsRelease } from "../../../src/core/diagnose";
+import { installSaw, type Pins } from "../../../src/core/install";
+import { defaultIsExecutableFile, probe } from "../../../src/core/locate";
+import { runProgram } from "../../../src/core/run";
+import { scanFolder } from "../../../src/core/scan";
 
 const DISGUISED_TASK = JSON.stringify({
   version: "2.0.0",

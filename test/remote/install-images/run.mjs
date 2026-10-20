@@ -1,12 +1,15 @@
 // Installs and runs saw, through this extension's own installer, in the Linux images a remote window
 // lands on: WSL's Ubuntu as it ships, with venv, with pipx, a dev-container Python image, and a
-// Debian without Python. Needs Docker and network access to PyPI. Usage: pnpm test:linux [name…]
-import { execFileSync, spawnSync } from "node:child_process";
+// Debian without Python. Needs Docker and network access to PyPI.
+// Usage: pnpm test:remote:install-images [name…]
+import { execFileSync } from "node:child_process";
 import { chmodSync, copyFileSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 
 import * as esbuild from "esbuild";
+
+import { runScenarios } from "../scenarios.mjs";
 
 const NODE_IMAGE = "node:24-bookworm-slim";
 const apt = (packages) =>
@@ -50,10 +53,10 @@ const SCENARIOS = [
   },
 ];
 
-const root = path.resolve(import.meta.dirname, "../..");
-const work = mkdtempSync(path.join(tmpdir(), "saw-linux-"));
+const root = path.resolve(import.meta.dirname, "../../..");
+const work = mkdtempSync(path.join(tmpdir(), "saw-remote-install-"));
 await esbuild.build({
-  entryPoints: [path.join(root, "test/linux/check.ts")],
+  entryPoints: [path.join(import.meta.dirname, "check.ts")],
   bundle: true,
   platform: "node",
   format: "cjs",
@@ -65,11 +68,8 @@ copyFileSync(path.join(root, "package.json"), path.join(work, "package.json"));
 // The container's user need not be this one (Ubuntu images already hold uid 1000).
 chmodSync(work, 0o755);
 
-const wanted = process.argv.slice(2);
-const chosen = SCENARIOS.filter((s) => !wanted.length || wanted.includes(s.name));
-let failures = 0;
-for (const scenario of chosen) {
-  const tag = `saw-ext-linux:${scenario.name}`;
+runScenarios(SCENARIOS, (scenario) => {
+  const tag = `saw-ext-remote-install:${scenario.name}`;
   const dockerfile = [
     `FROM ${NODE_IMAGE} AS node`,
     `FROM ${scenario.base}`,
@@ -82,22 +82,5 @@ for (const scenario of chosen) {
   const context = mkdtempSync(path.join(work, "image-"));
   writeFileSync(path.join(context, "Dockerfile"), dockerfile);
   execFileSync("docker", ["build", "-q", "-t", tag, context], { stdio: ["ignore", "ignore", "inherit"] });
-  const started = Date.now();
-  const run = spawnSync("docker", ["run", "--rm", "-v", `${work}:/check:ro`, tag, "node", "/check/check.cjs", "/check/package.json"], {
-    encoding: "utf8",
-    timeout: 15 * 60_000,
-  });
-  const line = run.stdout.trim().split("\n").pop() ?? "";
-  let report;
-  try {
-    report = JSON.parse(line);
-  } catch {
-    report = { result: "no-report", stdout: run.stdout.slice(-2000), stderr: run.stderr.slice(-2000) };
-  }
-  const ok = scenario.expect(report);
-  failures += ok ? 0 : 1;
-  const seconds = Math.round((Date.now() - started) / 1000);
-  console.log(`${ok ? "✔" : "✘"} ${scenario.name} (${seconds}s): ${scenario.about}`);
-  console.log(`    ${JSON.stringify(report)}`);
-}
-process.exitCode = failures ? 1 : 0;
+  return ["-v", `${work}:/check:ro`, tag, "node", "/check/check.cjs", "/check/package.json"];
+});

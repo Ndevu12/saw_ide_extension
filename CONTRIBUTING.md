@@ -12,7 +12,8 @@ pnpm test             # unit + contract tests (contract tests run when saw is in
 SAW_INSTALL_E2E=1 SAW_E2E_NO_PIPX=1 pnpm exec vitest run test/unit/real-install.test.ts
                       # the real install from PyPI, into a sandbox (your pipx is untouched)
 pnpm run test:integration   # in a real VS Code, the oldest version supported
-pnpm run test:linux   # the install, in WSL's Ubuntu, dev-container and bare Debian images (Docker)
+pnpm run test:remote:install-images   # the install, in WSL's Ubuntu, dev-container and bare Debian images (Docker)
+pnpm run test:remote:vscode-server    # the extension in VS Code Server, which remote windows run (Docker)
 pnpm run lint && pnpm run check-types
 pnpm run package      # saw.vsix
 ```
@@ -23,8 +24,20 @@ Press F5 in the editor to run the extension in a development host.
 
 In a remote window (Remote - SSH, WSL, Dev Containers, or Cursor's equivalents) the extension runs
 on the remote machine (`extensionKind: workspace`), so saw is found or installed there.
-`pnpm test:linux` covers the install on those machines. Before a release, also check by hand with
-`saw.vsix` installed in each kind of remote window:
+The tests for remote windows live in `test/remote/`, one folder per test, sharing the scenario runner
+in `test/remote/scenarios.mjs`:
+
+- `install-images/` (`pnpm test:remote:install-images`) runs the install on the machines those
+  windows land on.
+- `vscode-server/` (`pnpm test:remote:vscode-server`) runs `saw.vsix` in VS Code Server, the program
+  those windows start on the remote, inside a Debian container with a headless browser as the window
+  (`VSCODE_TEST_VERSION` picks the server; default: latest stable). It checks that saw is installed
+  and run on the server, that the folder's report is kept in the server's storage and not in the
+  project, and that a server without network never shows a folder as clean.
+
+It does not cover the editors' own remote extensions, Cursor's server, or Fix, Audit and the hooks,
+which need clicks. Before a release, check those by hand with `saw.vsix` installed in each kind of
+remote window:
 
 - the status bar shows the remote folder's verdict, and an infected folder is reported as infected;
 - `saw` is found or installed **on the remote** (`saw: Show Log` names its path), not on this machine;

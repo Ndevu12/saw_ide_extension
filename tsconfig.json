@@ -16,5 +16,5 @@
     "forceConsistentCasingInFileNames": true,
     "rootDir": "."
   },
-  "include": ["src", "test/unit", "test/linux"]
+  "include": ["src", "test/unit", "test/remote"]
 }
