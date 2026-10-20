@@ -11,6 +11,8 @@ const RUNS_CODE = [
   "**/{package-lock.json,npm-shrinkwrap.json,pnpm-lock.yaml,yarn.lock,bun.lock,bun.lockb}",
   "**/.github/workflows/**",
   "**/.git/{config,hooks/**}",
+  // A checkout, pull, merge or rebase moves these, changing files that no other pattern names.
+  "**/.git/{HEAD,ORIG_HEAD}",
   "**/{.gitattributes,.gitmodules}",
 ];
 

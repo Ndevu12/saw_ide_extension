@@ -12,8 +12,23 @@ on each workspace folder and shows what it finds:
 - **In the Problems panel.** Confirmed findings are errors, heuristic ones are warnings.
 - **In the status bar and the saw view.** Each folder's verdict: clean, suspicious, residue,
   infected, or could not scan. A folder that could not be scanned fully is never shown as clean.
-- **As things change.** A saved file, a pull or a package install that changes `.vscode/`,
-  `package.json`, a lockfile, a workflow or a git hook triggers another scan.
+- **As things change.** A saved file, a checkout, a pull or a package install that changes
+  `.vscode/`, `package.json`, a lockfile, a workflow or a git hook triggers another scan.
+
+And it acts, when you ask:
+
+- **Fix a folder.** On an infected folder, **Fix…** (in the alert, the saw view or **saw: Fix
+  Folder…**) runs `saw fix` after you confirm. saw removes what it confirms from the checkout,
+  together with the installed packages, build output and lockfile, and prepares the clean-up on a
+  new local branch; what you had not committed is kept on a local `saw/uncommitted-…` branch.
+  Nothing is pushed. It works in Restricted Mode: saw runs git with the repository's own hooks and
+  settings switched off, so nothing from the folder runs. The report stays in a terminal, and the
+  folder is scanned again when saw is done.
+- **Audit this machine.** **saw: Audit This Machine** runs `saw audit` and tells you, in saw's own
+  words, whether changing your passwords and tokens is safe yet. Changing them while something on
+  the machine still watches them can set off code that deletes your files.
+- **Scan-on-clone hooks.** The saw view shows whether saw's git hooks are in place, so every clone,
+  pull and branch switch is scanned, and installs or repairs them in one click.
 
 ## Requirements
 
@@ -60,8 +75,8 @@ which program runs or switch the scan off.
 
 ## What it does not do
 
-It never changes your files. To remove what saw confirms, run `saw fix` in the folder. The
-extension sends nothing anywhere: saw scans offline. The only download is the install from PyPI.
+It never changes your files on its own: only **Fix…**, after you confirm, does. It never pushes or
+opens a pull request. The extension sends nothing anywhere: saw scans offline. The only download is the install from PyPI.
 The install does not edit your shell profile: the extension's terminals get pipx's folder on `PATH`;
 for other terminals, run `pipx ensurepath` once.
 

@@ -60,4 +60,52 @@ suite("saw extension", () => {
     assert.equal(confirmed.severity, vscode.DiagnosticSeverity.Error);
     assert.equal(confirmed.source, "saw");
   });
+
+  test("fixes the infected folder once the operator confirms, then scans it again", async () => {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    assert.ok(folder);
+    const asked: string[] = [];
+    const window = vscode.window as { showWarningMessage: (...args: unknown[]) => Thenable<unknown> };
+    const original = window.showWarningMessage;
+    window.showWarningMessage = (message: unknown, ...rest: unknown[]) => {
+      if (typeof message === "string" && message.startsWith("Fix ")) {
+        asked.push(message);
+        return Promise.resolve("Fix");
+      }
+      return original.call(vscode.window, message, ...rest);
+    };
+    try {
+      void vscode.commands.executeCommand("saw.fixFolder", folder);
+      await until(() => (api.model.get(folder).fixing ? true : undefined), 30_000);
+      const last = await until(() => {
+        const state = api.model.get(folder);
+        return !state.fixing && !state.scanning && state.last?.verdict !== "infected" ? state.last : undefined;
+      }, 180_000).catch(() => {
+        const state = api.model.get(folder);
+        throw new Error(`still ${JSON.stringify({ fixing: state.fixing, scanning: state.scanning, verdict: state.last?.verdict, asked })}`);
+      });
+      assert.deepEqual(asked, [`Fix ${folder.name} with saw?`]);
+      assert.notEqual(last?.verdict, "infected", JSON.stringify(last?.reasons));
+      const tasks = vscode.Uri.joinPath(folder.uri, ".vscode", "tasks.json");
+      await assert.rejects(Promise.resolve(vscode.workspace.fs.stat(tasks)), "the confirmed task file is gone");
+    } finally {
+      window.showWarningMessage = original;
+    }
+  });
+
+  test("audits this machine and keeps saw's verdict on changing credentials", async () => {
+    const started = Date.now();
+    void vscode.commands.executeCommand("saw.auditMachine");
+    const audit = await until(() => {
+      const last = api.model.machine.audit;
+      return last && last.at >= started && !api.model.machine.auditing ? last : undefined;
+    }, 540_000);
+    assert.notEqual(audit.verdict, "failed", JSON.stringify(audit));
+    assert.match(audit.sentence ?? "", /^Rotation safety:/);
+  });
+
+  test("shows this machine's scan-on-clone hooks", async () => {
+    const hooks = await until(() => api.model.machine.hooks, 60_000);
+    assert.notEqual(hooks.kind, "unknown", JSON.stringify(hooks));
+  });
 });

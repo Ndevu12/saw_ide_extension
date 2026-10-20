@@ -54,13 +54,15 @@ export class Controller implements vscode.Disposable {
 
   private async scan(key: string, signal: AbortSignal): Promise<void> {
     const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.toString() === key);
-    if (!folder) {
+    // A fix rewrites the checkout as it goes; it asks for a scan of its own when it is done.
+    if (!folder || this.model.get(folder).fixing) {
       return;
     }
     const engine = await this.engines.resolve();
     this.model.setEngine(engine);
+    // Alerts are not awaited: a notification left open must not hold up the next scan.
     if (engine.kind !== "ready") {
-      await this.alerts.engineUnavailable(engine);
+      void this.alerts.engineUnavailable(engine);
       return;
     }
     const before = this.model.get(folder).last?.verdict;
@@ -84,7 +86,7 @@ export class Controller implements vscode.Disposable {
     for (const reason of outcome.reasons) {
       this.log.warn(`${folder.name}: ${reason}`);
     }
-    await this.alerts.verdictChanged(folder, before, outcome);
+    void this.alerts.verdictChanged(folder, before, outcome);
   }
 
   dispose(): void {

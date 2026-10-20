@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import * as vscode from "vscode";
 
 import { defaultIsExecutableFile, locate, probe, type Probed } from "../core/locate";
-import { formatVersion } from "../core/version";
+import { atLeast, formatVersion, parseVersion } from "../core/version";
 import type { Installer } from "./installer";
 
 export type Unavailable =
@@ -71,7 +71,17 @@ export class EngineResolver {
 
   private async findOrInstall(): Promise<Found> {
     const found = await this.find();
-    if (found.kind === "ready" || found.reason === "invalid-setting") {
+    if (found.kind === "ready") {
+      // The saw this extension installed is kept at the release it pins; one the operator installed is theirs.
+      const pinned = parseVersion(`saw (stayawakebot) ${this.installer.pinnedSaw}`);
+      const ours = found.binary === this.installer.installedBinary();
+      const behind = pinned && !atLeast(parseVersion(`saw (stayawakebot) ${found.version}`) ?? [0, 0, 0], this.installer.pinnedSaw);
+      if (ours && behind && this.settings().autoInstall && !this.settings().path.trim() && process.platform !== "win32") {
+        return this.installThenFind(`The saw this extension installed is ${found.version}; it now installs ${this.installer.pinnedSaw}.`);
+      }
+      return found;
+    }
+    if (found.reason === "invalid-setting") {
       return found;
     }
     // saw imports POSIX-only modules at start-up, so an install on Windows could never run.

@@ -13,3 +13,15 @@
   and what to run, with **Retry** and **Copy Diagnostics**. **saw: Install or Repair saw** and the
   `saw.autoInstall` setting.
 - On Windows, where saw does not run yet, says so and points to WSL instead of installing it.
+- **Fix…** on an infected folder runs `saw fix` after you confirm, in Restricted Mode too, shows
+  its report in a terminal and scans the folder again. Nothing is pushed.
+- **saw: Audit This Machine** runs `saw audit` and repeats its verdict on whether changing
+  credentials is safe; the saw view keeps the last one.
+- The saw view shows whether saw's scan-on-clone git hooks are in place, and installs or repairs
+  them.
+- Scans again after a checkout, pull, merge or rebase.
+- Installs stayawakebot 0.13.0, and moves a saw it installed earlier up to it.
+
+### Fixed
+
+- A notification left open no longer holds up the next scan of its folder.
