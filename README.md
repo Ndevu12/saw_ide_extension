@@ -30,6 +30,15 @@ And it acts, when you ask:
 - **Scan-on-clone hooks.** The saw view shows whether saw's git hooks are in place, so every clone,
   pull and branch switch is scanned, and installs or repairs them in one click.
 
+And it answers AI agents:
+
+- **Before an agent installs or runs anything.** The `saw_folderVerdict` tool (`#sawVerdict` in
+  chat) gives an agent the folder's verdict, scanning the latest changes first, and tells it to stop
+  and ask you when the folder is infected, suspicious or not verified. It only reads: it never fixes
+  anything, and it leaves out the file contents saw quotes as evidence, so a malicious file cannot
+  slip instructions to the agent. Tested with agent mode in VS Code; editors that do not offer
+  extension tools to their agents do not see it.
+
 ## Requirements
 
 Linux or macOS with Python 3.11 or later, on the machine where the files are (for Remote SSH, WSL

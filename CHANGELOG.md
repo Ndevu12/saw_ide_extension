@@ -21,6 +21,8 @@
   them.
 - Scans again after a checkout, pull, merge or rebase.
 - Installs stayawakebot 0.13.0, and moves a saw it installed earlier up to it.
+- A read-only `saw_folderVerdict` tool for AI agents in the editor: the folder's verdict from a scan
+  of the latest changes, with the instruction to stop and ask you unless it is clean or residue.
 
 ### Fixed
 

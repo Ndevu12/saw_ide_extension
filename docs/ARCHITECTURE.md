@@ -13,6 +13,7 @@ editor/                 VS Code adapters
   engine                find and version-check saw once per settings change; install it when missing
   installer             progress, cross-window lock, failure notification, diagnostics report
   model                 folder states; every view renders from it
+  agentTool             saw_folderVerdict language-model tool: waits for a current scan, read-only
   diagnostics · statusBar · tree · alerts · settings · present
 core/                   no `vscode` import (lint-enforced), unit-tested
   locate                saw candidates: setting alone, else PATH (absolute entries), ~/.local/bin, installed
@@ -26,6 +27,7 @@ core/                   no `vscode` import (lint-enforced), unit-tested
   verdict               report + exit status → clean | residue | suspicious | incomplete | infected
   schedule              one run per folder, debounced, with exactly one follow-up
   text                  plain-text rendering of bytes from scanned files
+  agent                 the verdict as told to an AI agent, with the instruction to stop; no evidence
 ```
 
 ## Decisions
@@ -106,6 +108,12 @@ which type-checks and builds the tests. TypeScript 7 has no JavaScript API yet, 
 is Microsoft's `@typescript/typescript6` package, which typescript-eslint reads. Drop the alias
 once typescript-eslint supports TypeScript 7. `pnpm-workspace.yaml` likewise lifts mocha's
 `diff` and `serialize-javascript` past their advisories until `@vscode/test-cli` moves to mocha 12.
+
+**Agents get the verdict, not the evidence.** The `saw_folderVerdict` tool answers from the same
+model as the views, after any scan that is due has run, and fails closed: no current answer reads
+as "stop". It leaves out finding evidence and flattens file names, because both come from the
+scanned folder and would otherwise put an attacker's text into the agent's prompt. It stays
+read-only so an agent can never trigger `fix`, `audit` or `hook` on its own.
 
 ## Next
 
