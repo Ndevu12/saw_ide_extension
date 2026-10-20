@@ -140,6 +140,7 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
   private auditItem(): vscode.TreeItem {
     const { audit, auditing } = this.model.machine;
     const item = new vscode.TreeItem("Changing credentials");
+    item.contextValue = "audit";
     item.command = { command: "saw.auditMachine", title: "Audit This Machine" };
     if (auditing) {
       item.description = "auditing…";
@@ -167,6 +168,7 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
   private hooksItem(): vscode.TreeItem {
     const hooks = this.model.machine.hooks;
     const item = new vscode.TreeItem("Scan-on-clone hooks");
+    item.contextValue = "hooks";
     if (!hooks) {
       item.description = "checking…";
       return item;

@@ -8,6 +8,7 @@ import { Diagnostics } from "./editor/diagnostics";
 import { EngineResolver } from "./editor/engine";
 import { Installer, readPins } from "./editor/installer";
 import { Model } from "./editor/model";
+import { Reports } from "./editor/reports";
 import { readSettings } from "./editor/settings";
 import { StatusBar } from "./editor/statusBar";
 import { FindingsTree } from "./editor/tree";
@@ -16,6 +17,7 @@ import { registerTriggers } from "./editor/triggers";
 export interface SawApi {
   readonly model: Model;
   readonly controller: Controller;
+  readonly reports: Reports;
 }
 
 export function activate(context: vscode.ExtensionContext): SawApi {
@@ -27,7 +29,8 @@ export function activate(context: vscode.ExtensionContext): SawApi {
   const alerts = new Alerts();
   const controller = new Controller(model, engines, diagnostics, alerts, readSettings, log);
   const tree = new FindingsTree(model);
-  const actions = new Actions(model, engines, controller, readSettings, log, context.globalState);
+  const reports = new Reports(model, context.storageUri?.fsPath, context.globalStorageUri.fsPath, log);
+  const actions = new Actions(model, engines, controller, readSettings, log, context.globalState, reports);
   installer.exposeToTerminals();
   const folderOf = (arg: unknown): vscode.WorkspaceFolder | undefined => {
     const node = arg as { state?: { folder?: vscode.WorkspaceFolder }; uri?: vscode.Uri } | undefined;
@@ -39,6 +42,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     model,
     diagnostics,
     controller,
+    reports,
     tree,
     new StatusBar(model),
     vscode.window.registerTreeDataProvider("saw.findings", tree),
@@ -54,6 +58,14 @@ export function activate(context: vscode.ExtensionContext): SawApi {
       if (engine.kind === "ready") {
         controller.requestAll({ immediate: true });
         void actions.refreshHooks();
+      }
+    }),
+    vscode.commands.registerCommand("saw.openReport", async (arg?: unknown) => {
+      const kind = (arg as { kind?: unknown } | undefined)?.kind;
+      const folder = folderOf(arg);
+      const uri = kind === "audit" || kind === "hooks" ? reports.machineUri(kind) : folder ? reports.scanUri(folder) : await reports.choose();
+      if (uri) {
+        await reports.open(uri);
       }
     }),
     vscode.commands.registerCommand("saw.fixFolder", (arg?: unknown) => actions.fixFolder(folderOf(arg))),
@@ -90,7 +102,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     void engines.resolve().then((engine) => model.setEngine(engine));
   }
   void actions.refreshHooks();
-  return { model, controller };
+  return { model, controller, reports };
 }
 
 export function deactivate(): void {}

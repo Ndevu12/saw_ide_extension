@@ -9,11 +9,15 @@ export function plain(value: string, limit = 200): string {
   return flat.length > limit ? `${flat.slice(0, limit - 1)}…` : flat;
 }
 
+// eslint-disable-next-line no-control-regex
+const ESCAPE_SEQUENCE = /\u001b\[[0-?]*[ -/]*[@-~]/g;
+
 /**
- * Make a program's output safe to write to a terminal: lines and tabs are kept, every other control
- * character — the escape sequences a terminal would act on — and every bidirectional override is
- * replaced. Lines end in CRLF, as a terminal expects.
+ * Make a program's output safe to show as text of several lines: lines and tabs are kept, colour
+ * sequences are dropped, every other control character and every bidirectional override is
+ * replaced, and the text is bounded.
  */
-export function forTerminal(value: string): string {
-  return value.replace(/\r\n?/g, "\n").replace(UNSAFE, "\uFFFD").replace(/\n/g, "\r\n");
+export function lines(value: string, limit = 200_000): string {
+  const text = value.replace(/\r\n?/g, "\n").replace(ESCAPE_SEQUENCE, "").replace(UNSAFE, "\uFFFD").replace(/\s+$/, "");
+  return text.length > limit ? `${text.slice(0, limit)}\n… (${text.length - limit} more characters not shown)` : text;
 }

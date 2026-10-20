@@ -15,7 +15,7 @@
 - On Windows, where saw does not run yet, says so and points to WSL instead of installing it. The
   README explains remote windows, and setting up WSL step by step.
 - **Fix…** on an infected folder runs `saw fix` after you confirm, in Restricted Mode too, shows
-  its report in a terminal and scans the folder again. Nothing is pushed.
+  its report in an editor tab and scans the folder again. Nothing is pushed.
 - **saw: Audit This Machine** runs `saw audit` and repeats its verdict on whether changing
   credentials is safe; the saw view keeps the last one.
 - The saw view shows whether saw's scan-on-clone git hooks are in place, and installs or repairs
@@ -24,6 +24,9 @@
 - Installs stayawakebot 0.13.0, and moves a saw it installed earlier up to it.
 - A read-only `saw_folderVerdict` tool for AI agents in the editor: the folder's verdict from a scan
   of the latest changes, with the instruction to stop and ask you unless it is clean or residue.
+- Reports you can read in an editor tab: **Open Report** shows a folder's scan, and Fix, Audit and
+  the hook commands open theirs, following saw as it works, instead of a terminal. They are kept in
+  the extension's own storage, never in the project, and the kept copies withhold evidence.
 
 ### Fixed
 

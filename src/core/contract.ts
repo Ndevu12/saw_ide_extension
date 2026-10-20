@@ -21,6 +21,10 @@ export interface Finding {
   evidence: string | null;
   remediation: string;
   advisoryOnly: boolean;
+  /** What to run or change, e.g. the fixed version of a dependency. */
+  fixAdvice: string | null;
+  /** A page about the advisory or technique. */
+  reference: string | null;
 }
 
 export interface TargetResult {
@@ -92,6 +96,8 @@ function parseFinding(raw: unknown, field: string): Finding {
     evidence: optionalText(raw["evidence"]),
     remediation: optionalText(raw["remediation"]) ?? "manual",
     advisoryOnly: raw["advisory_only"] === true,
+    fixAdvice: optionalText(raw["fix_advice"]),
+    reference: optionalText(raw["reference"]),
   };
 }
 

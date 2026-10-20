@@ -7,7 +7,7 @@ export interface RunOptions {
   signal?: AbortSignal;
   /** Bytes kept per stream; a report beyond this fails rather than being read partially. */
   maxOutputBytes?: number;
-  /** Told the output as it arrives, for a terminal that shows progress. */
+  /** Told the output as it arrives, for a report that follows the run. */
   onOutput?: (text: string, stream: "stdout" | "stderr") => void;
 }
 

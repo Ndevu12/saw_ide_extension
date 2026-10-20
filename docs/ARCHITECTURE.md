@@ -8,7 +8,7 @@ extension.ts            composition root
 editor/                 VS Code adapters
   controller            scan a folder on request, hand the outcome to the views
   actions               fix a folder, audit the machine, scan-on-clone hook status/install/repair
-  terminal              run saw in a terminal of its own (no shell), output made terminal-safe
+  reports               saw-report: documents in the Markdown preview; copies in extension storage
   triggers              save, checkout/pull (.git/HEAD, ORIG_HEAD), file watchers, folder changes
   engine                find and version-check saw once per settings change; install it when missing
   installer             progress, cross-window lock, failure notification, diagnostics report
@@ -28,6 +28,8 @@ core/                   no `vscode` import (lint-enforced), unit-tested
   schedule              one run per folder, debounced, with exactly one follow-up
   text                  plain-text rendering of bytes from scanned files
   agent                 the verdict as told to an AI agent, with the instruction to stop; no evidence
+  markdown              Markdown that keeps scanned text literal: code spans, blocks, https links
+  reports               scan, fix, audit and hook reports, with or without evidence
 ```
 
 ## Decisions
@@ -87,11 +89,24 @@ must not require trust. That is safe because saw, not the workspace, runs: saw s
 empty hooks folder, `core.fsmonitor` off, no external diff, pager or editor, and no transport
 protocols, so nothing the repository configures runs.
 
-**Actions run in a terminal of their own, without a shell.** A pseudoterminal starts saw directly,
-shows its report as it comes, and stays open to be read. Output is made terminal-safe first: saw
-quotes paths and text from the scanned repository, and a terminal acts on escape sequences. saw
-starts before the terminal opens, so a hidden panel never holds a fix up. With no TTY, `saw fix`
-asks nothing and leaves what it is unsure of for review, which its report names.
+**Reports are documents the extension builds, not saw's terminal output.** saw stays focused on
+detection; the extension turns its JSON (and, until `audit` and `hook` have JSON, its own words)
+into Markdown and shows it in the editor's Markdown preview, through a read-only `saw-report:` file
+system. Actions run in the background, without a shell, behind a progress notification that can
+stop them, and their report follows saw as it works. With no TTY, `saw fix` asks nothing and leaves
+what it is unsure of for review, which its report names.
+
+**Scanned text stays literal in a report.** File names, descriptions, evidence and saw's own output
+can come from whoever wrote the scanned folder. They reach Markdown only as code spans, fenced
+blocks or fully escaped text, so they cannot make a link, an image (which would tell an attacker the
+report was opened) or HTML. The only links are to plain https pages. Reports do not link to files:
+the saw view and the Problems panel open a finding at its line.
+
+**Reports are kept in the extension's own storage, never in the project.** Folder reports go in
+workspace storage, keyed by a hash of the folder, and machine reports (audit, hooks) in global
+storage, so nothing appears in `git status` and a cloned repository cannot plant or fake a report.
+The kept copies withhold evidence, so storage never holds copies of malicious code; the preview
+shows it from memory. A saved copy is shown, marked as such, only until this window has its own.
 
 **What each action reports is read from the narrowest stable output.**
 - `fix --json` (JSON on stdout, the report on stderr) for prepared, skipped or failed.
