@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parsePayload } from "../../src/core/contract";
+import { DOCS } from "../../src/core/docs";
 import { block, inline, prose, webLink } from "../../src/core/markdown";
 import { auditReport, fixReport, hooksReport, scanReport, type SettledScan } from "../../src/core/reports";
 import { judge } from "../../src/core/verdict";
@@ -154,5 +155,13 @@ describe("the command reports", () => {
     expect(text).toContain("## Last `saw hook repair`");
     expect(hooksReport({ status: { kind: "not-installed" }, checkedAt: undefined, change: undefined, sawVersion: undefined }, "preview"))
       .toContain("Install Scan-on-Clone Hooks");
+  });
+
+  it("each ends with a link to the saw documentation page that explains it", () => {
+    const learn = (url: string) => `](${url})`;
+    expect(scanReport(input(infected()), "preview")).toContain(learn(DOCS.verdicts));
+    expect(fixReport({ folderName: "w", folderPath: "/w", run, outcome: undefined, sawVersion: undefined }, "saved")).toContain(learn(DOCS.fix));
+    expect(auditReport({ run: undefined, verdict: undefined, sentence: undefined, sawVersion: undefined }, "saved")).toContain(learn(DOCS.audit));
+    expect(hooksReport({ status: { kind: "not-installed" }, checkedAt: undefined, change: undefined, sawVersion: undefined }, "saved")).toContain(learn(DOCS.hooks));
   });
 });

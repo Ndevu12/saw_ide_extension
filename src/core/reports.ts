@@ -1,3 +1,4 @@
+import { DOCS } from "./docs";
 import type { AuditDetails, AuditVerdict, FixDetails, FixOutcome, HookStatus } from "./actions";
 import type { Finding, TargetResult } from "./contract";
 import { block, inline, prose, webLink } from "./markdown";
@@ -37,9 +38,9 @@ function sawVersion(version: string | undefined): string {
   return version ? ` with saw ${inline(version, 40)}` : "";
 }
 
-function footer(copy: Copy, source: string): string {
+function footer(copy: Copy, source: string, learn: { title: string; url: string }): string {
   const evidence = copy === "preview" ? " Evidence is shown here only: the copy the extension keeps withholds it." : " This is the copy the extension keeps: evidence is withheld.";
-  return `---\n\n*Built by the saw extension from ${source}. Nothing from the folder ran to make it.${evidence}*`;
+  return `---\n\nLearn more in saw's documentation: [${learn.title}](${learn.url}).\n\n*Built by the saw extension from ${source}. Nothing from the folder ran to make it.${evidence}*`;
 }
 
 function said(run: CommandRun): string {
@@ -212,7 +213,7 @@ export function scanReport(input: ScanReportInput, copy: Copy): string {
   if (outcome.kind === "scanned" && !findings.length && !results.some((r) => r.advisories.length)) {
     out.push("*No findings.*", "");
   }
-  out.push(footer(copy, "`saw scan --json`"));
+  out.push(footer(copy, "`saw scan --json`", { title: "what each verdict means", url: DOCS.verdicts }));
   return out.join("\n");
 }
 
@@ -300,7 +301,7 @@ export function fixReport(input: FixReportInput, copy: Copy): string {
   }
   const finished = run.finishedAt === undefined ? "" : `, took ${seconds(run.finishedAt - run.startedAt)}`;
   out.push(`- Folder: ${inline(input.folderPath, 400)}`, `- Started ${when(run.startedAt)}${finished}${sawVersion(input.sawVersion)}`, "");
-  out.push("## saw's report", "", said(run), "", footer(copy, "`saw fix --json` and saw's own report"));
+  out.push("## saw's report", "", said(run), "", footer(copy, "`saw fix --json` and saw's own report", { title: "saw fix", url: DOCS.fix }));
   return out.join("\n");
 }
 
@@ -364,7 +365,7 @@ export function auditReport(input: AuditReportInput, copy: Copy): string {
   const out = ["# saw audit: this machine", ""];
   const { run, verdict } = input;
   if (!run) {
-    out.push("This machine has not been audited from this editor yet. Run **saw: Audit This Machine**.", "", `- ${AUDIT_HINT}`);
+    out.push("This machine has not been audited from this editor yet. Run **saw: Audit This Machine**.", "", `- ${AUDIT_HINT}`, `- Learn more in saw's documentation: [auditing a machine](${DOCS.audit}).`);
     return out.join("\n");
   }
   const stopped = stoppedLine(run);
@@ -382,7 +383,7 @@ export function auditReport(input: AuditReportInput, copy: Copy): string {
     }
   }
   const finished = run.finishedAt === undefined ? "" : `, took ${seconds(run.finishedAt - run.startedAt)}`;
-  out.push(`- Started ${when(run.startedAt)}${finished}${sawVersion(input.sawVersion)}`, "", "## saw's report", "", said(run), "", footer(copy, "`saw audit` and its own report"));
+  out.push(`- Started ${when(run.startedAt)}${finished}${sawVersion(input.sawVersion)}`, "", "## saw's report", "", said(run), "", footer(copy, "`saw audit` and its own report", { title: "auditing a machine", url: DOCS.audit }));
   return out.join("\n");
 }
 
@@ -418,6 +419,6 @@ export function hooksReport(input: HooksReportInput, copy: Copy): string {
     const state = change.finishedAt === undefined ? "running now" : (stoppedLine(change) ?? `finished in ${seconds(change.finishedAt - change.startedAt)}`);
     out.push(`## Last ${inline(`saw hook ${change.subcommand}`)}`, "", `Started ${when(change.startedAt)}; ${state}`, "", said(change), "");
   }
-  out.push(footer(copy, "`saw hook status`"));
+  out.push(footer(copy, "`saw hook status`", { title: "scan-on-clone hooks", url: DOCS.hooks }));
   return out.join("\n");
 }

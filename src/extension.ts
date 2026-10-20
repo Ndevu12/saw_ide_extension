@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 
+import { DOCS } from "./core/docs";
 import { Actions } from "./editor/actions";
 import { FOLDER_VERDICT_TOOL, FolderVerdictTool } from "./editor/agentTool";
 import { Alerts } from "./editor/alerts";
@@ -84,6 +85,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
       void vscode.window.showInformationMessage("The install diagnostics are on the clipboard, ready to paste into an issue.");
     }),
     vscode.commands.registerCommand("saw.showOutput", () => log.show()),
+    vscode.commands.registerCommand("saw.openDocumentation", () => vscode.env.openExternal(vscode.Uri.parse(DOCS.home))),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("saw")) {
         engines.reset();
