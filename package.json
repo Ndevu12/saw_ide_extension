@@ -48,7 +48,8 @@
       "restrictedConfigurations": [
         "saw.path",
         "saw.configPath",
-        "saw.autoInstall"
+        "saw.autoInstall",
+        "saw.registerMcpServer"
       ]
     },
     "virtualWorkspaces": {
@@ -105,6 +106,12 @@
         "command": "saw.repairHooks",
         "title": "Repair Scan-on-Clone Hooks",
         "category": "saw"
+      }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "saw.mcp",
+        "label": "saw"
       }
     ],
     "languageModelTools": [
@@ -197,6 +204,12 @@
           "default": true,
           "scope": "machine",
           "markdownDescription": "Install saw with pipx when it is missing or too old, installing pipx first when the machine has none. Needs Python 3.11 or later and access to PyPI. Turn it off where software is installed only by an administrator."
+        },
+        "saw.registerMcpServer": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "markdownDescription": "Offer saw's own read-only MCP server (`saw mcp`) to AI agents in the editor, when the installed saw has one: in Cursor through its MCP API, in VS Code 1.101 and later as an MCP server. It cannot fix, install hooks or change files. Turn it off to keep agents to the `saw_folderVerdict` tool."
         },
         "saw.configPath": {
           "type": "string",

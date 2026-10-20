@@ -14,6 +14,7 @@ editor/                 VS Code adapters
   installer             progress, cross-window lock, failure notification, diagnostics report
   model                 folder states; every view renders from it
   agentTool             saw_folderVerdict language-model tool: waits for a current scan, read-only
+  mcp                   offer `saw mcp` to agents: Cursor's MCP API, or VS Code's MCP provider
   diagnostics · statusBar · tree · alerts · settings · present
 core/                   no `vscode` import (lint-enforced), unit-tested
   locate                saw candidates: setting alone, else PATH (absolute entries), ~/.local/bin, installed
@@ -30,6 +31,7 @@ core/                   no `vscode` import (lint-enforced), unit-tested
   schedule              one run per folder, debounced, with exactly one follow-up
   text                  plain-text rendering of bytes from scanned files
   agent                 the verdict as told to an AI agent, with the instruction to stop; no evidence
+  mcp                   how to start `saw mcp`, when this saw has it
   markdown              Markdown that keeps scanned text literal: code spans, blocks, https links
   reports               scan, fix, audit and hook reports, with or without evidence
 ```
@@ -152,8 +154,15 @@ as "stop". It leaves out finding evidence and flattens file names, because both 
 scanned folder and would otherwise put an attacker's text into the agent's prompt. It stays
 read-only so an agent can never trigger `fix`, `audit` or `hook` on its own.
 
+**saw serves MCP, not the extension.** When `saw capabilities` lists `mcp`, the extension tells
+the editor how to start `saw mcp` with the saw it uses, and follows that saw: it registers again
+when the program changes, and withdraws it when saw goes or the setting is turned off. Cursor gets
+it through `vscode.cursor.mcp.registerServer`, and nowhere else, so it is not listed twice. VS
+Code 1.101 and later get it from an MCP server definition provider. Both APIs are found at run
+time, since the 1.96 types have neither. In a remote Cursor window it is not registered: where
+Cursor would start the server there is not documented.
+
 ## Next
 
-- Register `saw mcp` with Cursor when the installed saw has it.
 - From saw: line numbers on more findings, and a long-running mode.
 - From saw: running on native Windows (it imports `pwd` at start-up).

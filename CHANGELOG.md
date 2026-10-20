@@ -28,6 +28,9 @@
   a report in a newer schema than the extension reads says to update the extension.
 - With a saw that reports its progress (`--progress=jsonl`), the status bar, the saw view and the
   audit's notification show which step saw is on, and how many remain.
+- Offers saw's own read-only MCP server (`saw mcp`) to agents when the installed saw has it: in
+  Cursor through its MCP API, in VS Code 1.101 and later as an MCP server. The
+  `saw.registerMcpServer` setting turns it off.
 - Installs stayawakebot 0.13.1, and moves a saw it installed earlier up to it.
 - A read-only `saw_folderVerdict` tool for AI agents in the editor: the folder's verdict from a scan
   of the latest changes, with the instruction to stop and ask you unless it is clean or residue.

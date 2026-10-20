@@ -44,6 +44,11 @@ And it answers AI agents:
   anything, and it leaves out the file contents saw quotes as evidence, so a malicious file cannot
   slip instructions to the agent. Tested with agent mode in VS Code; editors that do not offer
   extension tools to their agents do not see it.
+- **saw's own MCP server.** When the installed saw has `saw mcp`, the extension offers it to agents:
+  in Cursor through Cursor's MCP API, and in VS Code 1.101 or later as an MCP server named saw. It
+  is read-only, like the tool. Turn it off with the `saw.registerMcpServer` setting. Antigravity
+  has no API for this; add it to `~/.gemini/config/mcp_config.json` yourself:
+  `{"mcpServers": {"saw": {"command": "/absolute/path/to/saw", "args": ["mcp"]}}}`.
 
 ## Requirements
 
