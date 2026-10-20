@@ -22,7 +22,7 @@ export interface SawApi {
 }
 
 export function activate(context: vscode.ExtensionContext): SawApi {
-  const log = vscode.window.createOutputChannel("saw", { log: true });
+  const log = vscode.window.createOutputChannel("SAW BOT", { log: true });
   const model = new Model();
   const installer = new Installer(context, log, readPins(context));
   const engines = new EngineResolver(log, readSettings, installer, () => model.setEngine({ kind: "installing" }));

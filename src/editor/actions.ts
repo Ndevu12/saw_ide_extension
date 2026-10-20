@@ -221,7 +221,7 @@ export class Actions {
     }
   }
 
-  /** Ask saw whether its scan-on-clone hooks are in place. Quiet: the saw view shows the answer. */
+  /** Ask saw whether its scan-on-clone hooks are in place. Quiet: the SAW BOT view shows the answer. */
   async refreshHooks(): Promise<void> {
     const engine = await this.engines.resolve();
     if (engine.kind !== "ready") {

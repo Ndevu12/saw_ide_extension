@@ -23,7 +23,7 @@ export interface CommandRun {
 }
 
 const AUDIT_HINT =
-  "Before you change any password or token, run **saw: Audit This Machine**: changing them while something on the machine still watches them can set off code that deletes your files.";
+  "Before you change any password or token, run **SAW BOT: Audit This Machine**: changing them while something on the machine still watches them can set off code that deletes your files.";
 
 export function when(ms: number): string {
   return `${new Date(ms).toISOString().slice(0, 19).replace("T", " ")} UTC`;
@@ -90,11 +90,11 @@ const VERDICT_ADVICE: Record<FolderVerdict, string[]> = {
   ],
   incomplete: [
     "Do not trust the folder, install its dependencies or run anything in it until saw can finish.",
-    "The reasons are below. When they are dealt with, run **saw: Scan Workspace**.",
+    "The reasons are below. When they are dealt with, run **SAW BOT: Scan Workspace**.",
   ],
   infected: [
     "Do not trust this folder, install its dependencies, build or run it.",
-    "Use **Fix…** on the folder in the saw view, or **saw: Fix Folder…**: saw removes what it confirms and prepares the clean-up on a new local branch. Nothing from the folder runs while it does, and nothing is pushed.",
+    "Use **Fix…** on the folder in the SAW BOT view, or **SAW BOT: Fix Folder…**: saw removes what it confirms and prepares the clean-up on a new local branch. Nothing from the folder runs while it does, and nothing is pushed.",
     AUDIT_HINT,
   ],
 };
@@ -185,7 +185,7 @@ export function scanReport(input: ScanReportInput, copy: Copy): string {
   }
   out.push("", "## What to do", "", ...VERDICT_ADVICE[outcome.verdict].map((line) => `- ${line}`), "");
   if (findings.length) {
-    out.push("To open a finding's file at its line, click it in the saw view or the Problems panel.", "");
+    out.push("To open a finding's file at its line, click it in the SAW BOT view or the Problems panel.", "");
   }
   if (outcome.reasons.length) {
     out.push("## Why it is not verified", "", ...outcome.reasons.map((reason) => `- ${prose(reason, 600)}`), "");
@@ -328,7 +328,7 @@ const AUDIT_ADVICE: Record<AuditVerdict, string> = {
   "to-confirm": "saw found nothing that makes changing credentials unsafe, provided the items below are yours. If any is not, treat this as an incident: do not change anything yet.",
   "rotation-unsafe": "Something on this machine still watches your credentials. Act on saw's report below first, then audit again before you change anything.",
   incomplete: "saw could not read all of this machine, so changing credentials is not known to be safe. saw's report below says what it could not read.",
-  failed: "This machine was not checked. saw's report below may say why; run **saw: Audit This Machine** again.",
+  failed: "This machine was not checked. saw's report below may say why; run **SAW BOT: Audit This Machine** again.",
 };
 
 function auditFinding(f: AuditDetails["findings"][number]): string[] {
@@ -364,7 +364,7 @@ export function auditReport(input: AuditReportInput, copy: Copy): string {
   const out = ["# saw audit: this machine", ""];
   const { run, verdict } = input;
   if (!run) {
-    out.push("This machine has not been audited from this editor yet. Run **saw: Audit This Machine**.", "", `- ${AUDIT_HINT}`);
+    out.push("This machine has not been audited from this editor yet. Run **SAW BOT: Audit This Machine**.", "", `- ${AUDIT_HINT}`);
     return out.join("\n");
   }
   const stopped = stoppedLine(run);
@@ -404,9 +404,9 @@ export function hooksReport(input: HooksReportInput, copy: Copy): string {
   } else if (status.kind === "installed" && !status.problems.length) {
     out.push("## In place", "", `Every clone, pull and branch switch is scanned before anything in it runs${status.events.length ? ` (${status.events.map((e) => inline(e, 40)).join(", ")})` : ""}.`, "");
   } else if (status.kind === "installed") {
-    out.push("## Need repair", "", "saw's hooks are installed but not fully working:", "", ...status.problems.map((p) => `- ${prose(p, 600)}`), "", "Run **saw: Repair Scan-on-Clone Hooks**.", "");
+    out.push("## Need repair", "", "saw's hooks are installed but not fully working:", "", ...status.problems.map((p) => `- ${prose(p, 600)}`), "", "Run **SAW BOT: Repair Scan-on-Clone Hooks**.", "");
   } else if (status.kind === "not-installed") {
-    out.push("## Not installed", "", "Clones, pulls and branch switches are not scanned. Run **saw: Install Scan-on-Clone Hooks** so saw checks every repository before anything in it runs.", "");
+    out.push("## Not installed", "", "Clones, pulls and branch switches are not scanned. Run **SAW BOT: Install Scan-on-Clone Hooks** so saw checks every repository before anything in it runs.", "");
   } else {
     out.push("## Unknown", "", `saw could not say whether its hooks are in place: ${prose(status.detail, 600)}`, "");
   }

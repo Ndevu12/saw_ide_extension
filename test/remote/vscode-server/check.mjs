@@ -73,7 +73,7 @@ children.push(
 );
 
 // The extension's log and its saved scan report are written on the server, in the server's data folder.
-const logOf = () => files(path.join(DATA, "data", "logs")).find((file) => file.endsWith(path.join("ndevu12.stayawakebot", "saw.log")));
+const logOf = () => files(path.join(DATA, "data", "logs")).find((file) => path.basename(path.dirname(file)) === "ndevu12.stayawakebot" && file.endsWith(".log"));
 const reportOf = () => files(path.join(DATA, "data", "User", "workspaceStorage")).find((file) => file.endsWith("scan.md"));
 const VERDICT = /^## (Clean|Residue|Suspicious|Not verified|Infected)$/m;
 
@@ -155,12 +155,12 @@ if (process.env.SAW_REMOTE_ACTIONS === "1" && verdict === "Infected") {
       actions.alert = await workbench.dialog();
     }
     actions.alertDismissed = await workbench.click("Cancel");
-    await workbench.run("saw: Audit This Machine");
+    await workbench.run("SAW BOT: Audit This Machine");
     await shot("1-audit-started");
     actions.audit = await finished(() => globalReport("audit"), (t) => t.includes("## saw's report") && !t.includes("## Auditing now"));
 
     await shot("2-audit-finished");
-    await workbench.run("saw: Install Scan-on-Clone Hooks");
+    await workbench.run("SAW BOT: Install Scan-on-Clone Hooks");
     await shot("3-hooks-started");
     actions.hooks = await finished(() => globalReport("hooks"), (t) => t.includes("Last `saw hook install`") && !t.includes("running now"));
     // What saw itself says on the server, apart from what the extension shows.
@@ -168,7 +168,7 @@ if (process.env.SAW_REMOTE_ACTIONS === "1" && verdict === "Infected") {
     actions.hooks &&= { ...actions.hooks, sawSays: sawSays.split("\n").find((line) => line.startsWith("scan-on-clone:")) ?? null };
 
     await shot("4-hooks-finished");
-    await workbench.run("saw: Fix Folder…");
+    await workbench.run("SAW BOT: Fix Folder…");
     await shot("5-fix-asked");
     actions.fixConfirmed = await workbench.click("Fix");
     actions.fix = await finished(fixReportOf, (t) => t.includes("## saw's report") && !t.includes("## Fixing now"));

@@ -104,7 +104,7 @@ what it is unsure of for review, which its report names.
 can come from whoever wrote the scanned folder. They reach Markdown only as code spans, fenced
 blocks or fully escaped text, so they cannot make a link, an image (which would tell an attacker the
 report was opened) or HTML. The only links are to plain https pages. Reports do not link to files:
-the saw view and the Problems panel open a finding at its line.
+the SAW BOT view and the Problems panel open a finding at its line.
 
 **Reports are kept in the extension's own storage, never in the project.** Folder reports go in
 workspace storage, keyed by a hash of the folder, and machine reports (audit, hooks) in global
@@ -136,7 +136,7 @@ in a newer schema is refused with "update the extension", never misread.
 saw writes events to stderr and keeps its report off it. So the extension passes the flag to
 background scans, and to audits only when saw also has `audit --json`, which carries what the
 report shows. Fix and the hook commands keep their human report. The step is shown in the status
-bar, the saw view and the audit's notification; a verdict never comes from it. Unknown events are
+bar, the SAW BOT view and the audit's notification; a verdict never comes from it. Unknown events are
 ignored, and any other stderr line (a traceback) is kept as saw's words.
 
 **A notification never holds up a scan.** Alerts are shown without being awaited: a scan job that

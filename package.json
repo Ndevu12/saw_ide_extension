@@ -1,6 +1,6 @@
 {
   "name": "stayawakebot",
-  "displayName": "StayAwakeBot (saw)",
+  "displayName": "SAW BOT",
   "description": "Supply-chain worm hunting in your editor: the saw verdict for every folder you open, before you trust it.",
   "version": "0.1.1",
   "publisher": "ndevu12",
@@ -62,50 +62,50 @@
       {
         "command": "saw.scanWorkspace",
         "title": "Scan Workspace",
-        "category": "saw",
+        "category": "SAW BOT",
         "icon": "$(refresh)"
       },
       {
         "command": "saw.showOutput",
         "title": "Show Log",
-        "category": "saw"
+        "category": "SAW BOT"
       },
       {
         "command": "saw.install",
         "title": "Install or Repair saw",
-        "category": "saw"
+        "category": "SAW BOT"
       },
       {
         "command": "saw.copyDiagnostics",
         "title": "Copy Install Diagnostics",
-        "category": "saw"
+        "category": "SAW BOT"
       },
       {
         "command": "saw.openReport",
         "title": "Open Report",
-        "category": "saw",
+        "category": "SAW BOT",
         "icon": "$(book)"
       },
       {
         "command": "saw.fixFolder",
         "title": "Fix Folder…",
-        "category": "saw",
+        "category": "SAW BOT",
         "icon": "$(wand)"
       },
       {
         "command": "saw.auditMachine",
         "title": "Audit This Machine",
-        "category": "saw"
+        "category": "SAW BOT"
       },
       {
         "command": "saw.installHooks",
         "title": "Install Scan-on-Clone Hooks",
-        "category": "saw"
+        "category": "SAW BOT"
       },
       {
         "command": "saw.repairHooks",
         "title": "Repair Scan-on-Clone Hooks",
-        "category": "saw"
+        "category": "SAW BOT"
       }
     ],
     "mcpServerDefinitionProviders": [
@@ -117,7 +117,7 @@
     "languageModelTools": [
       {
         "name": "saw_folderVerdict",
-        "displayName": "saw folder verdict",
+        "displayName": "SAW BOT folder verdict",
         "toolReferenceName": "sawVerdict",
         "canBeReferencedInPrompt": true,
         "icon": "$(shield)",
@@ -142,7 +142,7 @@
       "activitybar": [
         {
           "id": "saw",
-          "title": "saw",
+          "title": "SAW BOT",
           "icon": "media/saw.svg"
         }
       ]
@@ -191,7 +191,7 @@
       ]
     },
     "configuration": {
-      "title": "saw",
+      "title": "SAW BOT",
       "properties": {
         "saw.path": {
           "type": "string",

@@ -26,7 +26,7 @@ const GUIDANCE: Record<FolderVerdict | "unknown", string> = {
   incomplete:
     "STOP. saw could not finish checking this folder, so it is not known to be safe. Do not install, run or build anything in it. Tell the person and ask how to continue.",
   infected:
-    "STOP. Do not install dependencies, run scripts, tasks, tests or builds, or start a server in this folder: doing so can run the worm. Tell the person saw's verdict and findings. They can review them in the saw view and run \"saw: Fix Folder…\" themselves.",
+    "STOP. Do not install dependencies, run scripts, tasks, tests or builds, or start a server in this folder: doing so can run the worm. Tell the person saw's verdict and findings. They can review them in the SAW BOT view and run \"SAW BOT: Fix Folder…\" themselves.",
   unknown:
     "STOP. This folder has not been checked by saw, so it is not known to be safe. Do not install, run or build anything in it. Tell the person and ask how to continue.",
 };

@@ -51,7 +51,7 @@ for it nor a browser window to drive it). Before a release, check those by hand 
 installed in each kind of remote window:
 
 - the status bar shows the remote folder's verdict, and an infected folder is reported as infected;
-- `saw` is found or installed **on the remote** (`saw: Show Log` names its path), not on this machine;
+- `saw` is found or installed **on the remote** (`SAW BOT: Show Log` names its path), not on this machine;
 - **Fix…**, **Audit This Machine** and the hooks act on the remote's files, git and machine;
 - with no network, the install fails with the diagnosis, and no folder is reported clean.
 
