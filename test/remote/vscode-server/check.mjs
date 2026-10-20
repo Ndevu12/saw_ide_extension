@@ -1,4 +1,4 @@
-// Runs inside the container (see run.mjs), with the VS Code server's own Node. Installs saw.vsix into
+// Runs inside the container (see run.mjs), with VS Code Server's own Node. Installs saw.vsix into
 // the server, opens an infected folder from a headless browser, and waits until the extension, running
 // in the server's extension host, has scanned it. Prints one JSON line.
 import { execFileSync, spawn } from "node:child_process";

@@ -1,6 +1,6 @@
-name: remote-server
+name: remote-vscode-server
 
-# Runs saw.vsix in the VS Code server, the program Remote - SSH, WSL and Dev Containers start on the
+# Runs saw.vsix in VS Code Server, the program Remote - SSH, WSL and Dev Containers start on the
 # remote machine, in a Debian container with a headless browser as the window: saw must be installed
 # and run on the server, and a server without network must never show a folder as clean. Online
 # (Docker Hub, Debian, PyPI, the VS Code update server), so it runs when the paths involved change,
@@ -14,9 +14,10 @@ on:
       - "src/editor/reports.ts"
       - "src/core/install.ts"
       - "src/core/locate.ts"
-      - "test/remote/**"
+      - "test/remote/vscode-server/**"
+      - "test/remote/scenarios.mjs"
       - "package.json"
-      - ".github/workflows/remote-server.yml"
+      - ".github/workflows/remote-vscode-server.yml"
   schedule:
     - cron: "37 5 * * 1"
   workflow_dispatch:
@@ -25,11 +26,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: remote-server-${{ github.ref }}
+  group: remote-vscode-server-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  server:
+  vscode-server:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -46,6 +47,6 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:remote
+      - run: pnpm test:remote:vscode-server
         env:
           VSCODE_TEST_VERSION: ${{ matrix.vscode }}
