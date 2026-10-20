@@ -30,14 +30,25 @@ in `test/remote/scenarios.mjs`:
 - `install-images/` (`pnpm test:remote:install-images`) runs the install on the machines those
   windows land on.
 - `vscode-server/` (`pnpm test:remote:vscode-server`) runs `saw.vsix` in VS Code Server, the program
-  those windows start on the remote, inside a Debian container with a headless browser as the window
-  (`VSCODE_TEST_VERSION` picks the server; default: latest stable). It checks that saw is installed
-  and run on the server, that the folder's report is kept in the server's storage and not in the
-  project, and that a server without network never shows a folder as clean.
+  those windows start on the remote, inside a Debian container with headless Chromium as the window
+  (`VSCODE_TEST_VERSION` picks the server; default: latest stable). It checks that:
+  - saw is installed and run on the server, and the folder's report is kept in the server's storage,
+    not in the project;
+  - the window warns that the folder is infected;
+  - **Audit This Machine**, **Install Scan-on-Clone Hooks** and **Fix…**, started from the command
+    palette and confirmed in the dialog as a person would, act on the server: saw reports its hooks
+    installed there, and Fix prepares its branch in the server's checkout, after which the folder
+    scans clean;
+  - a server without network never shows a folder as clean.
 
-It does not cover the editors' own remote extensions, Cursor's server, or Fix, Audit and the hooks,
-which need clicks. Before a release, check those by hand with `saw.vsix` installed in each kind of
-remote window:
+  `workbench.mjs` drives the window through Chromium's DevTools protocol. A screenshot of the window
+  is taken after each step; the path is printed first, `SAW_REMOTE_SCREENSHOTS` chooses it, and CI
+  uploads them when the test fails.
+
+Neither covers the editors' own remote extensions (Microsoft's Remote - SSH, WSL and Dev Containers
+clients, which are not open source) or Cursor's remote server (Cursor documents neither a download
+for it nor a browser window to drive it). Before a release, check those by hand with `saw.vsix`
+installed in each kind of remote window:
 
 - the status bar shows the remote folder's verdict, and an infected folder is reported as infected;
 - `saw` is found or installed **on the remote** (`saw: Show Log` names its path), not on this machine;

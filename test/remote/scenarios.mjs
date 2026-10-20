@@ -22,7 +22,12 @@ export function runScenarios(scenarios, dockerRunArgs, note) {
     } catch {
       report = { result: "no-report", stdout: run.stdout.slice(-2000), stderr: run.stderr.slice(-2000) };
     }
-    const ok = scenario.expect(report);
+    let ok;
+    try {
+      ok = scenario.expect(report) === true;
+    } catch {
+      ok = false;
+    }
     failures += ok ? 0 : 1;
     const seconds = Math.round((Date.now() - started) / 1000);
     console.log(`${ok ? "✔" : "✘"} ${scenario.name} (${seconds}s${note ? `, ${note}` : ""}): ${scenario.about}`);

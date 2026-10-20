@@ -2,13 +2,16 @@ name: remote-vscode-server
 
 # Runs saw.vsix in VS Code Server, the program Remote - SSH, WSL and Dev Containers start on the
 # remote machine, in a Debian container with a headless browser as the window: saw must be installed
-# and run on the server, and a server without network must never show a folder as clean. Online
-# (Docker Hub, Debian, PyPI, the VS Code update server), so it runs when the paths involved change,
-# weekly, and on demand, not on every pull request.
+# and run on the server, Audit, the hook install and Fix started from the window must act there, and
+# a server without network must never show a folder as clean. Screenshots of the window are kept when
+# it fails. Online (Docker Hub, Debian, PyPI, the VS Code update server), so it runs when the paths
+# involved change, weekly, and on demand, not on every pull request.
 on:
   pull_request:
     paths:
       - "src/extension.ts"
+      - "src/editor/actions.ts"
+      - "src/editor/alerts.ts"
       - "src/editor/engine.ts"
       - "src/editor/installer.ts"
       - "src/editor/reports.ts"
@@ -50,3 +53,10 @@ jobs:
       - run: pnpm test:remote:vscode-server
         env:
           VSCODE_TEST_VERSION: ${{ matrix.vscode }}
+          SAW_REMOTE_SCREENSHOTS: ${{ runner.temp }}/screenshots
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vscode-server-${{ matrix.vscode }}-screenshots
+          path: ${{ runner.temp }}/screenshots
+          retention-days: 7
