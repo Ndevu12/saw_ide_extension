@@ -1,6 +1,7 @@
 import * as assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import * as path from "node:path";
 
 import * as vscode from "vscode";
 
@@ -63,7 +64,11 @@ suite("saw extension", () => {
     assert.equal(confirmed.source, "saw");
   });
 
-  test("tells an AI agent the folder is infected and to stop, without passing on evidence", async () => {
+  test("tells an AI agent the folder is infected and to stop, without passing on evidence", async function () {
+    // Cursor's agent does not call tools that extensions contribute; the next test covers Cursor.
+    if ((vscode as unknown as { cursor?: object }).cursor) {
+      this.skip();
+    }
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder);
     assert.ok(vscode.lm.tools.some((tool) => tool.name === "saw_folderVerdict"), "the tool is registered");
@@ -73,6 +78,25 @@ suite("saw extension", () => {
     assert.match(text, /STOP\./, text);
     assert.match(text, /\.vscode\/tasks\.json/, text);
     assert.doesNotMatch(text, /a\.woff2/, "evidence from the folder is left out");
+  });
+
+  test("in Cursor, refuses the agent's install command in the infected folder", async function () {
+    if (!(vscode as unknown as { cursor?: object }).cursor) {
+      this.skip();
+    }
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    assert.ok(folder);
+    assert.ok(api.cursorGuard.registered, "the guard's plugin is given to Cursor");
+    const hooks = JSON.parse(readFileSync(path.join(api.cursorGuard.pluginDir, "hooks", "hooks.json"), "utf8")) as {
+      hooks: { beforeShellExecution: { command: string; matcher: string }[] };
+    };
+    const [hook] = hooks.hooks.beforeShellExecution;
+    assert.ok(hook && new RegExp(hook.matcher).test("npm install"));
+    const input = JSON.stringify({ command: "npm install", cwd: folder.uri.fsPath, workspace_roots: [folder.uri.fsPath] });
+    const run = spawnSync(process.env["SHELL"] ?? "/bin/sh", ["-c", hook.command], { input, encoding: "utf8" });
+    const answer = JSON.parse(run.stdout) as { permission: string; agent_message: string };
+    assert.equal(answer.permission, "deny", run.stdout + run.stderr);
+    assert.match(answer.agent_message, /Verdict: INFECTED/);
   });
 
   test("opens the scan report in the editor, and keeps a copy without evidence outside the project", async () => {

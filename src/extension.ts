@@ -5,6 +5,7 @@ import { Actions } from "./editor/actions";
 import { FOLDER_VERDICT_TOOL, FolderVerdictTool } from "./editor/agentTool";
 import { Alerts } from "./editor/alerts";
 import { Controller } from "./editor/controller";
+import { CursorAgentGuard } from "./editor/cursorGuard";
 import { Diagnostics } from "./editor/diagnostics";
 import { EngineResolver } from "./editor/engine";
 import { Installer, readPins } from "./editor/installer";
@@ -20,6 +21,7 @@ export interface SawApi {
   readonly model: Model;
   readonly controller: Controller;
   readonly reports: Reports;
+  readonly cursorGuard: CursorAgentGuard;
 }
 
 export function activate(context: vscode.ExtensionContext): SawApi {
@@ -32,6 +34,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
   const controller = new Controller(model, engines, diagnostics, alerts, readSettings, log);
   const tree = new FindingsTree(model);
   const reports = new Reports(model, context.storageUri?.fsPath, context.globalStorageUri.fsPath, log);
+  const cursorGuard = new CursorAgentGuard(model, readSettings, context.globalStorageUri.fsPath, context.asAbsolutePath("dist/cursor-hook.js"), log);
   const actions = new Actions(model, engines, controller, readSettings, log, context.globalState, reports);
   installer.exposeToTerminals();
   const folderOf = (arg: unknown): vscode.WorkspaceFolder | undefined => {
@@ -45,6 +48,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     diagnostics,
     controller,
     reports,
+    cursorGuard,
     tree,
     new StatusBar(model),
     new SawMcpRegistration(model, readSettings, log),
@@ -106,7 +110,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     void engines.resolve().then((engine) => model.setEngine(engine));
   }
   void actions.refreshHooks();
-  return { model, controller, reports };
+  return { model, controller, reports, cursorGuard };
 }
 
 export function deactivate(): void {}

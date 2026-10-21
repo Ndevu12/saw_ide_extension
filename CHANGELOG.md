@@ -4,6 +4,10 @@
 
 ### Added
 
+- In Cursor, the agent checks saw's verdict before it runs a command that installs or runs a
+  folder's code, such as `npm install`, `make` or `./script.sh`. In a folder saw found infected the
+  command is refused and the agent is told why; when saw found it suspicious or could not check it,
+  Cursor asks you first. Turn it off with `saw.guardAgentCommands`.
 - **saw: Open saw Documentation**, also in the saw view's title bar, opens
   [saw's documentation](https://saw-docs.ndevuspace.com/). Each report ends with a link to the page
   that explains it, and the saw view links to what each verdict means.

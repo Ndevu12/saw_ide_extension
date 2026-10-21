@@ -1,5 +1,6 @@
 **
 !dist/extension.js
+!dist/cursor-hook.js
 !media/**
 !package.json
 !README.md

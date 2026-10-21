@@ -22,9 +22,10 @@ git("init", "-q", "-b", "main");
 git("add", "-A");
 git("-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "init");
 
+// SAW_IT_EDITOR runs the tests in another VS Code-based editor, such as Cursor, instead.
 // The test editor is a third-party build; keeping it outside the repository keeps it out of
 // every scan of this project, including the one this extension runs on itself.
-const executable = await downloadAndUnzipVSCode({
+const executable = process.env.SAW_IT_EDITOR || await downloadAndUnzipVSCode({
   version: process.env.VSCODE_TEST_VERSION ?? "1.96.0",
   cachePath: process.env.VSCODE_TEST_CACHE ?? path.join(homedir(), ".cache", "saw-vscode-test"),
 });

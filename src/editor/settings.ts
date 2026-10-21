@@ -8,6 +8,7 @@ export interface Settings {
   timeoutMs: number;
   autoInstall: boolean;
   registerMcpServer: boolean;
+  guardAgentCommands: boolean;
 }
 
 // Every saw setting is machine-scoped in package.json, so a workspace's own settings file can
@@ -22,5 +23,6 @@ export function readSettings(): Settings {
     timeoutMs: Math.max(5, config.get<number>("scanTimeoutSeconds", 120)) * 1000,
     autoInstall: config.get<boolean>("autoInstall", true),
     registerMcpServer: config.get<boolean>("registerMcpServer", true),
+    guardAgentCommands: config.get<boolean>("guardAgentCommands", true),
   };
 }

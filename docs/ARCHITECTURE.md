@@ -9,6 +9,7 @@ it in the editor.
 ```text
 src/
   extension.ts          composition root: builds the parts below and registers commands
+  cursorHook.ts         Cursor's beforeShellExecution hook, bundled as dist/cursor-hook.js
   editor/               VS Code adapters
     controller          scan a folder on request, hand the outcome to the views
     triggers            save, checkout/pull (.git/HEAD, ORIG_HEAD), file watchers, folder changes
@@ -19,6 +20,7 @@ src/
     model               folder and machine state; every view renders from it
     agentTool           the saw_folderVerdict language-model tool
     mcp                 offers `saw mcp` to the editor's agents
+    cursorGuard         in Cursor, registers the hook's plugin and writes each folder's verdict for it
     changes             opens a fix's clean-up as a diff through the Git extension
     diagnostics · statusBar · tree · alerts · settings · present
   core/                 no `vscode` import (lint-enforced), unit-tested
@@ -35,6 +37,7 @@ src/
     schedule            one run per folder, debounced, with exactly one follow-up
     reports · markdown  reports as Markdown, with scanned text kept literal
     agent · mcp         what agents are told, and how to start saw's MCP server
+    guard               which commands the hook checks, and its answer for each verdict
     text · docs         plain-text rendering of scanned bytes; links to saw's documentation
 ```
 
@@ -134,5 +137,14 @@ report off stderr while they are on. A verdict never comes from progress.
   start `saw mcp` with the saw it uses. Cursor gets it through `vscode.cursor.mcp.registerServer`,
   and VS Code 1.101 and later through an MCP server definition provider. Both APIs are detected at
   run time.
+- **Cursor's agent asks saw before it runs a folder's code.** Cursor's agent cannot call
+  `saw_folderVerdict`, so in Cursor the extension registers a plugin directory in its global storage
+  with `vscode.cursor.plugins` (`addPlugin` in Cursor 3.26, `registerPath` as documented). Its `beforeShellExecution` hook matches commands that
+  install or run a folder's code, and the extension writes each folder's latest finished verdict
+  there, one file per folder and window, removed when the window closes. The hook, the extension's
+  own script run by the editor's binary as Node, answers from the newest record: refuse when
+  infected, ask the person when suspicious, incomplete or unknown, allow otherwise. If it cannot
+  read its input or records, it asks. It is not registered on Windows or in remote windows, where
+  Cursor does not document how hooks run.
 - **A notification never holds up a scan.** Alerts are not awaited, so an unanswered notification
   cannot queue later scans behind it.

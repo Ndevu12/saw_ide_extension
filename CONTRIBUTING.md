@@ -16,6 +16,7 @@ pnpm test             # unit + contract tests (contract tests run when saw is in
 SAW_INSTALL_E2E=1 SAW_E2E_NO_PIPX=1 pnpm exec vitest run test/unit/real-install.test.ts
                       # the real install from PyPI, into a sandbox (your pipx is untouched)
 pnpm run test:integration   # in a real VS Code, the oldest version supported
+SAW_IT_EDITOR=/path/to/cursor pnpm run test:integration   # the same tests in Cursor, or another VS Code-based editor
 pnpm run test:remote:install-images   # the install, in WSL's Ubuntu, dev-container and bare Debian images (Docker)
 pnpm run test:remote:vscode-server    # the extension in VS Code Server, which remote windows run (Docker)
 pnpm run lint && pnpm run check-types
@@ -68,6 +69,18 @@ installed in each kind of remote window:
 - `saw` is found or installed **on the remote** (`saw: Show Log` names its path), not on this machine;
 - **Fix…**, **Audit This Machine** and the hooks act on the remote's files, git and machine;
 - with no network, the install fails with the diagnosis, and no folder is reported clean.
+
+## Cursor's agent guard
+
+In Cursor, the extension gives Cursor a plugin whose `beforeShellExecution` hook checks saw's verdict
+before the agent installs or runs a folder's code (`src/core/guard.ts`, `src/cursorHook.ts`). The
+integration tests, run in Cursor with `SAW_IT_EDITOR`, check that the plugin is registered and
+that its hook command refuses `npm install` in the infected folder. Starting the agent needs a
+signed-in account, so before a release check by hand, in Cursor with `saw.vsix` installed:
+
+- in a folder saw found infected, asking the agent to install the dependencies is refused, and the
+  agent repeats saw's verdict;
+- in a clean folder, the same command runs without a prompt.
 
 ## Rules
 

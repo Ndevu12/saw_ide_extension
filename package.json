@@ -222,6 +222,12 @@
           "scope": "machine",
           "markdownDescription": "Offer saw's own read-only MCP server (`saw mcp`) to AI agents in the editor, when the installed saw has one: in Cursor through its MCP API, in VS Code 1.101 and later as an MCP server. It cannot fix, install hooks or change files. Turn it off to keep agents to the `saw_folderVerdict` tool."
         },
+        "saw.guardAgentCommands": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "markdownDescription": "In Cursor, check saw's verdict before the agent runs a command that installs or runs a folder's code (a package manager, build tool, interpreter, `./script`, or a git command that runs the repository's hooks). It refuses the command in a folder saw found infected, and asks you first when saw found it suspicious or could not check it."
+        },
         "saw.configPath": {
           "type": "string",
           "default": "",
