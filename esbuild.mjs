@@ -4,12 +4,12 @@ const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
 
 const context = await esbuild.context({
-  entryPoints: ["src/extension.ts"],
+  entryPoints: { extension: "src/extension.ts", "cursor-hook": "src/cursorHook.ts" },
   bundle: true,
   format: "cjs",
   platform: "node",
   target: "node20",
-  outfile: "dist/extension.js",
+  outdir: "dist",
   external: ["vscode"],
   minify: production,
   sourcemap: !production,

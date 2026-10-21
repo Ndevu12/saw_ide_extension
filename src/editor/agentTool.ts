@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 
 import { agentReport, type AgentFolder } from "../core/agent";
 import type { Controller } from "./controller";
+import type { Engine } from "./engine";
 import type { FolderState, Model } from "./model";
 import type { Settings } from "./settings";
 
@@ -80,34 +81,40 @@ export class FolderVerdictTool implements vscode.LanguageModelTool<FolderVerdict
       clearTimeout(timer);
       cancelled.dispose();
     }
-    const busy = state.scanning || state.fixing || stop.signal.aborted;
-    const last = state.last;
-    if (!last || busy) {
-      return { ...base, verdict: undefined, problem: this.why(state, busy) };
-    }
-    if (last.kind === "failed") {
-      return { ...base, verdict: last.verdict, reasons: last.reasons };
-    }
-    return {
-      ...base,
-      verdict: last.verdict,
-      scannedAt: last.payload.generatedAt,
-      reasons: last.reasons,
-      findings: last.payload.results.flatMap((result) => result.findings),
-    };
+    return describeFolder(state, this.model.engine, stop.signal.aborted);
   }
+}
 
-  private why(state: FolderState, busy: boolean): string {
-    if (state.fixing) {
-      return "saw is fixing this folder right now.";
-    }
-    if (busy) {
-      return "saw has not finished scanning the latest changes yet.";
-    }
-    const engine = this.model.engine;
-    if (engine?.kind === "unavailable") {
-      return `saw cannot run: ${engine.message}`;
-    }
-    return "saw has no verdict for it yet.";
+/** What an agent is told about a folder from its state now; `waited` when a wait for its scan ran out. */
+export function describeFolder(state: FolderState, engine: Engine | undefined, waited = false): AgentFolder {
+  const folder = state.folder;
+  const base = { name: folder.name, path: folder.uri.fsPath, reasons: [], findings: [] };
+  const busy = state.scanning || state.fixing || waited;
+  const last = state.last;
+  if (!last || busy) {
+    return { ...base, verdict: undefined, problem: why(state, busy, engine) };
   }
+  if (last.kind === "failed") {
+    return { ...base, verdict: last.verdict, reasons: last.reasons };
+  }
+  return {
+    ...base,
+    verdict: last.verdict,
+    scannedAt: last.payload.generatedAt,
+    reasons: last.reasons,
+    findings: last.payload.results.flatMap((result) => result.findings),
+  };
+}
+
+function why(state: FolderState, busy: boolean, engine: Engine | undefined): string {
+  if (state.fixing) {
+    return "saw is fixing this folder right now.";
+  }
+  if (busy) {
+    return "saw has not finished scanning the latest changes yet.";
+  }
+  if (engine?.kind === "unavailable") {
+    return `saw cannot run: ${engine.message}`;
+  }
+  return "saw has no verdict for it yet.";
 }

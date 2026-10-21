@@ -92,6 +92,13 @@ click.
   - In Cursor, it registers through Cursor's MCP API.
   - In VS Code 1.101 or later, it appears as an MCP server named saw.
   - It's read-only. Turn it off with `saw.registerMcpServer`.
+- **In Cursor, a check before commands:** Cursor's agent can't call `saw_folderVerdict`, so the
+  extension adds a hook that runs before the agent's commands that install or run a folder's code,
+  such as `npm install`, `make`, `python` or `./script.sh`.
+  - **Infected:** the command is refused, and the agent is told saw's verdict.
+  - **Suspicious, could not scan, or not checked yet:** Cursor asks you first.
+  - **Clean or residue:** the command runs.
+  - Turn it off with `saw.guardAgentCommands`. Not available on Windows or in remote windows yet.
 
 ![After Fix, the folder scans clean and the clean-up waits on a local branch](docs/images/fix-prepared.png)
 
@@ -155,6 +162,7 @@ All commands are in the Command Palette under **saw:**.
 | `saw.scanOnChange` | `true` | Scan again on save, and when a file that can run code changes. |
 | `saw.scanTimeoutSeconds` | `120` | How long one folder's scan may take. |
 | `saw.registerMcpServer` | `true` | Offer saw's read-only MCP server to AI agents, when saw provides one. |
+| `saw.guardAgentCommands` | `true` | In Cursor, check saw's verdict before the agent installs or runs a folder's code. |
 
 These are read from your **user** settings only. A folder's own `.vscode/settings.json` can't choose
 which program runs or switch scanning off.
