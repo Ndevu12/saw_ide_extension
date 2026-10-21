@@ -1,138 +1,82 @@
 # Contributing
 
-Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) first: how the code is laid out, how a scan and an
-action run, and where the security boundaries are. What saw itself does is documented at
-[saw-docs.ndevuspace.com](https://saw-docs.ndevuspace.com/).
+This guide is for changing this repository. Using the extension is covered in the
+[README](README.md). The layout of the code is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+What saw detects is documented at [saw-docs.ndevuspace.com](https://saw-docs.ndevuspace.com/).
 
-## Setup
+## Issues
 
-Node 22 or later, pnpm 11 (`corepack enable` or `npm i -g pnpm`), and saw on `PATH`
-(`pipx install stayawakebot`) for the contract and integration tests.
+- **This extension** (installing saw, a view, a command): open an
+  [issue here](https://github.com/Ndevu12/saw_ide_extension/issues).
+- **A verdict that looks wrong:** detection lives in saw. Open an
+  [issue on stayAwakeBot](https://github.com/Ndevu12/stayAwakeBot/issues).
+
+## Set up
+
+Node.js 22 or later, pnpm 11 (`corepack enable`), and saw on `PATH`
+(`pipx install stayawakebot`). The contract and integration tests run saw.
 
 ```bash
 pnpm install
-pnpm run build        # dist/extension.js
-pnpm test             # unit + contract tests (contract tests run when saw is installed)
-SAW_INSTALL_E2E=1 SAW_E2E_NO_PIPX=1 pnpm exec vitest run test/unit/real-install.test.ts
-                      # the real install from PyPI, into a sandbox (your pipx is untouched)
-pnpm run test:integration   # in a real VS Code, the oldest version supported
-SAW_IT_EDITOR=/path/to/cursor pnpm run test:integration   # the same tests in Cursor, or another VS Code-based editor
-pnpm run test:remote:install-images   # the install, in WSL's Ubuntu, dev-container and bare Debian images (Docker)
-pnpm run test:remote:vscode-server    # the extension in VS Code Server, which remote windows run (Docker)
-pnpm run lint && pnpm run check-types
-pnpm run package      # saw.vsix
+pnpm run build
 ```
 
-Press F5 in the editor to run the extension in a development host.
+Press F5 to run the extension in a development window.
 
-## Tooling
+### Toolchain
 
-- **TypeScript 7** (`@typescript/native`, the native compiler) runs `pnpm run check-types`.
-  typescript-eslint still needs the TypeScript 6 API, so the `typescript` package is aliased to
-  `@typescript/typescript6` for lint only.
-- **esbuild** bundles `src/extension.ts` into `dist/extension.js`; nothing else ships.
-- **`pnpm-workspace.yaml`** holds the install policy (minimum release age, trust policy, no exotic
-  sub-dependencies, explicit build allowlist) and the overrides for mocha's `diff` and
-  `serialize-javascript`, which `@vscode/test-cli` still pulls in. Keep both when upgrading.
+- `pnpm run check-types` uses TypeScript 7 (`@typescript/native`). typescript-eslint needs the
+  TypeScript 6 API, so the `typescript` package is aliased to `@typescript/typescript6` for lint.
+- esbuild bundles the extension into `dist/`.
+- `pnpm-workspace.yaml` holds the install policy and the overrides for mocha's `diff` and
+  `serialize-javascript`, which the VS Code test runner still depends on. Keep those overrides when
+  you upgrade the runner.
 
-## Remote windows
+## Checks
 
-In a remote window (Remote - SSH, WSL, Dev Containers, or Cursor's equivalents) the extension runs
-on the remote machine (`extensionKind: workspace`), so saw is found or installed there.
-The tests for remote windows live in `test/remote/`, one folder per test, sharing the scenario runner
-in `test/remote/scenarios.mjs`:
+Run these before opening a pull request. Continuous integration runs them on every pull request.
 
-- `install-images/` (`pnpm test:remote:install-images`) runs the install on the machines those
-  windows land on.
-- `vscode-server/` (`pnpm test:remote:vscode-server`) runs `saw.vsix` in VS Code Server, the program
-  those windows start on the remote, inside a Debian container with headless Chromium as the window
-  (`VSCODE_TEST_VERSION` picks the server; default: latest stable). It checks that:
-  - saw is installed and run on the server, and the folder's report is kept in the server's storage,
-    not in the project;
-  - the window warns that the folder is infected;
-  - **Audit This Machine**, **Install Scan-on-Clone Hooks** and **Fix…**, started from the command
-    palette and confirmed in the dialog as a person would, act on the server: saw reports its hooks
-    installed there, and Fix prepares its branch in the server's checkout, after which the folder
-    scans clean;
-  - a server without network never shows a folder as clean.
+```bash
+pnpm test                   # unit tests; the contract tests run when saw is installed
+pnpm run lint
+pnpm run check-types
+pnpm run test:integration   # VS Code, at the oldest version this extension supports
+pnpm run package            # writes saw.vsix
+```
 
-  `workbench.mjs` drives the window through Chromium's DevTools protocol. A screenshot of the window
-  is taken after each step; the path is printed first, `SAW_REMOTE_SCREENSHOTS` chooses it, and CI
-  uploads them when the test fails.
+When your change touches one of these areas, run its check as well.
 
-Neither covers the editors' own remote extensions (Microsoft's Remote - SSH, WSL and Dev Containers
-clients, which are not open source) or Cursor's remote server (Cursor documents neither a download
-for it nor a browser window to drive it). Before a release, check those by hand with `saw.vsix`
-installed in each kind of remote window:
+| Area | Command |
+| --- | --- |
+| Installing saw | `SAW_INSTALL_E2E=1 SAW_E2E_NO_PIPX=1 pnpm exec vitest run test/unit/real-install.test.ts` installs from PyPI into a sandbox. |
+| Cursor | `SAW_IT_EDITOR=/path/to/cursor pnpm run test:integration` |
+| Remote windows | `pnpm run test:remote:install-images` and `pnpm run test:remote:vscode-server`, both under Docker. |
 
-- the status bar shows the remote folder's verdict, and an infected folder is reported as infected;
-- `saw` is found or installed **on the remote** (`saw: Show Log` names its path), not on this machine;
-- **Fix…**, **Audit This Machine** and the hooks act on the remote's files, git and machine;
-- with no network, the install fails with the diagnosis, and no folder is reported clean.
+## Conventions
 
-## Cursor's agent guard
+A pull request needs to keep these.
 
-In Cursor, the extension gives Cursor a plugin whose `beforeShellExecution` hook checks saw's verdict
-before the agent installs or runs a folder's code (`src/core/guard.ts`, `src/cursorHook.ts`). The
-integration tests, run in Cursor with `SAW_IT_EDITOR`, check that the plugin is registered and
-that its hook command refuses `npm install` in the infected folder. Starting the agent needs a
-signed-in account, so before a release check by hand, in Cursor with `saw.vsix` installed:
+- **`src/core` has no `vscode` import.** Lint enforces it. Editor code belongs in `src/editor`.
+- **A scan that could not answer is `incomplete`.** A failed start, a timeout, output that does not
+  parse, and a target saw could not read are all `incomplete`.
+- **The workspace does not choose the program that runs.** saw is an absolute path, started without
+  a shell, from a neutral directory. Settings that choose what runs are machine-scoped.
+- **Text from a scanned file is plain text**, rendered through `core/text.plain`.
+- **An install failure names its cause and the next command**, in `core/diagnose`, with a test.
+- **A bump of the `"saw"` pin in `package.json` is its own pull request.** Continuous integration
+  tests that release, and it is the release the extension installs.
+- **The published bundle is this repository's own code.** A new runtime dependency needs its reason
+  recorded in the pull request.
+- **`engines.vscode` moves with `@types/vscode`, and only for an API the extension needs.** Galleries
+  for VS Code forks hide an extension that requires an editor newer than they ship.
 
-- in a folder saw found infected, asking the agent to install the dependencies is refused, and the
-  agent repeats saw's verdict;
-- in a clean folder, the same command runs without a prompt.
+## Pull requests
 
-## Rules
+Branch from `main`. For a change someone using the extension can see, add an entry under
+`[Unreleased]` in `CHANGELOG.md`.
 
-- **`src/core` never imports `vscode`.** It holds everything that can be tested without an editor:
-  the report contract, the verdict, finding and running saw, scheduling. Lint enforces it.
-- **Detection lives in saw.** The extension never decides that something is or is not malware. If a
-  verdict looks wrong, the fix belongs in saw.
-- **Never read a run that could not answer as clean.** A failed start, a timeout, unparsable output
-  or an errored target is `incomplete`.
-- **Nothing from the workspace chooses what runs.** saw is resolved to an absolute path from user
-  settings, PATH or known install locations, and started without a shell from a neutral directory.
-- **Text from a scanned file is shown as plain text only**, through `core/text.plain`.
-- **The install never asks; it explains when it fails.** Every failure the installer can name gets a
-  cause and a fix in `core/diagnose`, with a test.
-- **Bump `"saw"` in `package.json` in its own pull request.** CI runs the contract tests against that
-  stayawakebot release, and that is what the extension installs.
-- **No runtime dependencies** without a decision recorded in the pull request. The bundle is the
-  extension's own code.
-- **`engines.vscode` moves only when a needed API requires it**, together with `@types/vscode`.
-  VS Code forks lag upstream, and their galleries hide an extension that asks for a newer editor.
-- Feature branches and pull requests; update `CHANGELOG.md` under `[Unreleased]` in the same PR.
+## Releases
 
-## Releasing
-
-The extension is `ndevu12.stayawakebot`, after saw's PyPI package; the display name is
-**StayAwakeBot (saw)**. One `.vsix` goes to both registries, so both get the same build.
-
-1. Bump `version` in `package.json` and move the `[Unreleased]` changelog entries under a
-   `## [X.Y.Z] - YYYY-MM-DD` heading, in one pull request.
-2. After it merges, tag the merge commit on `main` with a signed tag, and push it:
-
-   ```bash
-   git tag -s vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z
-   ```
-
-3. The release workflow packages once, then waits for approval in the `release` environment. Once
-   approved, it publishes the `.vsix` to each registry whose token is set (`OVSX_PAT` for Open VSX,
-   `VSCE_PAT` for the Visual Studio Marketplace), and attaches `stayawakebot-X.Y.Z.vsix` and its
-   SHA-256 checksum to a GitHub Release with generated notes.
-4. While `VSCE_PAT` is not set, upload that `.vsix` to the Marketplace by hand at
-   [marketplace.visualstudio.com/manage](https://marketplace.visualstudio.com/manage/publishers/ndevu12).
-
-The workflow refuses to release when the tag is not on `main`, does not match `package.json`, has no
-changelog section, or when neither token is set.
-
-### Registry setup
-
-- **Open VSX:** the `ndevu12` namespace exists, and its
-  [ownership claim](https://github.com/EclipseFdn/open-vsx.org/issues/14490) asks for the old
-  `ndevu12.saw` listing to be deprecated. Open VSX scans each upload before it lists it, and its API
-  paths are case-sensitive (`/api/Ndevu12/stayawakebot`).
-- **Visual Studio Marketplace:** the publisher is `ndevu12`. For automatic publishing, create an Azure
-  DevOps personal access token with the Marketplace (Manage) scope and add it as `VSCE_PAT`.
-- **Secrets** belong to the `release` environment (Settings → Environments), not the repository, and
-  that environment requires a reviewer, so a pushed tag waits for approval before it publishes.
+Maintainers publish. A release is a signed `vX.Y.Z` tag on `main`: it matches `version` in
+`package.json` and has a `## [X.Y.Z]` heading in `CHANGELOG.md`. Pushing the tag runs the release
+workflow, which publishes that one build to the Visual Studio Marketplace and to Open VSX.
