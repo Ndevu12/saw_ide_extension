@@ -10,8 +10,7 @@ import { tempDir } from "./helpers";
 
 // Installs saw from PyPI into a sandbox, so the machine's own pipx and saw are untouched.
 // Slow and online, so only when asked for: SAW_INSTALL_E2E=1, with SAW_E2E_NO_PIPX=1 to force the pipx bootstrap.
-// Not on Windows: the published pin still does not start there, so a real install cannot be checked.
-const enabled = process.env["SAW_INSTALL_E2E"] === "1" && process.platform !== "win32";
+const enabled = process.env["SAW_INSTALL_E2E"] === "1";
 const pins = (JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as { saw: Pins }).saw;
 const sandbox = enabled ? tempDir("saw-e2e-") : "";
 

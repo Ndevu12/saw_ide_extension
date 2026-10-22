@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-22
+
 ### Added
 
 - An open scan or audit report names the step saw is on, such as `reading git history (2/6)`, and
@@ -17,6 +19,7 @@
 
 ### Changed
 
+- Installs stayawakebot 0.14.0, and moves a saw it installed earlier up to it.
 - On Windows the extension finds and installs saw, the same as on Linux and macOS.
 - The README is a user guide: what each feature does, the verdicts, commands, settings, remote
   windows, privacy, and troubleshooting, with screenshots and links to saw's documentation.
@@ -76,6 +79,7 @@
 - The log of a successful install no longer shows the expected "no pipx yet" check as a warning,
   or a step twice.
 
-[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Ndevu12/saw_ide_extension/releases/tag/v0.1.0
