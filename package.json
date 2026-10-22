@@ -2,7 +2,7 @@
   "name": "stayawakebot",
   "displayName": "StayAwakeBot (saw)",
   "description": "Supply-chain worm hunting in your editor: the saw verdict for every folder you open, before you trust it.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "ndevu12",
   "license": "BSD-3-Clause",
   "private": true,
@@ -32,7 +32,7 @@
   ],
   "main": "./dist/extension.js",
   "saw": {
-    "saw": "0.14.0",
+    "saw": "0.15.0",
     "pipx": "1.18.4"
   },
   "extensionKind": [
