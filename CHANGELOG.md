@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-22
+
+### Added
+
+- When saw can ask during a fix, the **Decide** view offers the choice and a diff opens beside it.
+  Keep is the focused action. Closing the diff does not answer, and stopping the fix does not
+  answer. **Show the Decision** opens it again. The fix report lists what you decided. A saw that
+  does not announce this stays as it was: the fix finishes, and anything left open stays in the
+  report.
+
 ## [0.2.0] - 2026-10-22
 
 ### Added
@@ -79,7 +89,8 @@
 - The log of a successful install no longer shows the expected "no pipx yet" check as a warning,
   or a step twice.
 
-[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Ndevu12/saw_ide_extension/releases/tag/v0.1.0
