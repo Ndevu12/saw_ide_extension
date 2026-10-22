@@ -1,9 +1,5 @@
 name: remote-install-images
 
-# Installs saw through the extension's installer in the Linux images a remote window lands on
-# (WSL's Ubuntu, dev containers, a Debian without Python). The images are taken by tag on purpose:
-# the point is what operators get today. Online (Docker Hub, PyPI), so it runs when the install
-# path changes, weekly, and on demand, not on every pull request.
 on:
   pull_request:
     paths:

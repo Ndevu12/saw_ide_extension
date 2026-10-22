@@ -1,11 +1,5 @@
 name: remote-vscode-server
 
-# Runs saw.vsix in VS Code Server, the program Remote - SSH, WSL and Dev Containers start on the
-# remote machine, in a Debian container with a headless browser as the window: saw must be installed
-# and run on the server, Audit, the hook install and Fix started from the window must act there, and
-# a server without network must never show a folder as clean. Screenshots of the window are kept when
-# it fails. Online (Docker Hub, Debian, PyPI, the VS Code update server), so it runs when the paths
-# involved change, weekly, and on demand, not on every pull request.
 on:
   pull_request:
     paths:
