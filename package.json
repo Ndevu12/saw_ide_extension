@@ -112,6 +112,47 @@
         "title": "Open saw Documentation",
         "category": "saw",
         "icon": "$(question)"
+      },
+      {
+        "command": "saw.decideShow",
+        "title": "Show the Decision",
+        "category": "saw",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "saw.decideKeep",
+        "title": "Keep",
+        "category": "saw"
+      },
+      {
+        "command": "saw.decideRemove",
+        "title": "Remove",
+        "category": "saw"
+      },
+      {
+        "command": "saw.decideRestore",
+        "title": "Restore",
+        "category": "saw"
+      },
+      {
+        "command": "saw.decideSupply",
+        "title": "Supply a File",
+        "category": "saw"
+      },
+      {
+        "command": "saw.decideTakeOut",
+        "title": "Take Out Selected",
+        "category": "saw"
+      },
+      {
+        "command": "saw.decideUseFile",
+        "title": "Use This File",
+        "category": "saw"
+      },
+      {
+        "command": "saw.decideConfirmTakeOut",
+        "title": "Take Them Out",
+        "category": "saw"
       }
     ],
     "mcpServerDefinitionProviders": [
@@ -158,6 +199,11 @@
         {
           "id": "saw.findings",
           "name": "Verdict"
+        },
+        {
+          "id": "saw.decide",
+          "name": "Decide",
+          "type": "webview"
         }
       ]
     },
@@ -178,6 +224,11 @@
           "command": "saw.openDocumentation",
           "when": "view == saw.findings",
           "group": "navigation@9"
+        },
+        {
+          "command": "saw.decideShow",
+          "when": "view == saw.decide && saw.deciding",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -198,6 +249,63 @@
         {
           "command": "saw.fixFolder",
           "when": "view == saw.findings && viewItem == folder.infected"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "saw.decideKeep",
+          "when": "resourceScheme == saw-ask && saw.deciding && saw.decideStep == ask && saw.decideKind == file",
+          "group": "navigation"
+        },
+        {
+          "command": "saw.decideKeep",
+          "when": "resourceScheme == saw-ask && saw.deciding && saw.decideKind == delivery",
+          "group": "navigation"
+        },
+        {
+          "command": "saw.decideKeep",
+          "when": "resourceScheme == saw-ask && saw.deciding && saw.decideStep == ask && saw.decideKind == package",
+          "group": "navigation"
+        },
+        {
+          "command": "saw.decideRemove",
+          "when": "resourceScheme == saw-ask && saw.deciding && saw.decideStep == ask && saw.decideKind == file",
+          "group": "navigation@1"
+        },
+        {
+          "command": "saw.decideRestore",
+          "when": "resourceScheme == saw-ask && saw.deciding && saw.decideStep == ask && saw.decideCanRestore",
+          "group": "navigation@2"
+        },
+        {
+          "command": "saw.decideSupply",
+          "when": "resourceScheme == saw-ask && saw.deciding && saw.decideStep == ask && saw.decideCanSupply",
+          "group": "navigation@3"
+        },
+        {
+          "command": "saw.decideTakeOut",
+          "when": "resourceScheme == saw-ask && saw.deciding && saw.decideStep == ask && saw.decideKind == delivery",
+          "group": "navigation@1"
+        },
+        {
+          "command": "saw.decideKeep",
+          "when": "resourceScheme == saw-ask && saw.deciding && saw.decideStep == supply",
+          "group": "navigation"
+        },
+        {
+          "command": "saw.decideUseFile",
+          "when": "resourceScheme == saw-ask && saw.deciding && saw.decideStep == supply",
+          "group": "navigation@1"
+        },
+        {
+          "command": "saw.decideConfirmTakeOut",
+          "when": "resourceScheme == saw-ask && saw.deciding && saw.decideStep == confirm",
+          "group": "navigation@1"
+        },
+        {
+          "command": "saw.decideShow",
+          "when": "resourceScheme == saw-ask && saw.deciding",
+          "group": "navigation@9"
         }
       ]
     },

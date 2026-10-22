@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { readCapabilities } from "../../src/core/capabilities";
-import { describeProgress, progressArgs, ProgressLines, readEvent, withoutEvents, type Progress } from "../../src/core/progress";
+import { describeProgress, progressArgs, ProgressLines, readEvent, withoutEvents, type Progress } from "../../src/core/scan/progress";
 
 const event = (e: Record<string, unknown>) => JSON.stringify(e);
 

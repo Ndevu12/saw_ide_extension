@@ -3,8 +3,8 @@ import * as path from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { installSaw, type Pins } from "../../src/core/install";
-import { defaultIsExecutableFile, probe } from "../../src/core/locate";
+import { installSaw, type Pins } from "../../src/core/install/install";
+import { defaultIsExecutableFile, probe } from "../../src/core/install/locate";
 import { runProgram } from "../../src/core/run";
 import { tempDir } from "./helpers";
 

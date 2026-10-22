@@ -3,10 +3,7 @@ name: remote-install-images
 on:
   pull_request:
     paths:
-      - "src/core/install.ts"
-      - "src/core/python.ts"
-      - "src/core/locate.ts"
-      - "src/core/diagnose.ts"
+      - "src/core/install/**"
       - "src/core/run.ts"
       - "test/remote/install-images/**"
       - "test/remote/scenarios.mjs"

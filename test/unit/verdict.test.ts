@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { parsePayload } from "../../src/core/contract";
-import { judge, strongest } from "../../src/core/verdict";
+import { parsePayload } from "../../src/core/scan/contract";
+import { judge, strongest } from "../../src/core/scan/verdict";
 import { finding, report, target } from "./helpers";
 
 const payload = (...results: Record<string, unknown>[]) => parsePayload(report(results));

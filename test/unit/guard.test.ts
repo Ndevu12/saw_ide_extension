@@ -6,7 +6,7 @@ import * as path from "node:path";
 import * as esbuild from "esbuild";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { decide, folderOf, GUARDED_COMMAND, hooksJson, isGuarded, recordName, shellQuote, type GuardRecord } from "../../src/core/guard";
+import { decide, folderOf, GUARDED_COMMAND, hooksJson, isGuarded, recordName, shellQuote, type GuardRecord } from "../../src/core/agent/guard";
 
 const record = (verdict: GuardRecord["verdict"], updatedAt = 1): GuardRecord => ({
   path: "/work/web",

@@ -57,6 +57,7 @@ When your change touches one of these areas, run its check as well.
 A pull request needs to keep these.
 
 - **`src/core` has no `vscode` import.** Lint enforces it. Editor code belongs in `src/editor`.
+  Both are grouped by scan, fix, install, report, and agent. The shared pieces stay at the top of each.
 - **A scan that could not answer is `incomplete`.** A failed start, a timeout, output that does not
   parse, and a target saw could not read are all `incomplete`.
 - **The workspace does not choose the program that runs.** saw is an absolute path, started without

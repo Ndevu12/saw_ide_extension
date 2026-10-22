@@ -3,7 +3,7 @@ import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { scanArgs, scanFolder } from "../../src/core/scan";
+import { scanArgs, scanFolder } from "../../src/core/scan/scan";
 import { fakeSaw, finding, onWindows, report, target, tempDir } from "./helpers";
 
 const request = (binary: string, overrides = {}) => ({ binary, folder: "/work/repo", configPath: "", timeoutMs: 10_000, ...overrides });

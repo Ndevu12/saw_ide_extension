@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { readCapabilities } from "../../src/core/capabilities";
-import { mcpLaunch, sameLaunch } from "../../src/core/mcp";
+import { mcpLaunch, sameLaunch } from "../../src/core/agent/mcp";
 
 const sawWith = (...features: string[]) => readCapabilities(JSON.stringify({ features }), 0);
 

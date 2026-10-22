@@ -2,6 +2,16 @@ import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { StringDecoder } from "node:string_decoder";
 
+export interface RunControl {
+  /** Write one line to the program's standard input. No-op once it has exited. */
+  writeLine(line: string): void;
+  /**
+   * While held, the timeout does not fire. Time the operator spends deciding is not saw being
+   * stuck.
+   */
+  hold(holding: boolean): void;
+}
+
 export interface RunOptions {
   timeoutMs: number;
   signal?: AbortSignal;
@@ -9,6 +19,9 @@ export interface RunOptions {
   maxOutputBytes?: number;
   /** Told the output as it arrives, for a report that follows the run. */
   onOutput?: (text: string, stream: "stdout" | "stderr") => void;
+  /** Pipe standard input, and hand over the control once the process has started. */
+  input?: boolean;
+  onReady?: (control: RunControl) => void;
 }
 
 export interface RunResult {
@@ -50,7 +63,7 @@ export function runProgram(binary: string, args: readonly string[], options: Run
     const child = spawn(binary, [...args], {
       cwd: NEUTRAL_CWD,
       env: { ...process.env, ...QUIET_ENV },
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: [options.input ? "pipe" : "ignore", "pipe", "pipe"],
       shell: false,
       windowsHide: true,
     });
@@ -60,10 +73,38 @@ export function runProgram(binary: string, args: readonly string[], options: Run
         child.kill();
       }
     };
-    const timer = setTimeout(() => {
-      timedOut = true;
-      stop();
-    }, options.timeoutMs);
+    let holding = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (holding) {
+          return;
+        }
+        timedOut = true;
+        stop();
+      }, options.timeoutMs);
+    };
+    arm();
+    if (options.input) {
+      child.stdin?.on("error", () => undefined);
+      options.onReady?.({
+        writeLine: (line) => {
+          if (child.exitCode !== null || child.stdin?.writable === false) {
+            return;
+          }
+          child.stdin?.write(`${line}\n`);
+        },
+        hold: (value) => {
+          holding = value;
+          if (value) {
+            clearTimeout(timer);
+          } else {
+            arm();
+          }
+        },
+      });
+    }
     const onAbort = () => {
       cancelled = true;
       stop();
@@ -91,30 +132,36 @@ export function runProgram(binary: string, args: readonly string[], options: Run
       });
     };
 
-    child.stdout.on("data", (chunk: Buffer) => {
-      outBytes += chunk.length;
-      if (outBytes > limit) {
-        overflowed = true;
-        stop();
-        return;
-      }
-      out.push(chunk);
-    });
-    const decoders = { stdout: new StringDecoder("utf8"), stderr: new StringDecoder("utf8") };
-    const tell = (stream: "stdout" | "stderr", chunk: Buffer) => {
-      const text = options.onOutput && decoders[stream].write(chunk);
-      if (text) {
-        options.onOutput?.(text, stream);
-      }
-    };
-    child.stdout.on("data", (chunk: Buffer) => tell("stdout", chunk));
-    child.stderr.on("data", (chunk: Buffer) => {
-      tell("stderr", chunk);
-      errBytes += chunk.length;
-      if (errBytes <= limit) {
-        err.push(chunk);
-      }
-    });
+    const stdout = child.stdout;
+    const stderr = child.stderr;
+    if (stdout && stderr) {
+      stdout.on("data", (chunk: Buffer) => {
+        outBytes += chunk.length;
+        if (outBytes > limit) {
+          overflowed = true;
+          stop();
+          return;
+        }
+        out.push(chunk);
+      });
+      const decoders = { stdout: new StringDecoder("utf8"), stderr: new StringDecoder("utf8") };
+      const tell = (stream: "stdout" | "stderr", chunk: Buffer) => {
+        const text = options.onOutput && decoders[stream].write(chunk);
+        if (text) {
+          options.onOutput?.(text, stream);
+        }
+      };
+      stdout.on("data", (chunk: Buffer) => tell("stdout", chunk));
+      stderr.on("data", (chunk: Buffer) => {
+        tell("stderr", chunk);
+        errBytes += chunk.length;
+        if (errBytes <= limit) {
+          err.push(chunk);
+        }
+      });
+    } else {
+      finish(null, "could not read saw's output");
+    }
     child.on("error", (error) => finish(null, error.message));
     child.on("close", (code) => finish(code, null));
   });

@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 
-import type { Confidence, Finding } from "../core/contract";
+import type { Confidence, Finding } from "../core/scan/contract";
 import { plain } from "../core/text";
-import type { FolderVerdict } from "../core/verdict";
+import type { FolderVerdict } from "../core/scan/verdict";
 
 export const VERDICT_LABEL: Record<FolderVerdict, string> = {
   clean: "clean",

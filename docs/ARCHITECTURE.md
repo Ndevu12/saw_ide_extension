@@ -10,35 +10,24 @@ it in the editor.
 src/
   extension.ts          composition root: builds the parts below and registers commands
   cursorHook.ts         Cursor's beforeShellExecution hook, bundled as dist/cursor-hook.js
-  editor/               VS Code adapters
-    controller          scan a folder on request, hand the outcome to the views
-    triggers            save, checkout/pull (.git/HEAD, ORIG_HEAD), file watchers, folder changes
-    engine              find and version-check saw once per settings change; install it when missing
-    installer           install progress, cross-window lock, failure notification, diagnostics
-    actions             fix a folder, audit the machine, scan-on-clone hook status/install/repair
-    reports             the saw-report: file system that serves reports to the Markdown preview
-    model               folder and machine state; every view renders from it
-    agentTool           the saw_folderVerdict language-model tool
-    mcp                 offers `saw mcp` to the editor's agents
-    cursorGuard         in Cursor, registers the hook's plugin and writes each folder's verdict for it
-    changes             opens a fix's clean-up as a diff through the Git extension
-    diagnostics · statusBar · tree · alerts · settings · present
   core/                 no `vscode` import (lint-enforced), unit-tested
-    locate              saw candidates: the setting alone, else PATH (absolute entries), ~/.local/bin
-    python · install    find Python 3.11+, then pipx (bootstrapped if missing) → stayawakebot==<pin>
-    diagnose            a failed install → its cause and fix, per OS and distribution
-    run                 start a program without a shell, from a neutral cwd, with timeout and cancel
-    capabilities        `saw capabilities --json` → the features and schemas this saw has
-    scan                `saw scan <folder> --json --no-stream [--config]` → outcome
-    contract            validate the scan report (unknown fields ignored, unknown values refused)
-    verdict             report + exit status → clean | residue | suspicious | incomplete | infected
-    actions             read what `fix`, `audit` and `hook` reported
-    progress            `--progress=jsonl` events on stderr → the current step
-    schedule            one run per folder, debounced, with exactly one follow-up
-    reports · markdown  reports as Markdown, with scanned text kept literal
-    agent · mcp         what agents are told, and how to start saw's MCP server
-    guard               which commands the hook checks, and its answer for each verdict
-    text · docs         plain-text rendering of scanned bytes; links to saw's documentation
+    run · text · version · capabilities · docs
+    scan/               scan, contract, verdict, progress, schedule
+    fix/                what `fix`, `audit` and `hook` reported; `--ask=jsonl` questions
+    install/            locate saw, find Python, pipx install, diagnose a failure
+    report/             Markdown reports, with scanned text kept literal
+    agent/              what agents are told, `saw mcp`, the Cursor hook's answer
+  editor/               VS Code adapters, grouped the same way
+    model · settings · present
+    scan/               controller, triggers, diagnostics
+    fix/                Fix…, the Decide view, diffs
+    install/            find saw, install it, the install lock
+    view/               the saw sidebar, status bar, alerts, reports
+    agent/              the language-model tool, MCP registration, the Cursor guard
+test/
+  unit/                 vitest, against src/core
+  integration/          the extension host
+  remote/               install images and the VS Code server
 ```
 
 ## How a scan flows
@@ -66,7 +55,9 @@ it, otherwise its exit status and its own words. A fix ends with a rescan of the
 
 Installing saw never asks, because it changes nothing the operator owns. Fixing always asks: it
 deletes files from the checkout, so it runs only from an explicit **Fix…** and a modal that says
-what will change. The extension never passes `--pr`, so nothing is pushed or published.
+what will change. The extension never passes `--pr`, so nothing is pushed or published. When saw
+announces `fix.ask.json`, the fix also passes `--ask=jsonl` and the Decide view answers what a
+terminal would ask. How that looks is specified in [FIX-DECISIONS.md](FIX-DECISIONS.md).
 
 ## Finding and installing saw
 

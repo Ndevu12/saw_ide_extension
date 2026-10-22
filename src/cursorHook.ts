@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import * as path from "node:path";
 
-import { decide, folderKey, folderOf, UNREADABLE, type GuardRecord, type HookAnswer, type HookInput } from "./core/guard";
+import { decide, folderKey, folderOf, UNREADABLE, type GuardRecord, type HookAnswer, type HookInput } from "./core/agent/guard";
 
 // Cursor's `beforeShellExecution` hook. Cursor starts it with the command on stdin as JSON; it
 // answers on stdout from the records the extension keeps in the directory named by its argument.

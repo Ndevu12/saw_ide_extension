@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parsePayload } from "../../src/core/contract";
+import { parsePayload } from "../../src/core/scan/contract";
 import { DOCS } from "../../src/core/docs";
-import { block, inline, prose, webLink } from "../../src/core/markdown";
-import { auditReport, fixReport, hooksReport, scanReport, type SettledScan } from "../../src/core/reports";
-import { judge } from "../../src/core/verdict";
+import { block, inline, prose, webLink } from "../../src/core/report/markdown";
+import { auditReport, fixReport, hooksReport, scanReport, type SettledScan } from "../../src/core/report/reports";
+import { judge } from "../../src/core/scan/verdict";
 import { finding, report, target } from "./helpers";
 
 function scanned(results: Record<string, unknown>[], exitCode = 1): SettledScan {
