@@ -114,9 +114,8 @@ click.
 
 ### Requirements
 
-- **Linux or macOS** with **Python 3.11 or later**, on the machine where the files are. For
-  Remote - SSH, WSL and dev containers, that's the remote.
-- **Windows:** use WSL. See [Windows](#windows) below.
+- **Linux, macOS, or Windows** with **Python 3.11 or later**, on the machine where the files are.
+  For Remote - SSH, WSL and dev containers, that's the remote.
 
 ### How saw is installed
 
@@ -167,30 +166,13 @@ All commands are in the Command Palette under **saw:**.
 These are read from your **user** settings only. A folder's own `.vscode/settings.json` can't choose
 which program runs or switch scanning off.
 
-## Remote windows and Windows
+## Remote windows
 
-### Remote - SSH, WSL and dev containers
-
-The extension runs on the remote machine, where the files are. It finds or installs saw there, scans
-the remote's files, and **Fix…** and the hooks act on the remote's git. **Audit This Machine** audits
-that remote machine (the server, the WSL distribution or the container), not the computer in front
+The extension runs on the machine where the files are. A local window is this computer, on Windows,
+macOS, or Linux. In Remote - SSH, WSL, or a dev container, it finds or installs saw on that remote,
+scans the remote's files, and **Fix…** and the hooks act on the remote's git. **Audit This Machine**
+audits that machine (the server, the WSL distribution, or the container), not the computer in front
 of you.
-
-### Windows
-
-saw doesn't run on native Windows yet, so the extension doesn't install it there. Use WSL:
-
-1. Install WSL with Ubuntu: run `wsl --install` in an administrator PowerShell, then restart.
-2. In Ubuntu, install what saw needs, once:
-
-   ```bash
-   sudo apt install python3 python3-venv pipx
-   ```
-
-3. Open your project in a WSL window. In VS Code, install the WSL extension and run
-   **WSL: Open Folder in WSL…**; Cursor and other editors have their own WSL remote. Keep the project
-   on the Linux side, for example `~/code/project` rather than `/mnt/c/…`.
-4. Install this extension in the WSL window when asked. It installs saw inside WSL and scans.
 
 ## Privacy and safety
 

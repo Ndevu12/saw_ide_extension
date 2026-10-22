@@ -14,11 +14,7 @@ export type Unavailable =
   | "unrecognised"
   /** The installer already told the operator why, with what to do. */
   | "install-failed"
-  | "install-cancelled"
-  | "unsupported-platform";
-
-const WINDOWS_MESSAGE =
-  "saw does not run on Windows yet. Open this folder in WSL (Remote - WSL) to scan it: the extension sets up saw there.";
+  | "install-cancelled";
 
 export type Engine =
   | { kind: "ready"; binary: string; version: string; capabilities: Capabilities }
@@ -62,9 +58,6 @@ export class EngineResolver {
         );
         return this.find();
       }
-      if (process.platform === "win32") {
-        return this.unsupported();
-      }
       return this.installThenFind("Install or repair was asked for.");
     })();
     return this.pending;
@@ -77,7 +70,7 @@ export class EngineResolver {
       const pinned = parseVersion(`saw (stayawakebot) ${this.installer.pinnedSaw}`);
       const ours = found.binary === this.installer.installedBinary();
       const behind = pinned && !atLeast(parseVersion(`saw (stayawakebot) ${found.version}`) ?? [0, 0, 0], this.installer.pinnedSaw);
-      if (ours && behind && this.settings().autoInstall && !this.settings().path.trim() && process.platform !== "win32") {
+      if (ours && behind && this.settings().autoInstall && !this.settings().path.trim()) {
         return this.installThenFind(`The saw this extension installed is ${found.version}; it now installs ${this.installer.pinnedSaw}.`);
       }
       return found;
@@ -85,19 +78,10 @@ export class EngineResolver {
     if (found.reason === "invalid-setting") {
       return found;
     }
-    // saw imports POSIX-only modules at start-up, so an install on Windows could never run.
-    if (process.platform === "win32") {
-      return this.unsupported();
-    }
     if (!this.settings().autoInstall) {
       return { ...found, message: `${found.message} saw.autoInstall is off: run saw: Install or Repair saw to install it.` };
     }
     return this.installThenFind(found.message);
-  }
-
-  private unsupported(): Found {
-    this.log.warn(WINDOWS_MESSAGE);
-    return { kind: "unavailable", reason: "unsupported-platform", message: WINDOWS_MESSAGE };
   }
 
   private async installThenFind(why: string): Promise<Found> {
