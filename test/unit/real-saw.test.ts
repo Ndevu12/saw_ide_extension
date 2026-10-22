@@ -5,11 +5,11 @@ import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { fixArgs, hookArgs, readFix, readHookStatus } from "../../src/core/actions";
+import { fixArgs, hookArgs, readFix, readHookStatus } from "../../src/core/fix/actions";
 import { NO_CAPABILITIES } from "../../src/core/capabilities";
-import { defaultIsExecutableFile, locate, probe } from "../../src/core/locate";
+import { defaultIsExecutableFile, locate, probe } from "../../src/core/install/locate";
 import { runProgram } from "../../src/core/run";
-import { scanFolder } from "../../src/core/scan";
+import { scanFolder } from "../../src/core/scan/scan";
 import { DISGUISED_TASK, tempDir } from "./helpers";
 
 // The contract with the real saw: skipped where it is not installed, required in CI.

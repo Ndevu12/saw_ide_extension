@@ -65,6 +65,9 @@ confirm. It's available from the alert, from the infected folder in the saw view
 When it's done, the folder is scanned again. With a saw that names the clean-up branch,
 **Open Changes** shows the whole clean-up as one diff.
 
+When saw can ask during a fix, the **Decide** view offers the choice and a diff opens beside it.
+Keep is the focused action. Closing the diff does not answer. Stopping the fix does not answer.
+
 ![The confirmation names what saw will change](docs/images/fix-confirmation.png)
 
 ### Audit this machine
@@ -142,6 +145,7 @@ All commands are in the Command Palette under **saw:**.
 | **Scan Workspace** | Scan every workspace folder now. |
 | **Open Report** | Open a folder's scan report, or the audit or hooks report. |
 | **Fix Folder…** | Clean an infected folder with `saw fix`, after you confirm. |
+| **Show the Decision** | Open the diff for a fix that is waiting on you. |
 | **Audit This Machine** | Check whether changing credentials is safe yet. |
 | **Install Scan-on-Clone Hooks** | Scan every clone, pull and branch switch. |
 | **Repair Scan-on-Clone Hooks** | Put saw's hooks back when something changed them. |

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Scheduler } from "../../src/core/schedule";
+import { Scheduler } from "../../src/core/scan/schedule";
 
 function deferred() {
   let resolve!: () => void;

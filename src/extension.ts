@@ -1,21 +1,22 @@
 import * as vscode from "vscode";
 
 import { DOCS } from "./core/docs";
-import { Actions } from "./editor/actions";
-import { FOLDER_VERDICT_TOOL, FolderVerdictTool } from "./editor/agentTool";
-import { Alerts } from "./editor/alerts";
-import { Controller } from "./editor/controller";
-import { CursorAgentGuard } from "./editor/cursorGuard";
-import { Diagnostics } from "./editor/diagnostics";
-import { EngineResolver } from "./editor/engine";
-import { Installer, readPins } from "./editor/installer";
-import { SawMcpRegistration } from "./editor/mcp";
+import { Actions } from "./editor/fix/actions";
+import { FOLDER_VERDICT_TOOL, FolderVerdictTool } from "./editor/agent/agentTool";
+import { Alerts } from "./editor/view/alerts";
+import { Controller } from "./editor/scan/controller";
+import { CursorAgentGuard } from "./editor/agent/cursorGuard";
+import { Decide } from "./editor/fix/decide";
+import { Diagnostics } from "./editor/scan/diagnostics";
+import { EngineResolver } from "./editor/install/engine";
+import { Installer, readPins } from "./editor/install/installer";
+import { SawMcpRegistration } from "./editor/agent/mcp";
 import { Model } from "./editor/model";
-import { Reports } from "./editor/reports";
+import { Reports } from "./editor/view/reports";
 import { readSettings } from "./editor/settings";
-import { StatusBar } from "./editor/statusBar";
-import { FindingsTree } from "./editor/tree";
-import { registerTriggers } from "./editor/triggers";
+import { StatusBar } from "./editor/view/statusBar";
+import { FindingsTree } from "./editor/view/tree";
+import { registerTriggers } from "./editor/scan/triggers";
 
 export interface SawApi {
   readonly model: Model;
@@ -35,7 +36,8 @@ export function activate(context: vscode.ExtensionContext): SawApi {
   const tree = new FindingsTree(model);
   const reports = new Reports(model, context.storageUri?.fsPath, context.globalStorageUri.fsPath, log);
   const cursorGuard = new CursorAgentGuard(model, readSettings, context.globalStorageUri.fsPath, context.asAbsolutePath("dist/cursor-hook.js"), log);
-  const actions = new Actions(model, engines, controller, readSettings, log, context.globalState, reports);
+  const decide = new Decide(model, log);
+  const actions = new Actions(model, engines, controller, readSettings, log, context.globalState, reports, decide);
   installer.exposeToTerminals();
   const folderOf = (arg: unknown): vscode.WorkspaceFolder | undefined => {
     const node = arg as { state?: { folder?: vscode.WorkspaceFolder }; uri?: vscode.Uri } | undefined;
@@ -48,6 +50,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     diagnostics,
     controller,
     reports,
+    decide,
     cursorGuard,
     tree,
     new StatusBar(model),

@@ -4,7 +4,7 @@ import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { auditArgs, auditVerdict, canFix, fixArgs, gitIdentity, hookArgs, readAudit, readFix, readHookJson, readHookStatus, rotationSentence } from "../../src/core/actions";
+import { auditArgs, auditVerdict, canFix, fixArgs, gitIdentity, hookArgs, readAudit, readFix, readHookJson, readHookStatus, rotationSentence } from "../../src/core/fix/actions";
 import { NO_CAPABILITIES, readCapabilities } from "../../src/core/capabilities";
 import { runProgram } from "../../src/core/run";
 import { lines } from "../../src/core/text";
@@ -27,6 +27,13 @@ describe("saw fix", () => {
   it("never publishes: no --pr, and the report as JSON", () => {
     expect(fixArgs("/work/repo", "")).toEqual(["fix", "/work/repo", "--json", "--no-stream"]);
     expect(fixArgs("/work/repo", "/home/me/saw.yml")).toContain("/home/me/saw.yml");
+  });
+
+  it("asks only a saw that can ask without a terminal, and only at a schema it reads", () => {
+    expect(fixArgs("/work/repo", "", sawWith("fix.ask.json"))).toContain("--ask=jsonl");
+    expect(fixArgs("/work/repo", "", readCapabilities(JSON.stringify({ features: ["fix.ask.json"], schema_versions: { "fix-ask": 1 } }), 0))).toContain("--ask=jsonl");
+    expect(fixArgs("/work/repo", "", readCapabilities(JSON.stringify({ features: ["fix.ask.json"], schema_versions: { "fix-ask": 2 } }), 0))).not.toContain("--ask=jsonl");
+    expect(fixArgs("/work/repo", "", NO_CAPABILITIES)).not.toContain("--ask");
   });
 
   it("reads a prepared clean-up, and whether part of it is left for the operator", () => {

@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
 
-import type { AuditDetails, AuditVerdict, HookStatus } from "../core/actions";
-import type { ScanOutcome } from "../core/scan";
-import { strongest, type FolderVerdict } from "../core/verdict";
-import type { Engine } from "./engine";
+import type { AuditDetails, AuditVerdict, HookStatus } from "../core/fix/actions";
+import type { ScanOutcome } from "../core/scan/scan";
+import { strongest, type FolderVerdict } from "../core/scan/verdict";
+import type { Engine } from "./install/engine";
 
 export type Settled = Exclude<ScanOutcome, { kind: "cancelled" }>;
 
@@ -11,6 +11,8 @@ export interface FolderState {
   folder: vscode.WorkspaceFolder;
   scanning: boolean;
   fixing: boolean;
+  /** A fix is waiting on a decision in the Decide view. */
+  deciding: boolean;
   /** What saw says it is doing, while it scans; from a saw with `--progress=jsonl`. */
   progress: string | undefined;
   last: Settled | undefined;
@@ -53,7 +55,20 @@ export class Model implements vscode.Disposable {
   }
 
   setFixing(folder: vscode.WorkspaceFolder, fixing: boolean): void {
-    this.get(folder).fixing = fixing;
+    const state = this.get(folder);
+    state.fixing = fixing;
+    if (!fixing) {
+      state.deciding = false;
+    }
+    this.changed.fire();
+  }
+
+  setDeciding(folder: vscode.WorkspaceFolder, deciding: boolean): void {
+    const state = this.get(folder);
+    if (state.deciding === deciding) {
+      return;
+    }
+    state.deciding = deciding;
     this.changed.fire();
   }
 
@@ -70,7 +85,7 @@ export class Model implements vscode.Disposable {
     const key = folder.uri.toString();
     let state = this.folders.get(key);
     if (!state) {
-      state = { folder, scanning: false, fixing: false, progress: undefined, last: undefined };
+      state = { folder, scanning: false, fixing: false, deciding: false, progress: undefined, last: undefined };
       this.folders.set(key, state);
     }
     return state;

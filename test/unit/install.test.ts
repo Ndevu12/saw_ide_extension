@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { diagnose, parseOsRelease } from "../../src/core/diagnose";
-import { installSaw, type InstallDeps, type InstallResult } from "../../src/core/install";
-import type { LocateEnv } from "../../src/core/locate";
-import { findPython, pythonLaunchers, type Runner } from "../../src/core/python";
+import { diagnose, parseOsRelease } from "../../src/core/install/diagnose";
+import { installSaw, type InstallDeps, type InstallResult } from "../../src/core/install/install";
+import type { LocateEnv } from "../../src/core/install/locate";
+import { findPython, pythonLaunchers, type Runner } from "../../src/core/install/python";
 import type { RunResult } from "../../src/core/run";
 
 const PINS = { saw: "0.12.3", pipx: "1.18.4" };

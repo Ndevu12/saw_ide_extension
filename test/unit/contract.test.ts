@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ContractError, parsePayload } from "../../src/core/contract";
+import { ContractError, parsePayload } from "../../src/core/scan/contract";
 import { finding, report, target } from "./helpers";
 
 describe("parsePayload", () => {

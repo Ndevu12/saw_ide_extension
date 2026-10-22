@@ -4,13 +4,10 @@ on:
   pull_request:
     paths:
       - "src/extension.ts"
-      - "src/editor/actions.ts"
-      - "src/editor/alerts.ts"
-      - "src/editor/engine.ts"
-      - "src/editor/installer.ts"
-      - "src/editor/reports.ts"
-      - "src/core/install.ts"
-      - "src/core/locate.ts"
+      - "src/editor/fix/**"
+      - "src/editor/view/**"
+      - "src/editor/install/**"
+      - "src/core/install/**"
       - "test/remote/vscode-server/**"
       - "test/remote/scenarios.mjs"
       - "package.json"

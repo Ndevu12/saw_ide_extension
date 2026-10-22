@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { agentReport, type AgentFolder } from "../../src/core/agent";
-import type { Finding } from "../../src/core/contract";
+import { agentReport, type AgentFolder } from "../../src/core/agent/agent";
+import type { Finding } from "../../src/core/scan/contract";
 
 const found = (overrides: Partial<Finding> = {}): Finding => ({
   signatureId: "vscode-task-runs-font",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { locate, probe, type LocateEnv } from "../../src/core/locate";
+import { locate, probe, type LocateEnv } from "../../src/core/install/locate";
 import { fakeSaw, onWindows } from "./helpers";
 
 function env(executables: string[], overrides: Partial<LocateEnv> = {}): LocateEnv {
