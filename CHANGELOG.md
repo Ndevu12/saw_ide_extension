@@ -12,6 +12,10 @@
   does not announce this stays as it was: the fix finishes, and anything left open stays in the
   report.
 
+### Changed
+
+- Installs stayawakebot 0.15.0, and moves a saw it installed earlier up to it.
+
 ## [0.2.0] - 2026-10-22
 
 ### Added
