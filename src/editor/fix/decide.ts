@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 
 import { answerLine, decisionLine, type AskDecision, type AskQuestion } from "../../core/fix/ask";
 import { plain } from "../../core/text";
-import { openAsk, openSupply, openTakeOut, registerAskDocuments } from "./askDiff";
+import { openAsk, openIntroduced, openSupply, openTakeOut, registerAskDocuments } from "./askDiff";
 import type { Model } from "../model";
 
 type Step = "ask" | "supply" | "confirm";
@@ -23,6 +23,8 @@ export class Decide implements vscode.Disposable {
   private supplyPath: string | undefined;
   private hint = "";
   private readonly log: string[] = [];
+  /** The question id of the last answer sent. Saw repeats that id when it does not accept the answer. */
+  private answeredId: string | undefined;
   private pending: ((decision: AskDecision | "stop") => void) | undefined;
   private readonly subscriptions: vscode.Disposable[];
 
@@ -68,7 +70,21 @@ export class Decide implements vscode.Disposable {
 
   clearLog(): void {
     this.log.length = 0;
+    this.answeredId = undefined;
     this.render();
+  }
+
+  /**
+   * Drop the last logged choice when saw asks `id` again. That answer was not accepted, so the
+   * report must not keep it. Returns whether a line was dropped.
+   */
+  repeated(id: string): boolean {
+    if (this.answeredId !== id || !this.log.length) {
+      return false;
+    }
+    this.log.pop();
+    this.answeredId = undefined;
+    return true;
   }
 
   /** Wait until the operator answers `question`, or the fix is stopped. */
@@ -194,6 +210,14 @@ export class Decide implements vscode.Disposable {
     }
     if (act === "show") {
       await this.reopen();
+      return;
+    }
+    if (act === "introduced" && this.question.kind === "file") {
+      const opened = await openIntroduced(this.folder, this.question);
+      if (!opened) {
+        this.hint = "git could not read that commit.";
+        this.render();
+      }
     }
   }
 
@@ -246,6 +270,7 @@ export class Decide implements vscode.Disposable {
       this.render();
       return;
     }
+    this.answeredId = this.question.id;
     this.log.push(decisionLine(this.question, decision));
     this.settle(decision);
   }
@@ -345,7 +370,7 @@ ${body}
         })
         .join("");
       const recorded = question.recorded ? `<p class="meta">saw asked about this commit before, then replaced it.</p>` : "";
-      const known = question.knownAs.length ? `<p class="meta">Also known as ${escape(question.knownAs.join(", "), 300)}</p>` : "";
+      const known = question.knownAs.length ? `<p class="meta">Also known as ${escape(question.knownAs.map((id) => id.slice(0, 12)).join(", "), 300)}</p>` : "";
       return `<p>Files added in <strong>${escape(question.commit.slice(0, 12), 20)}</strong> ${escape(question.subject, 160)}</p>
         ${recorded}${known}
         <p class="meta">saw is already removing ${escape(question.removing.join(", ") || "the payload", 300)}</p>
@@ -364,14 +389,14 @@ ${body}
     const origin = question.originUnread
       ? "git could not read what this file arrived with"
       : question.introducedBy
-        ? `introduced in ${question.introducedBy.slice(0, 12)}`
+        ? `<button data-act="introduced">Introduced in ${escape(question.introducedBy.slice(0, 12), 20)}</button>`
         : "no commit ties it to the payload";
     const withRemoved = question.arrivedWithRemoved.length ? `<p class="meta">saw is already removing ${escape(question.arrivedWithRemoved.join(", "), 300)}</p>` : "";
     const restore = question.restore ? `<button data-act="restore">Restore</button>` : "";
     const supply = question.supply ? `<button data-act="supply">Supply a file</button>` : "";
     return `<p>${escape(title)}. <strong>${escape(question.path, 300)}</strong></p>
       <p class="meta">${escape(question.category, 80)} ${escape(question.signatureId, 80)} ${escape(question.description, 400)}</p>
-      <p class="meta">${escape(origin, 200)}</p>${withRemoved}
+      <p class="meta">${question.introducedBy && !question.originUnread ? origin : escape(origin, 200)}</p>${withRemoved}
       <p><button data-act="keep" autofocus>Keep</button>
       <button data-act="remove">Remove</button>${restore}${supply}</p>`;
   }

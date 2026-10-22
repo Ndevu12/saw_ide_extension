@@ -328,6 +328,9 @@ export class Actions {
         }
         control.hold(true);
         try {
+          if (this.decide.repeated(read.id)) {
+            this.reports.fixDecisions(ask.folder, this.decide.lines());
+          }
           const decision = await this.decide.ask(ask.folder, read);
           if (decision === "stop" || abort.signal.aborted || closed) {
             return;
