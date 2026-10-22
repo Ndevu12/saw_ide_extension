@@ -1,11 +1,5 @@
-name: Release — package, publish (Open VSX, Marketplace, GitHub Release)
+name: release
 
-# A signed `vX.Y.Z` tag on main packages the extension once. Each gallery is its own job, so one
-# registry cannot succeed by skipping the other. The GitHub Release is attached only after both
-# galleries have that same file.
-#
-# Open VSX reads OVSX_PAT from the `release` environment. The Visual Studio Marketplace reads
-# VSCE_PAT from the `marketplace` environment. A missing token fails that job.
 on:
   push:
     tags: ["v*.*.*"]
@@ -129,7 +123,6 @@ jobs:
           asset="stayawakebot-${GITHUB_REF_NAME#v}.vsix"
           mv saw.vsix "$asset"
           sha256sum "$asset" > "$asset.sha256"
-          # A release made by hand gets the files rather than a second release.
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "$asset" "$asset.sha256" --clobber
           else
