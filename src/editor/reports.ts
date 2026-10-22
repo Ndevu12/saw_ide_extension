@@ -211,7 +211,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
       case "scan": {
         if (!folder) return "# saw scan";
         const state = this.model.get(folder);
-        return scanReport({ folderName: folder.name, folderPath: folder.uri.fsPath, scanning: state.scanning, fixing: state.fixing, outcome: state.last, sawVersion }, copy);
+        return scanReport({ folderName: folder.name, folderPath: folder.uri.fsPath, scanning: state.scanning, fixing: state.fixing, step: state.scanning ? state.progress : undefined, outcome: state.last, sawVersion }, copy);
       }
       case "fix": {
         const record = folder && this.fixes.get(folderKey(folder));
@@ -221,7 +221,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
       case "audit": {
         const audit = this.model.machine.audit;
         const finished = this.auditRun?.finishedAt !== undefined;
-        return auditReport({ run: this.auditRun, verdict: finished ? audit?.verdict : undefined, sentence: finished ? audit?.sentence : undefined, details: finished ? audit?.details : undefined, sawVersion }, copy);
+        return auditReport({ run: this.auditRun, verdict: finished ? audit?.verdict : undefined, sentence: finished ? audit?.sentence : undefined, details: finished ? audit?.details : undefined, step: finished ? undefined : this.model.machine.auditProgress, sawVersion }, copy);
       }
       case "hooks":
         return hooksReport({

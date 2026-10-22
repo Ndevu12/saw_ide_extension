@@ -190,6 +190,8 @@ export interface AuditFinding {
   detail: string;
   fix: string;
   confidence: string;
+  /** A command saw names for checking this finding, such as `saw audit --verify`. */
+  command?: string;
   process: { pid: number; exe: string } | undefined;
 }
 
@@ -199,7 +201,7 @@ export interface AuditDetails {
   toConfirm: string[];
   findings: AuditFinding[];
   /** The checks saw could not run, and why. */
-  incomplete: { probe: string; reason: string }[];
+  incomplete: { probe: string; reason: string; title?: string; fix?: string }[];
   /** What the audit covered and did not. */
   scopeNotes: string[];
 }
@@ -253,12 +255,15 @@ export function readAudit(stdout: string, stderr: string, exitCode: number | nul
       detail: text(f["detail"]),
       fix: text(f["fix"]),
       confidence: text(f["confidence"]),
+      ...(text(f["command"]) ? { command: text(f["command"]) } : {}),
       process: proc && typeof proc === "object" ? { pid: count(proc["pid"]), exe: text(proc["exe"]) } : undefined,
     };
   });
   const incomplete = (Array.isArray(record["incomplete"]) ? record["incomplete"] : []).map((item: unknown) => {
     const i = (item ?? {}) as Record<string, unknown>;
-    return { probe: text(i["probe"]), reason: text(i["reason"]) };
+    const title = text(i["title"]);
+    const fix = text(i["fix"]);
+    return { probe: text(i["probe"]), reason: text(i["reason"]), ...(title ? { title } : {}), ...(fix ? { fix } : {}) };
   });
   const sentence = text(rotation["sentence"]);
   return {

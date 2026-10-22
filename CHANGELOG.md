@@ -4,6 +4,9 @@
 
 ### Added
 
+- An open scan or audit report names the step saw is on, such as `reading git history (2/6)`, and
+  updates as saw moves on. An audit report also shows the check saw names for a finding, and how to
+  deal with a probe it could not read.
 - In Cursor, the agent checks saw's verdict before it runs a command that installs or runs a
   folder's code, such as `npm install`, `make` or `./script.sh`. In a folder saw found infected the
   command is refused and the agent is told why; when saw found it suspicious or could not check it,

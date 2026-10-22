@@ -13,8 +13,11 @@ export const FEATURES = {
 } as const;
 export type Feature = (typeof FEATURES)[keyof typeof FEATURES];
 
-/** The newest `schema_version` of each document this extension reads. A newer one means a breaking change it does not know. */
-export const KNOWN_SCHEMAS = { scan: 1, fix: 2, audit: 1, "hook-status": 1 } as const;
+/**
+ * The newest `schema_version` of each document this extension reads. A newer one means a breaking
+ * change it does not know. saw's fix document stays at 1 when fields are added.
+ */
+export const KNOWN_SCHEMAS = { scan: 1, fix: 1, audit: 1, "hook-status": 1 } as const;
 export type Document = keyof typeof KNOWN_SCHEMAS;
 
 export interface Capabilities {

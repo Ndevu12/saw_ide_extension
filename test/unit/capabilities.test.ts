@@ -37,6 +37,8 @@ describe("what the installed saw can do", () => {
     expect(schemaProblem("scan", {})).toBeUndefined();
     expect(schemaProblem("scan", { schema_version: 1 })).toBeUndefined();
     expect(schemaProblem("scan", { schema_version: 2 })).toMatch(/update the extension/);
+    expect(schemaProblem("fix", { schema_version: 1 })).toBeUndefined();
+    expect(schemaProblem("fix", { schema_version: 2 })).toMatch(/update the extension/);
     expect(schemaProblem("audit", { schema_version: "1" })).toMatch(/invalid/);
   });
 });
