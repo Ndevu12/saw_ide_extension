@@ -6,15 +6,14 @@
 
 ### Added
 
-- When saw can ask during a fix, the **Decide** view offers the choice and a diff opens beside it.
-  Keep is the focused action. Closing the diff does not answer, and stopping the fix does not
-  answer. **Show the Decision** opens it again. The fix report lists what you decided. A saw that
-  does not announce this stays as it was: the fix finishes, and anything left open stays in the
-  report.
+- During a fix, the **Decide** view offers the choice and a diff opens beside it. Keep is the
+  focused action. Closing the diff does not answer, and stopping the fix does not answer.
+  **Show the Decision** opens it again. The fix report lists what you decided.
 
 ### Changed
 
-- Installs stayawakebot 0.15.0, and moves a saw it installed earlier up to it.
+- Installs stayawakebot 0.15.0, and moves a saw it installed earlier up to it. This is the saw
+  release that asks those questions.
 
 ## [0.2.0] - 2026-10-22
 
