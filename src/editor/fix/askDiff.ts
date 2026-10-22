@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 
 import type { AskFile, AskQuestion } from "../../core/fix/ask";
 import { plain } from "../../core/text";
-import { uriAt } from "./changes";
+import { hasCommit, uriAt } from "./changes";
 
 const SCHEME = "saw-ask";
 /** A preview larger than this is described, not loaded into the editor. */
@@ -132,7 +132,7 @@ async function openMany(title: string, resources: [vscode.Uri, vscode.Uri, vscod
 export async function openAsk(folder: vscode.WorkspaceFolder, question: AskQuestion): Promise<void> {
   try {
     if (question.kind === "delivery") {
-      await openDelivery(folder, question.commit, question.subject, [...question.removing, ...question.files.map((file) => file.path), ...question.changed]);
+      await openDelivery(folder, question, [...question.removing, ...question.files.map((file) => file.path), ...question.changed]);
       return;
     }
     if (question.kind === "package") {
@@ -188,6 +188,24 @@ export async function openTakeOut(folder: vscode.WorkspaceFolder, commit: string
   }
 }
 
+/**
+ * The commit that introduced a file, parent on the left. False when git cannot read that commit,
+ * in which case no diff is opened.
+ */
+export async function openIntroduced(folder: vscode.WorkspaceFolder, question: AskFile): Promise<boolean> {
+  const commit = question.introducedBy;
+  if (!commit || !(await hasCommit(folder, commit)) || !(await hasCommit(folder, `${commit}^`))) {
+    return false;
+  }
+  const right = await uriAt(folder, question.path, commit);
+  const left = await uriAt(folder, question.path, `${commit}^`);
+  if (!right || !left) {
+    return false;
+  }
+  await openPair(`Introduced in ${commit.slice(0, 12)}`, left, right);
+  return true;
+}
+
 /** The operator's replacement beside the copy saw read. */
 export async function openSupply(folder: vscode.WorkspaceFolder, question: AskFile, replacement: string): Promise<void> {
   try {
@@ -202,7 +220,11 @@ export async function openSupply(folder: vscode.WorkspaceFolder, question: AskFi
   }
 }
 
-async function openDelivery(folder: vscode.WorkspaceFolder, commit: string, subject: string, paths: string[]): Promise<void> {
+function day(date: string): string {
+  return /^(\d{4}-\d{2}-\d{2})/.exec(date)?.[1] ?? date.trim();
+}
+
+async function openDelivery(folder: vscode.WorkspaceFolder, question: Extract<AskQuestion, { kind: "delivery" }>, paths: string[]): Promise<void> {
   const resources: [vscode.Uri, vscode.Uri, vscode.Uri][] = [];
   const seen = new Set<string>();
   for (const relative of paths) {
@@ -210,14 +232,16 @@ async function openDelivery(folder: vscode.WorkspaceFolder, commit: string, subj
       continue;
     }
     seen.add(relative);
-    const right = await uriAt(folder, relative, commit);
-    const left = await uriAt(folder, relative, `${commit}^`);
+    const right = await uriAt(folder, relative, question.commit);
+    const left = await uriAt(folder, relative, `${question.commit}^`);
     if (!right || !left) {
       continue;
     }
     const file = vscode.Uri.joinPath(folder.uri, ...relative.split(/[/\\]/).filter(Boolean));
     resources.push([file, left, right]);
   }
-  const short = commit.slice(0, 12);
-  await openMany(subject ? `${short} — ${subject}` : short, resources);
+  const short = question.commit.slice(0, 12);
+  const when = day(question.date);
+  const title = [short, when, question.subject].filter(Boolean).join(" — ");
+  await openMany(title, resources);
 }
