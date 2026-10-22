@@ -85,6 +85,8 @@ describe("the scan report", () => {
 
   it("says when a scan is running, and when there has been none", () => {
     expect(scanReport({ ...input(undefined), scanning: true }, "preview")).toContain("> **Scanning now.**");
+    expect(scanReport({ ...input(undefined), scanning: true, step: "reading git history (2/6)" }, "preview")).toContain("**Scanning now.** reading git history \\(2\\/6\\).");
+    expect(scanReport({ ...input(undefined), scanning: true, step: "[click](http://evil.test)" }, "preview")).toContain("\\[click\\]\\(http\\:\\/\\/evil\\.test\\)");
     expect(scanReport({ ...input(infected()), scanning: true }, "preview")).toContain("below is the previous scan");
     expect(scanReport(input(undefined), "preview")).toContain("saw has not scanned this folder in this window yet.");
     expect(scanReport(input(scanned([target()], 0)), "preview")).toContain("*No findings.*");
@@ -137,12 +139,14 @@ describe("the command reports", () => {
 
   it("audit: the items to confirm first, then the rest, what was not read and what it covers", () => {
     const finding = (id: string, title: string) => ({ id, severity: "medium", title, detail: "", fix: "", confidence: "heuristic", process: undefined });
-    const details = { toConfirm: ["b"], findings: [finding("a", "a cron job"), finding("b", "ssh-agent holds keys")], incomplete: [{ probe: "browsers", reason: "permission denied" }], scopeNotes: ["user processes only"] };
+    const details = { toConfirm: ["b"], findings: [finding("a", "a cron job"), { ...finding("b", "ssh-agent holds keys"), command: "saw audit --verify" }], incomplete: [{ probe: "browsers", reason: "permission denied", title: "A location was not read", fix: "Read it by hand" }], scopeNotes: ["user processes only"] };
     const text = auditReport({ run, verdict: "to-confirm", sentence: undefined, details, sawVersion: undefined }, "preview");
     expect(text).toContain("## Safe once you confirm the items below");
     expect(text.indexOf("## Confirm these are yours")).toBeLessThan(text.indexOf("## Findings"));
     expect(text).toContain("- **medium** · heuristic · ssh\\-agent holds keys");
-    expect(text).toContain("## Not read\n\n- `browsers`: permission denied");
+    expect(text).toContain("Check it: `saw audit --verify`");
+    expect(text).toContain("## Not read\n\n- `browsers`: A location was not read. permission denied\n  To deal with it: `Read it by hand`");
+    expect(auditReport({ run: { startedAt: run.startedAt, said: "" }, verdict: undefined, sentence: undefined, sawVersion: undefined, step: "cached credentials (4/12)" }, "preview")).toContain("saw is checking this machine: cached credentials \\(4\\/12\\).");
     expect(text).toContain("## What this audit covers\n\n- user processes only");
   });
 

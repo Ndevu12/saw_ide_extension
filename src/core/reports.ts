@@ -158,6 +158,8 @@ export interface ScanReportInput {
   folderPath: string;
   scanning: boolean;
   fixing: boolean;
+  /** What saw says it is doing, while it scans. */
+  step?: string | undefined;
   outcome: SettledScan | undefined;
   sawVersion: string | undefined;
 }
@@ -167,7 +169,8 @@ export function scanReport(input: ScanReportInput, copy: Copy): string {
   if (input.fixing) {
     out.push("> **saw is fixing this folder.** It is scanned again when the fix is done.", "");
   } else if (input.scanning) {
-    out.push(`> **Scanning now.** This report updates when saw finishes${input.outcome ? "; below is the previous scan" : ""}.`, "");
+    const step = input.step ? ` ${prose(input.step, 120)}.` : "";
+    out.push(`> **Scanning now.**${step} This report updates when saw finishes${input.outcome ? "; below is the previous scan" : ""}.`, "");
   }
   const { outcome } = input;
   if (!outcome) {
@@ -313,6 +316,8 @@ export interface AuditReportInput {
   /** saw's own rotation-safety sentence. */
   sentence: string | undefined;
   details?: AuditDetails | undefined;
+  /** What saw says it is doing, while it audits. */
+  step?: string | undefined;
   sawVersion: string | undefined;
 }
 
@@ -337,6 +342,7 @@ function auditFinding(f: AuditDetails["findings"][number]): string[] {
   const lines = [`- ${head}`];
   if (f.detail) lines.push(`  ${prose(f.detail, 800)}`);
   if (f.process) lines.push(`  Process ${f.process.pid}: ${inline(f.process.exe, 300)}`);
+  if (f.command) lines.push(`  Check it: ${inline(f.command, 200)}`);
   if (f.fix) lines.push(`  To deal with it: ${inline(f.fix, 300)}`);
   return lines;
 }
@@ -353,7 +359,11 @@ function auditDetails(details: AuditDetails): string[] {
     out.push("## Findings", "", ...rest.slice(0, MAX_LISTED).flatMap(auditFinding), ...(rest.length > MAX_LISTED ? [`- *and ${rest.length - MAX_LISTED} more in saw's report*`] : []), "");
   }
   if (details.incomplete.length) {
-    out.push("## Not read", "", ...details.incomplete.map((i) => `- ${inline(i.probe, 120)}: ${prose(i.reason, 400)}`), "");
+    const item = (i: AuditDetails["incomplete"][number]) => {
+      const head = i.title ? `${inline(i.probe, 120)}: ${prose(i.title, 200)}. ${prose(i.reason, 400)}` : `${inline(i.probe, 120)}: ${prose(i.reason, 400)}`;
+      return [ `- ${head}`, ...(i.fix ? [`  To deal with it: ${inline(i.fix, 300)}`] : []) ];
+    };
+    out.push("## Not read", "", ...details.incomplete.flatMap(item), "");
   }
   if (details.scopeNotes.length) {
     out.push("## What this audit covers", "", ...details.scopeNotes.map((note) => `- ${prose(note, 400)}`), "");
@@ -370,7 +380,8 @@ export function auditReport(input: AuditReportInput, copy: Copy): string {
   }
   const stopped = stoppedLine(run);
   if (run.finishedAt === undefined) {
-    out.push("## Auditing now", "", "saw is checking this machine. Its report appears below as it works.", "");
+    const step = input.step ? `: ${prose(input.step, 120)}` : "";
+    out.push("## Auditing now", "", `saw is checking this machine${step}. Its report appears below as it works.`, "");
   } else if (stopped || !verdict) {
     out.push("## Stopped", "", stopped ?? "The audit did not finish.", "");
   } else {

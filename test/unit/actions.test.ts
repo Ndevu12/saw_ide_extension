@@ -69,6 +69,7 @@ describe("saw fix", () => {
   });
 
   it("refuses a fix report newer than it reads", () => {
+    expect(readFix(JSON.stringify({ schema_version: 2, results: [{ remediation: "prepared" }] }), 0)).toMatchObject({ kind: "failed", cause: expect.stringMatching(/update the extension/) });
     expect(readFix(JSON.stringify({ schema_version: 99, results: [] }), 0)).toMatchObject({ kind: "failed", cause: expect.stringMatching(/update the extension/) });
   });
 
@@ -141,8 +142,8 @@ describe("saw audit --json", () => {
     JSON.stringify({
       schema_version: 1,
       rotation: { verdict, sentence: "safe once you confirm the item(s) below are yours.", to_confirm: ["ssh-agent"] },
-      findings: [{ id: "ssh-agent", severity: "medium", title: "ssh-agent holds keys", detail: "", fix: "ssh-add -D", confidence: "heuristic", process: { pid: 42, exe: "/usr/bin/ssh-agent" } }],
-      incomplete: [{ probe: "browser-extensions", reason: "permission denied" }],
+      findings: [{ id: "ssh-agent", severity: "medium", title: "ssh-agent holds keys", detail: "", fix: "ssh-add -D", confidence: "heuristic", command: "saw audit --verify", process: { pid: 42, exe: "/usr/bin/ssh-agent" } }],
+      incomplete: [{ probe: "browser-extensions", reason: "permission denied", title: "A location was not read", fix: "Read it by hand" }],
       scope_notes: ["user processes only"],
       ...more,
     });
@@ -158,8 +159,8 @@ describe("saw audit --json", () => {
     expect(result.sentence).toBe("Rotation safety: safe once you confirm the item(s) below are yours.");
     expect(result.details).toEqual({
       toConfirm: ["ssh-agent"],
-      findings: [{ id: "ssh-agent", severity: "medium", title: "ssh-agent holds keys", detail: "", fix: "ssh-add -D", confidence: "heuristic", process: { pid: 42, exe: "/usr/bin/ssh-agent" } }],
-      incomplete: [{ probe: "browser-extensions", reason: "permission denied" }],
+      findings: [{ id: "ssh-agent", severity: "medium", title: "ssh-agent holds keys", detail: "", fix: "ssh-add -D", confidence: "heuristic", command: "saw audit --verify", process: { pid: 42, exe: "/usr/bin/ssh-agent" } }],
+      incomplete: [{ probe: "browser-extensions", reason: "permission denied", title: "A location was not read", fix: "Read it by hand" }],
       scopeNotes: ["user processes only"],
     });
   });

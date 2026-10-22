@@ -110,7 +110,8 @@ Otherwise the extension reads the output every supported saw has. A document in 
 | `hook` | the status JSON, also printed by install and repair | the first line of `hook status` and its ⚠ lines; anything else is unknown, never installed |
 
 Progress events are requested only where saw's human report is not shown, because saw keeps that
-report off stderr while they are on. A verdict never comes from progress.
+report off stderr while they are on. An open scan or audit report shows the step saw is on. A
+verdict never comes from progress.
 
 ## Security boundaries
 
