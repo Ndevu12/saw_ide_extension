@@ -8,6 +8,7 @@ interface GitChange {
 interface GitRepository {
   readonly rootUri: vscode.Uri;
   diffBetween(ref1: string, ref2: string): Promise<GitChange[]>;
+  getCommit(ref: string): Promise<unknown>;
 }
 interface GitApi {
   readonly repositories: GitRepository[];
@@ -27,16 +28,38 @@ async function gitApi(): Promise<GitApi | undefined> {
   return exports.enabled ? exports.getAPI(1) : undefined;
 }
 
+async function repositoryAt(folder: vscode.WorkspaceFolder): Promise<{ git: GitApi; repository: GitRepository } | undefined> {
+  const git = await gitApi();
+  const repository = git?.repositories.find((item) => item.rootUri.fsPath === folder.uri.fsPath);
+  return git && repository ? { git, repository } : undefined;
+}
+
+/** Whether `ref` names a commit in `folder`. */
+export async function hasCommit(folder: vscode.WorkspaceFolder, ref: string): Promise<boolean> {
+  if (!ref) {
+    return false;
+  }
+  try {
+    const found = await repositoryAt(folder);
+    if (!found) {
+      return false;
+    }
+    await found.repository.getCommit(ref);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** A file in `folder` as git has it at `ref`, or undefined when the Git extension cannot say. */
 export async function uriAt(folder: vscode.WorkspaceFolder, relativePath: string, ref: string): Promise<vscode.Uri | undefined> {
   try {
-    const git = await gitApi();
-    const repository = git?.repositories.find((item) => item.rootUri.fsPath === folder.uri.fsPath);
-    if (!git || !repository || !ref) {
+    const found = await repositoryAt(folder);
+    if (!found || !ref) {
       return undefined;
     }
     const file = vscode.Uri.joinPath(folder.uri, ...relativePath.split(/[/\\]/).filter(Boolean));
-    return git.toGitUri(file, ref);
+    return found.git.toGitUri(file, ref);
   } catch {
     return undefined;
   }
