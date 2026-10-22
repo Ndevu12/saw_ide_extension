@@ -17,6 +17,7 @@
 
 ### Changed
 
+- On Windows the extension finds and installs saw, the same as on Linux and macOS.
 - The README is a user guide: what each feature does, the verdicts, commands, settings, remote
   windows, privacy, and troubleshooting, with screenshots and links to saw's documentation.
 

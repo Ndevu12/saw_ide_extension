@@ -12,8 +12,8 @@ import { runProgram } from "../../src/core/run";
 import { scanFolder } from "../../src/core/scan";
 import { DISGUISED_TASK, onWindows, tempDir } from "./helpers";
 
-// The contract with the real saw: skipped where it is not installed, required in CI. saw does not
-// run on Windows (it imports POSIX-only modules), so there it is not tested.
+// The contract with the real saw: skipped where it is not installed, required in CI. The published
+// pin still does not start on Windows, so this suite stays off there until that pin moves.
 const located = locate(process.env["SAW_BIN"] ?? "", {
   platform: process.platform,
   homedir: homedir(),

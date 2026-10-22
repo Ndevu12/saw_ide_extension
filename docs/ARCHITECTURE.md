@@ -73,7 +73,7 @@ what will change. The extension never passes `--pr`, so nothing is pushed or pub
 The engine uses, in order:
 
 1. the `saw.path` setting, when set, and nothing else;
-2. a `saw` on `PATH` or in `~/.local/bin` that is new enough;
+2. a `saw` on `PATH` or in `~/.local/bin` that is new enough (`saw.exe` on Windows);
 3. otherwise it installs saw: pipx on `PATH`, in `~/.local/bin` or as `python -m pipx`. If none
    exists, a temporary venv installs a permanent pipx and is then deleted. Then
    `pipx install --python <base python> --pip-args=--only-binary=:all: stayawakebot==<pin>` runs.

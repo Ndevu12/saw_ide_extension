@@ -46,7 +46,7 @@ export class StatusBar implements vscode.Disposable {
     }
     if (engine?.kind === "unavailable") {
       this.item.text = "$(circle-slash) saw: not available";
-      const canInstall = engine.reason !== "invalid-setting" && engine.reason !== "unsupported-platform";
+      const canInstall = engine.reason !== "invalid-setting";
       this.item.tooltip = `${engine.message}\nSince no scan ran, no folder is shown as clean.${canInstall ? " Click to install or repair saw." : ""}`;
       this.item.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
       this.item.command = canInstall ? "saw.install" : "saw.showOutput";
