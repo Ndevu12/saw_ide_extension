@@ -25,6 +25,13 @@ git("-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-q",
 // SAW_IT_EDITOR runs the tests in another VS Code-based editor, such as Cursor, instead.
 // The test editor is a third-party build; keeping it outside the repository keeps it out of
 // every scan of this project, including the one this extension runs on itself.
+// Each run gets its own profile. The job starts 1.96, then the current release, then 1.96
+// again, and they would otherwise share one user-data directory. The older editor then opens
+// a profile the newer one wrote and exits during startup.
+const profile = mkdtempSync(path.join(tmpdir(), "saw-ext-profile-"));
+mkdirSync(path.join(profile, "data"));
+mkdirSync(path.join(profile, "extensions"));
+
 const executable = process.env.SAW_IT_EDITOR || await downloadAndUnzipVSCode({
   version: process.env.VSCODE_TEST_VERSION ?? "1.96.0",
   cachePath: process.env.VSCODE_TEST_CACHE ?? path.join(homedir(), ".cache", "saw-vscode-test"),
@@ -55,6 +62,7 @@ export default defineConfig({
   files: "out/test/integration/**/*.test.js",
   useInstallation: { fromPath: executable },
   workspaceFolder: workspace,
+  launchArgs: [`--user-data-dir=${path.join(profile, "data")}`, `--extensions-dir=${path.join(profile, "extensions")}`],
   env,
   mocha: { ui: "tdd", timeout: 600_000 },
 });
