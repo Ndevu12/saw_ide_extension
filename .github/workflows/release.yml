@@ -108,6 +108,7 @@ jobs:
   github-release:
     name: Create GitHub Release
     needs: [publish-open-vsx, publish-marketplace]
+    if: "${{ !cancelled() && (needs.publish-open-vsx.result == 'success' || needs.publish-marketplace.result == 'success') }}"
     runs-on: ubuntu-latest
     permissions:
       contents: write
