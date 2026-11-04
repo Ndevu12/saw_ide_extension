@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit } from "../../src/core/govern/command";
 import { mayRelease, prepareArgs, readApply, readNotice, readPrepare, type GovernConfig } from "../../src/core/govern/contract";
-import { plan, posixWrapper } from "../../src/core/govern/plan";
+import { activationEnv, plan, posixWrapper, standinBeside } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
 const config = (overrides: Partial<GovernConfig> = {}): GovernConfig => ({
@@ -114,6 +114,21 @@ describe("what the stand-in does", () => {
     ]);
   });
 
+  it("places saw's stand-in when it sits beside saw, and activates it", () => {
+    const saw = path.join("/usr/local/bin", "saw");
+    const standin = path.join("/usr/local/bin", "saw-git-standin");
+    const present = new Set([standin]);
+    expect(standinBeside(saw, (file) => present.has(file))).toBe(standin);
+    expect(standinBeside(saw, () => false)).toBeUndefined();
+    expect(activationEnv(config(), "git", "/tmp/holding/app")).toEqual({
+      SAW_GOVERN_HOLDING: "/tmp/holding/app",
+      SAW_REAL_GIT: "/usr/bin/git",
+      SAW_REAL_GH: "/usr/bin/gh",
+      SAW_BIN: "/usr/local/bin/saw",
+      SAW_STANDIN_TOOL: "git",
+    });
+  });
+
   it("falls through to the real program when its configuration is gone", () => {
     const wrapper = posixWrapper("/usr/bin/node", "/ext/govern-shim.js", "/ext/config.json", "/usr/bin/git", "git");
     expect(wrapper).toContain("exec '/usr/bin/git' \"$@\"");
@@ -150,6 +165,7 @@ describe("saw govern's report", () => {
       step: "reading git history (2/6)",
     });
     expect(readNotice(JSON.stringify({ repo: "/work/app", phase: "held", verdict: "infected", reasons: ["a workflow arrived"], at: 2 }))?.phase).toBe("held");
+    expect(readNotice(JSON.stringify({ repo: "/work/app", phase: "finished", reasons: [], at: 3 }))?.phase).toBe("finished");
     expect(readNotice("not json")).toBeUndefined();
     expect(readNotice(JSON.stringify({ released: true }))).toBeUndefined();
   });

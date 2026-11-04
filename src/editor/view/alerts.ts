@@ -69,8 +69,9 @@ export class Alerts {
     }
   }
 
-  applied(name: string, verdict: FolderVerdict): void {
-    void vscode.window.showInformationMessage(`saw checked the update to ${name} (${VERDICT_LABEL[verdict]}). The folder was updated.`);
+  applied(name: string, verdict?: FolderVerdict): void {
+    const detail = verdict ? ` (${VERDICT_LABEL[verdict]})` : "";
+    void vscode.window.showInformationMessage(`saw checked the update to ${name}${detail}. The folder was updated.`);
   }
 
   unheld(name: string): void {

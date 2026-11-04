@@ -4,7 +4,7 @@
 
 ### Added
 
-- While saw checks an incoming update, the status bar, the saw view, and Chat say saw is checking it, including the step saw names. The folder is unchanged until that check finishes. A git command saw did not run still changes the folder first; Chat says that change was not held.
+- While saw checks an incoming update, the status bar, the saw view, and Chat say saw is checking it, including the step saw names. The folder is unchanged until that check finishes. When the installed saw includes its git and gh stand-in, the editor places that and a bringing-files command is checked by saw. A git command saw did not run still changes the folder first; Chat says that change was not held.
 
 ## [0.4.0] - 2026-11-04
 
