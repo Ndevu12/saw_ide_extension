@@ -41,6 +41,10 @@ documentation.
 Scanning only reads files, so it runs in **Restricted Mode**. When saw confirms malware in a folder
 you have not trusted yet, the extension warns you before you trust it.
 
+### Chat
+
+The saw sidebar opens on **Chat**. Each open folder is a card: the verdict, what saw found, and buttons for what you can do. A scan only reads the folder. **Fix the checkout** removes what saw confirmed and puts the clean-up on a new local branch. It does not rewrite past commits, and it does not push. Amending history is named separately: that act rewrites the commits that still carry the malicious code and force-updates the branches they are on, and the checkout fix does not do it. When a fix is waiting, the card says whether the question is part of the checkout fix or of amending history. The same buttons are used in **Decide**. This view is part of the extension, so it looks the same in every editor built on VS Code.
+
 ### Reports you can read
 
 **Open Report** opens a folder's scan as a document in an editor tab: the verdict, what to do, and

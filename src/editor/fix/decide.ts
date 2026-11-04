@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 
+import { buttonCss } from "../../core/chat/transcript";
 import { answerLine, decisionLine, type AskDecision, type AskQuestion } from "../../core/fix/ask";
 import { plain } from "../../core/text";
 import { openAsk, openIntroduced, openSupply, openTakeOut, registerAskDocuments } from "./askDiff";
@@ -85,6 +86,22 @@ export class Decide implements vscode.Disposable {
     this.log.pop();
     this.answeredId = undefined;
     return true;
+  }
+
+  /**
+   * Which act the open question belongs to. A file question is amending history. A delivery or a
+   * package question is fixing the checkout. Undefined when nothing is waiting.
+   */
+  waitingOn(): { folder: vscode.WorkspaceFolder; specialty: string } | undefined {
+    if (!this.folder || !this.question) {
+      return undefined;
+    }
+    const specialty = this.question.kind === "file"
+      ? "This question is about amending history. The answer can rewrite the commits that carried this file. Fixing the checkout does not ask it."
+      : this.question.kind === "package"
+        ? "This question is part of fixing the checkout. It decides whether a known-malicious package stays declared. It does not rewrite past commits."
+        : "This question is part of fixing the checkout. It decides which files added beside the malicious code stay. It does not rewrite past commits.";
+    return { folder: this.folder, specialty };
   }
 
   /** Wait until the operator answers `question`, or the fix is stopped. */
@@ -305,7 +322,9 @@ export class Decide implements vscode.Disposable {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style nonce="${nonce}">
   body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); font-size: var(--vscode-font-size); padding: 8px 12px; }
-  button { margin: 0 8px 8px 0; }
+  ${buttonCss()}
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  .actions button.primary, .actions button.danger { flex: 1 1 100%; }
   .hint, .meta { color: var(--vscode-descriptionForeground); }
   ul { padding-left: 1.2em; }
   li { margin: 4px 0; }
@@ -343,23 +362,23 @@ ${body}
     const hint = this.hint ? `<p class="hint">${escape(this.hint)}</p>` : "";
     const done = this.log.map((line) => `<li>${escape(line)}</li>`).join("");
     const history = done ? `<p class="meta">Already decided</p><ul>${done}</ul>` : "";
-    return `${this.stepHtml(question)}${hint}<p><button data-act="show">Show diff</button></p>${history}`;
+    return `${this.stepHtml(question)}${hint}<p class="actions"><button type="button" class="secondary" data-act="show">Show diff</button></p>${history}`;
   }
 
   private stepHtml(question: AskQuestion): string {
     if (this.step === "supply") {
       return `<p>Look at the diff, then use this file or choose another.</p>
-        <p><button data-act="keep" autofocus>Keep</button>
-        <button data-act="supply">Choose another</button>
-        <button data-act="use-file">Use this file</button></p>`;
+        <p class="actions"><button type="button" class="primary" data-act="keep" autofocus>Keep</button>
+        <button type="button" class="secondary" data-act="supply">Choose another</button>
+        <button type="button" class="secondary" data-act="use-file">Use this file</button></p>`;
     }
     if (this.step === "confirm" && question.kind === "delivery") {
       const names = this.chosen.map((item) => `<li>${escape(item, 300)}</li>`).join("");
       return `<p>saw will take these files out of the prepared branch where it still has them as they were added.</p>
         <ul>${names}</ul>
-        <p><button data-act="keep" autofocus>Keep them all</button>
-        <button data-act="back">Back</button>
-        <button data-act="confirm-take-out">Take them out</button></p>`;
+        <p class="actions"><button type="button" class="primary" data-act="keep" autofocus>Keep them all</button>
+        <button type="button" class="secondary" data-act="back">Back</button>
+        <button type="button" class="danger" data-act="confirm-take-out">Take them out</button></p>`;
     }
     if (question.kind === "delivery") {
       const files = question.files
@@ -375,29 +394,29 @@ ${body}
         ${recorded}${known}
         <p class="meta">saw is already removing ${escape(question.removing.join(", ") || "the payload", 300)}</p>
         <ul>${files}</ul>
-        <p><button data-act="keep" autofocus>Keep them all</button>
-        <button data-act="take-out">Take out selected</button></p>`;
+        <p class="actions"><button type="button" class="primary" data-act="keep" autofocus>Keep them all</button>
+        <button type="button" class="danger" data-act="take-out">Take out selected</button></p>`;
     }
     if (question.kind === "package") {
       const files = question.manifests.map((manifest) => `<li>${escape(manifest.path, 300)}${manifest.proposed === undefined ? " <span class=\"meta\">saw will not rewrite this file</span>" : ""}</li>`).join("");
       return `<p><strong>${escape(question.name, 200)}</strong> ${escape(question.versions.join(", "), 200)} is a known-malicious package.</p>
         <ul>${files}</ul>
-        <p><button data-act="keep" autofocus>Leave it declared</button>
-        <button data-act="confirm-take-out">Take it out</button></p>`;
+        <p class="actions"><button type="button" class="primary" data-act="keep" autofocus>Leave it declared</button>
+        <button type="button" class="danger" data-act="confirm-take-out">Take it out</button></p>`;
     }
     const title = question.confirmed ? "saw confirmed this file and could not clean it" : "saw is unsure about this file";
     const origin = question.originUnread
       ? "git could not read what this file arrived with"
       : question.introducedBy
-        ? `<button data-act="introduced">Introduced in ${escape(question.introducedBy.slice(0, 12), 20)}</button>`
+        ? `<button type="button" class="secondary" data-act="introduced">Introduced in ${escape(question.introducedBy.slice(0, 12), 20)}</button>`
         : "no commit ties it to the payload";
     const withRemoved = question.arrivedWithRemoved.length ? `<p class="meta">saw is already removing ${escape(question.arrivedWithRemoved.join(", "), 300)}</p>` : "";
-    const restore = question.restore ? `<button data-act="restore">Restore</button>` : "";
-    const supply = question.supply ? `<button data-act="supply">Supply a file</button>` : "";
+    const restore = question.restore ? `<button type="button" class="secondary" data-act="restore">Restore</button>` : "";
+    const supply = question.supply ? `<button type="button" class="secondary" data-act="supply">Supply a file</button>` : "";
     return `<p>${escape(title)}. <strong>${escape(question.path, 300)}</strong></p>
       <p class="meta">${escape(question.category, 80)} ${escape(question.signatureId, 80)} ${escape(question.description, 400)}</p>
       <p class="meta">${question.introducedBy && !question.originUnread ? origin : escape(origin, 200)}</p>${withRemoved}
-      <p><button data-act="keep" autofocus>Keep</button>
-      <button data-act="remove">Remove</button>${restore}${supply}</p>`;
+      <p class="actions"><button type="button" class="primary" data-act="keep" autofocus>Keep</button>
+      <button type="button" class="danger" data-act="remove">Remove</button>${restore}${supply}</p>`;
   }
 }

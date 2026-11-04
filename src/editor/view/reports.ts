@@ -68,6 +68,12 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/scan/${folderKey(folder)}/saw scan - ${label(folder.name)}.md` });
   }
 
+  /** The fix this window finished for the folder, when it prepared a clean-up. */
+  lastFix(folder: vscode.WorkspaceFolder): FixOutcome | undefined {
+    const outcome = this.fixes.get(folderKey(folder))?.outcome;
+    return outcome?.kind === "prepared" ? outcome : undefined;
+  }
+
   fixUri(folder: vscode.WorkspaceFolder): vscode.Uri {
     return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/fix/${folderKey(folder)}/saw fix - ${label(folder.name)}.md` });
   }

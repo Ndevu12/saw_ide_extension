@@ -22,7 +22,7 @@ src/
     scan/               controller, triggers, diagnostics
     fix/                Fix…, the Decide view, diffs
     install/            find saw, install it, the install lock
-    view/               the saw sidebar, status bar, alerts, reports
+    view/               the saw sidebar, the chat webview, status bar, alerts, reports
     agent/              the language-model tool, MCP registration, the Cursor guard
 test/
   unit/                 vitest, against src/core
