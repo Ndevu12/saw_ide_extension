@@ -115,9 +115,11 @@ describe("what the stand-in does", () => {
   });
 
   it("places saw's stand-in when it sits beside saw, and activates it", () => {
-    const present = new Set(["/usr/local/bin/saw-git-standin"]);
-    expect(standinBeside("/usr/local/bin/saw", (file) => present.has(file))).toBe("/usr/local/bin/saw-git-standin");
-    expect(standinBeside("/usr/local/bin/saw", () => false)).toBeUndefined();
+    const saw = path.join("/usr/local/bin", "saw");
+    const standin = path.join("/usr/local/bin", "saw-git-standin");
+    const present = new Set([standin]);
+    expect(standinBeside(saw, (file) => present.has(file))).toBe(standin);
+    expect(standinBeside(saw, () => false)).toBeUndefined();
     expect(activationEnv(config(), "git", "/tmp/holding/app")).toEqual({
       SAW_GOVERN_HOLDING: "/tmp/holding/app",
       SAW_REAL_GIT: "/usr/bin/git",
