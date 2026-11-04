@@ -17,12 +17,14 @@ src/
     install/            locate saw, find Python, pipx install, diagnose a failure
     report/             Markdown reports, with scanned text kept literal
     agent/              what agents are told, `saw mcp`, the Cursor hook's answer
+    feedback/           when Chat may ask for a rating, and the links that ask opens
   editor/               VS Code adapters, grouped the same way
     model · settings · present
     scan/               controller, triggers, diagnostics
     fix/                Fix…, the Decide view, diffs
     install/            find saw, install it, the install lock
     view/               the saw sidebar, the chat webview, status bar, alerts, reports
+    feedback/           opens the rating, star, and issue pages; stores the dismissal
     agent/              the language-model tool, MCP registration, the Cursor guard
 test/
   unit/                 vitest, against src/core
@@ -161,3 +163,8 @@ verdict never comes from progress.
   (otherwise `~/.local/state/saw/govern/status`). The editor reads those with the same notice
   reader. Two notices for one phase a few seconds apart are one check. Git the stand-in did not
   run is still scanned by the scan-on-clone hooks.
+- **A rating is asked for in Chat, after saw has done something the person can judge.** The decision
+  of when to show the card lives in `core/feedback` and is unit-tested. The editor stores a
+  dismissal and a rating in global state, and opens the review, star, and issue pages. The issue
+  body carries the extension version, the saw version, the editor name, and the verdict word. It
+  does not carry a path, a finding, or evidence.

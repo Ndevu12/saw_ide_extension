@@ -8,6 +8,7 @@
 - When saw already covers your terminals, the editor's terminal uses that and does not check the same command again. The Git view still checks on its own.
 - When saw can say whether it let the current tree in, Chat names a change only when saw did not. A check that runs outside this window shows the same checking, applied, or held as one the editor started.
 - When saw can put a folder back, a commit it did not let in is put back by saw and your unsaved work stays. A change to the files on a commit saw already let in is not put back. An agent that asks saw about a folder is told the same checking, held, or not-held state, and waits while a check is running.
+- After saw holds an update, or after three checks of a folder come back with nothing saw knows, Chat asks for a rating. Rate, Star, Report a problem, and Request a feature are on that card. Not now hides it for this version. **Share feedback** opens it any time.
 
 ## [0.4.0] - 2026-11-04
 

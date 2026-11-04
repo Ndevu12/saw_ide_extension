@@ -5,6 +5,7 @@ import { chatCards, renderChat, SHOWN_FINDINGS, type ChatCleanup, type ChatFolde
 import type { Finding } from "../../core/scan/contract";
 import { plain } from "../../core/text";
 import type { AuditVerdict, FixOutcome, HookStatus } from "../../core/fix/actions";
+import type { Feedback } from "../feedback/feedback";
 import type { Decide } from "../fix/decide";
 import type { Controller } from "../scan/controller";
 import { findingRange, findingUri } from "../scan/diagnostics";
@@ -40,9 +41,11 @@ export class ChatView implements vscode.Disposable {
     private readonly lastFix: (folder: vscode.WorkspaceFolder) => FixOutcome | undefined,
     private readonly openFixReport: (folder: vscode.WorkspaceFolder) => void,
     private readonly decide: Decide,
+    private readonly feedback: Feedback,
   ) {
     this.subscriptions = [
       model.onDidChange(() => this.render()),
+      feedback.onDidChange(() => this.render()),
       vscode.window.registerWebviewViewProvider("saw.chat", {
         resolveWebviewView: (view) => {
           this.view = view;
@@ -66,7 +69,8 @@ export class ChatView implements vscode.Disposable {
     this.folders = states.map((state) => state.folder);
     this.opens = states.map((state) => openings(state));
     const nonce = Math.random().toString(36).slice(2);
-    webview.html = renderChat(chatCards(states.map((state) => folderInput(state, this.decide, this.lastFix)), this.machineInput()), nonce);
+    const ask = this.feedback.card();
+    webview.html = renderChat(chatCards(states.map((state) => folderInput(state, this.decide, this.lastFix)), this.machineInput(), ask), nonce);
   }
 
   private machineInput(): ChatMachineInput {
@@ -143,6 +147,9 @@ export class ChatView implements vscode.Disposable {
         return;
       case "docs":
         void vscode.env.openExternal(vscode.Uri.parse(DOCS.verdicts));
+        return;
+      case "feedback":
+        this.feedback.act(first);
         return;
       default:
         return;

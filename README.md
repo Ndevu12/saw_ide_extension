@@ -43,7 +43,7 @@ you have not trusted yet, the extension warns you before you trust it.
 
 ### Chat
 
-The saw sidebar opens on **Chat**. Each open folder is a card: the verdict, what saw found, and buttons for what you can do. A scan only reads the folder. **Fix the checkout** removes what saw confirmed and puts the clean-up on a new local branch. It does not rewrite past commits, and it does not push. Amending history is named separately: that act rewrites the commits that still carry the malicious code and force-updates the branches they are on, and the checkout fix does not do it. When a fix is waiting, the card says whether the question is part of the checkout fix or of amending history. The same buttons are used in **Decide**. This view is part of the extension, so it looks the same in every editor built on VS Code.
+The saw sidebar opens on **Chat**. Each open folder is a card: the verdict, what saw found, and buttons for what you can do. A scan only reads the folder. **Fix the checkout** removes what saw confirmed and puts the clean-up on a new local branch. It does not rewrite past commits, and it does not push. Amending history is named separately: that act rewrites the commits that still carry the malicious code and force-updates the branches they are on, and the checkout fix does not do it. When a fix is waiting, the card says whether the question is part of the checkout fix or of amending history. The same buttons are used in **Decide**. This view is part of the extension, so it looks the same in every editor built on VS Code. After saw holds an update, or after several quiet checks, a card under the folders asks for a rating. **Share feedback** opens it any time.
 
 ### Reports you can read
 
@@ -179,6 +179,7 @@ All commands are in the Command Palette under **saw:**.
 | **Copy Install Diagnostics** | Copy the last install's details for an issue report. |
 | **Show Log** | Open the extension's log. |
 | **Open saw Documentation** | Open [saw-docs.ndevuspace.com](https://saw-docs.ndevuspace.com/). |
+| **Share feedback** | Rate the editor, star the repository, report a problem, or request a feature. |
 
 ## Settings
 
@@ -237,6 +238,8 @@ and why it [fails closed](https://saw-docs.ndevuspace.com/latest/explanation/fai
 - [saw on GitHub](https://github.com/Ndevu12/stayAwakeBot) and [on PyPI](https://pypi.org/project/stayawakebot/)
 
 ## Feedback and contributing
+
+**saw: Share feedback** is on the saw view title and in the Command Palette. Rate opens the review page for the editor you are using. Star opens this repository. Report a problem asks whether it is about the editor or about what saw found, then opens that tracker with the extension version, the saw version, the editor name, and the verdict word filled in. Nothing from the folder is included. Request a feature opens an extension issue the same way. Not now hides the card until the next version, and only after saw has held another update or checked a folder quietly again. A rating or a star means Chat stops asking on its own.
 
 - **Extension issues and ideas:** [saw_ide_extension issues](https://github.com/Ndevu12/saw_ide_extension/issues)
 - **Detection issues:** [stayAwakeBot issues](https://github.com/Ndevu12/stayAwakeBot/issues)
