@@ -81,7 +81,7 @@ const VERDICT_TONE: Record<FolderVerdict, ChatCard["tone"]> = {
 };
 
 /** The cards the chat shows, in order. Folder buttons are keyed by that folder's place in `folders`. */
-export function chatCards(folders: ChatFolderInput[], machine: ChatMachineInput): ChatCard[] {
+export function chatCards(folders: ChatFolderInput[], machine: ChatMachineInput, extra?: ChatCard): ChatCard[] {
   const cards: ChatCard[] = [];
   if (machine.engine.phase === "installing") {
     cards.push({ badge: "installing", title: "saw", tone: "neutral", paragraphs: ["saw is being installed."], rows: [], actions: [] });
@@ -106,6 +106,9 @@ export function chatCards(folders: ChatFolderInput[], machine: ChatMachineInput)
     });
   }
   folders.forEach((folder, index) => cards.push(folderCard(folder, index)));
+  if (extra) {
+    cards.push(extra);
+  }
   cards.push(machineCard(machine));
   return cards;
 }

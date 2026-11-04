@@ -8,6 +8,7 @@ import { Controller } from "./editor/scan/controller";
 import { CursorAgentGuard } from "./editor/agent/cursorGuard";
 import { Decide } from "./editor/fix/decide";
 import { Diagnostics } from "./editor/scan/diagnostics";
+import { Feedback } from "./editor/feedback/feedback";
 import { Governor } from "./editor/govern/governor";
 import { EngineResolver } from "./editor/install/engine";
 import { Installer, readPins } from "./editor/install/installer";
@@ -41,6 +42,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
   const decide = new Decide(model, log);
   const actions = new Actions(model, engines, controller, readSettings, log, context.globalState, reports, decide);
   const govern = new Governor(context, model, controller, installer, alerts, readSettings, log);
+  const feedback = new Feedback(context, model);
   installer.exposeToTerminals();
   const folderOf = (arg: unknown): vscode.WorkspaceFolder | undefined => {
     const node = arg as { state?: { folder?: vscode.WorkspaceFolder }; uri?: vscode.Uri } | undefined;
@@ -55,6 +57,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     reports,
     decide,
     govern,
+    feedback,
     cursorGuard,
     tree,
     new ChatView(
@@ -64,6 +67,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
       (folder) => reports.lastFix(folder),
       (folder) => void reports.open(reports.fixUri(folder)),
       decide,
+      feedback,
     ),
     new StatusBar(model),
     new SawMcpRegistration(model, readSettings, log),
@@ -105,6 +109,10 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     }),
     vscode.commands.registerCommand("saw.showOutput", () => log.show()),
     vscode.commands.registerCommand("saw.openDocumentation", () => vscode.env.openExternal(vscode.Uri.parse(DOCS.home))),
+    vscode.commands.registerCommand("saw.shareFeedback", async () => {
+      feedback.open();
+      await vscode.commands.executeCommand("saw.chat.focus");
+    }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("saw")) {
         engines.reset();

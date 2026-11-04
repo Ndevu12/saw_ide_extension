@@ -114,6 +114,12 @@
         "icon": "$(question)"
       },
       {
+        "command": "saw.shareFeedback",
+        "title": "Share feedback",
+        "category": "saw",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "saw.decideShow",
         "title": "Show the Decision",
         "category": "saw",
@@ -229,6 +235,11 @@
           "command": "saw.openDocumentation",
           "when": "view == saw.findings",
           "group": "navigation@9"
+        },
+        {
+          "command": "saw.shareFeedback",
+          "when": "view == saw.findings || view == saw.chat",
+          "group": "navigation@10"
         },
         {
           "command": "saw.decideShow",
