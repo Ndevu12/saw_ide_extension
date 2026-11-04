@@ -53,9 +53,16 @@ export class StatusBar implements vscode.Disposable {
       return;
     }
     this.item.command = "workbench.view.extension.saw";
+    const held = states.find((state) => state.held && !state.held.released);
     const scanning = states.some((state) => state.scanning);
     const progress = states.find((state) => state.scanning && state.progress)?.progress;
     const overall = this.model.overall();
+    if (held?.held && !scanning) {
+      this.item.text = `${ICON[held.held.verdict]} saw: update held`;
+      this.item.backgroundColor = BACKGROUND[held.held.verdict];
+      this.item.tooltip = `${held.folder.name}: an update was held (${VERDICT_LABEL[held.held.verdict]}). The folder was not changed.`;
+      return;
+    }
     if (!overall) {
       this.item.text = scanning ? `$(sync~spin) saw: scanning${progress ? `: ${progress}` : ""}` : "$(shield) saw";
       this.item.tooltip = scanning ? scanningTooltip(states) : "No scan has run yet.";

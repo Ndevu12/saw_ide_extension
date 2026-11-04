@@ -8,6 +8,7 @@ import { Controller } from "./editor/scan/controller";
 import { CursorAgentGuard } from "./editor/agent/cursorGuard";
 import { Decide } from "./editor/fix/decide";
 import { Diagnostics } from "./editor/scan/diagnostics";
+import { Governor } from "./editor/govern/governor";
 import { EngineResolver } from "./editor/install/engine";
 import { Installer, readPins } from "./editor/install/installer";
 import { SawMcpRegistration } from "./editor/agent/mcp";
@@ -38,6 +39,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
   const cursorGuard = new CursorAgentGuard(model, readSettings, context.globalStorageUri.fsPath, context.asAbsolutePath("dist/cursor-hook.js"), log);
   const decide = new Decide(model, log);
   const actions = new Actions(model, engines, controller, readSettings, log, context.globalState, reports, decide);
+  const govern = new Governor(context, model, controller, installer, alerts, readSettings, log);
   installer.exposeToTerminals();
   const folderOf = (arg: unknown): vscode.WorkspaceFolder | undefined => {
     const node = arg as { state?: { folder?: vscode.WorkspaceFolder }; uri?: vscode.Uri } | undefined;
@@ -51,6 +53,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     controller,
     reports,
     decide,
+    govern,
     cursorGuard,
     tree,
     new StatusBar(model),
@@ -100,7 +103,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
         controller.requestAll({ immediate: true });
       }
     }),
-    ...registerTriggers(controller, readSettings),
+    ...registerTriggers(controller, readSettings, govern),
   );
   // Forks of VS Code may leave out the language-model API; scanning does not depend on it.
   if (typeof vscode.lm?.registerTool === "function") {

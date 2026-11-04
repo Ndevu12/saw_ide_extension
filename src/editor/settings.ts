@@ -9,6 +9,7 @@ export interface Settings {
   autoInstall: boolean;
   registerMcpServer: boolean;
   guardAgentCommands: boolean;
+  governUpdates: boolean;
 }
 
 // Every saw setting is machine-scoped in package.json, so a workspace's own settings file can
@@ -24,5 +25,6 @@ export function readSettings(): Settings {
     autoInstall: config.get<boolean>("autoInstall", true),
     registerMcpServer: config.get<boolean>("registerMcpServer", true),
     guardAgentCommands: config.get<boolean>("guardAgentCommands", true),
+    governUpdates: config.get<boolean>("governUpdates", true),
   };
 }

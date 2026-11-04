@@ -88,7 +88,8 @@ beyond plain scanning is read only when saw lists it in a schema the extension k
 
 - `audit --json`, `hook … --json` and the fuller `fix --json` record;
 - `--progress=jsonl`;
-- `saw mcp`.
+- `saw mcp`;
+- `saw govern`, which checks an incoming git or GitHub update in a directory outside the open folder and applies it only when the verdict is clean or residue.
 
 Otherwise the extension reads the output every supported saw has. A document in a newer
 `schema_version` than the extension knows is refused with "update the extension", never misread.
@@ -140,3 +141,7 @@ verdict never comes from progress.
   Cursor does not document how hooks run.
 - **A notification never holds up a scan.** Alerts are not awaited, so an unanswered notification
   cannot queue later scans behind it.
+- **An incoming update is checked before the open folder changes**, when saw lists `govern.json`.
+  The stand-in asks saw and does not change the folder itself. Clean and residue are applied by saw.
+  Anything else is shown as held. A change that arrives without the stand-in is put back by saw and
+  then judged the same way.

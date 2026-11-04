@@ -4,7 +4,7 @@ const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
 
 const context = await esbuild.context({
-  entryPoints: { extension: "src/extension.ts", "cursor-hook": "src/cursorHook.ts" },
+  entryPoints: { extension: "src/extension.ts", "cursor-hook": "src/cursorHook.ts", "govern-shim": "src/governShim.ts" },
   bundle: true,
   format: "cjs",
   platform: "node",

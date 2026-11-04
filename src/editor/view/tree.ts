@@ -46,11 +46,17 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
     if (node.kind === "notes") {
       return node.notes.map((text) => ({ kind: "note", text }));
     }
-    if (node.kind !== "folder" || !node.state.last) {
+    if (node.kind !== "folder") {
       return [];
     }
+    const heldReasons: Node[] = node.state.held && !node.state.held.released
+      ? node.state.held.reasons.map((text): Node => ({ kind: "reason", text }))
+      : [];
+    if (!node.state.last) {
+      return heldReasons;
+    }
     const last = node.state.last;
-    const children: Node[] = last.reasons.map((text) => ({ kind: "reason", text }));
+    const children: Node[] = [...heldReasons, ...last.reasons.map((text): Node => ({ kind: "reason", text }))];
     if (last.kind === "scanned") {
       const notes: string[] = [];
       for (const result of last.payload.results) {
@@ -94,13 +100,16 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
         } else if (state.scanning) {
           item.description = state.progress ? `scanning: ${state.progress}` : "scanning…";
           item.iconPath = new vscode.ThemeIcon("sync~spin");
+        } else if (state.held && !state.held.released) {
+          item.description = `update held: ${VERDICT_LABEL[state.held.verdict]}`;
+          item.iconPath = VERDICT_ICON[state.held.verdict];
         } else if (state.last) {
           item.description = VERDICT_LABEL[state.last.verdict];
           item.iconPath = VERDICT_ICON[state.last.verdict];
         } else {
           item.description = "not scanned";
         }
-        if (state.last?.kind === "scanned" && state.last.verdict === "clean") {
+        if (state.last?.kind === "scanned" && state.last.verdict === "clean" && !(state.held && !state.held.released)) {
           item.collapsibleState = vscode.TreeItemCollapsibleState.None;
         }
         item.tooltip = state.folder.uri.fsPath;

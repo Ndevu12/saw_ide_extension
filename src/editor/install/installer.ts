@@ -84,12 +84,19 @@ export class Installer {
     return remembered && defaultIsExecutableFile(remembered.binary) ? remembered.binary : undefined;
   }
 
-  /** Make `saw` runnable in this editor's terminals when pipx's folder is not on the PATH the editor started with. */
-  exposeToTerminals(): void {
+  /**
+   * Put directories on PATH for this editor's terminals. `lead` is searched first.
+   * One extension can set PATH only once, so saw's own folder is included here too.
+   */
+  exposeToTerminals(lead: readonly string[] = []): void {
+    const dirs = [...lead];
     const remembered = this.remembered();
     const onPath = (process.env["PATH"] ?? "").split(path.delimiter).includes(remembered?.binDir ?? "");
     if (remembered && !onPath && defaultIsExecutableFile(remembered.binary)) {
-      this.context.environmentVariableCollection.prepend("PATH", remembered.binDir + path.delimiter);
+      dirs.push(remembered.binDir);
+    }
+    if (dirs.length) {
+      this.context.environmentVariableCollection.prepend("PATH", dirs.join(path.delimiter) + path.delimiter);
     } else {
       this.context.environmentVariableCollection.delete("PATH");
     }

@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 
 import { plain } from "../../core/text";
 import type { FolderVerdict } from "../../core/scan/verdict";
+import { VERDICT_LABEL } from "../present";
 import type { Engine } from "../install/engine";
 import type { Settled } from "../model";
 function confirmedCount(outcome: Settled): number {
@@ -66,6 +67,16 @@ export class Alerts {
     } else if (choice === "Show Log") {
       await vscode.commands.executeCommand("saw.showOutput");
     }
+  }
+
+  held(name: string, verdict: FolderVerdict): void {
+    const message = `saw held an update to ${name} (${VERDICT_LABEL[verdict]}). The folder was not changed.`;
+    const show = verdict === "infected" ? vscode.window.showErrorMessage : vscode.window.showWarningMessage;
+    void show(message, "Open Report").then((choice) => {
+      if (choice === "Open Report") {
+        void vscode.commands.executeCommand("saw.openReport");
+      }
+    });
   }
 
   resetEngineWarning(): void {
