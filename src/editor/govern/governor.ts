@@ -5,10 +5,9 @@ import * as nodePath from "node:path";
 import * as vscode from "vscode";
 
 import { FEATURES, supports } from "../../core/capabilities";
-import type { GovernConfig } from "../../core/govern/contract";
+import { readNotice, type GovernConfig, type GovernNotice } from "../../core/govern/contract";
 import type { Tool } from "../../core/govern/command";
 import { folderKey, posixWrapper, windowsWrapper } from "../../core/govern/plan";
-import type { FolderVerdict } from "../../core/scan/verdict";
 import { defaultIsExecutableFile } from "../../core/install/locate";
 import type { Controller } from "../scan/controller";
 import type { Installer } from "../install/installer";
@@ -24,14 +23,6 @@ interface GitExtension {
   getAPI(version: 1): GitApi;
 }
 
-interface Notice {
-  repo: string;
-  verdict: FolderVerdict;
-  reasons: string[];
-  released: boolean;
-  at: number;
-}
-
 /**
  * When saw can check an update before it lands, stand in front of git and gh for open folders.
  * The stand-in asks saw. This class only writes the stand-in's configuration and shows the result.
@@ -43,7 +34,8 @@ export class Governor implements vscode.Disposable {
   private readonly holdingRoot: string;
   private readonly markerDir: string;
   private readonly resultDir: string;
-  private readonly seen = new Map<string, number>();
+  private readonly seen = new Map<string, string>();
+  private readonly gitMarks = new Map<string, string>();
   private watcher: FSWatcher | undefined;
   private active = false;
   private starting = false;
@@ -76,6 +68,26 @@ export class Governor implements vscode.Disposable {
    * True while saw is copying a checked update into this folder, so a watcher does not scan a
    * half-written tree. The scan runs when that copy finishes.
    */
+  /**
+   * A `.git/HEAD` or `ORIG_HEAD` change this window's stand-in did not make. The folder already
+   * changed; the scan that follows is of what landed.
+   */
+  missed(uri: vscode.Uri): void {
+    if (!this.active || this.claim(uri)) {
+      return;
+    }
+    const name = nodePath.basename(uri.fsPath);
+    if (name !== "HEAD" && name !== "ORIG_HEAD") {
+      return;
+    }
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    if (!folder || !this.gitMoved(uri.fsPath)) {
+      return;
+    }
+    this.model.setUnheld(folder, true);
+    this.alerts.unheld(folder.name);
+  }
+
   claim(uri: vscode.Uri): boolean {
     if (!this.active) {
       return false;
@@ -105,7 +117,7 @@ export class Governor implements vscode.Disposable {
       return;
     }
     this.starting = true;
-    void this.enable(ready.binary).finally(() => {
+    void this.enable(ready.binary, ready.capabilities.features.has("govern.progress.jsonl")).finally(() => {
       this.starting = false;
       if (this.pending) {
         this.pending = false;
@@ -114,10 +126,10 @@ export class Governor implements vscode.Disposable {
     });
   }
 
-  private async enable(saw: string): Promise<void> {
+  private async enable(saw: string, progress: boolean): Promise<void> {
     const realGit = await this.realBinary("git");
     const realGh = await this.realBinary("gh");
-    const signature = JSON.stringify({ saw, realGit, realGh, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
+    const signature = JSON.stringify({ saw, realGit, realGh, progress, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
     if (signature === this.signature && this.active) {
       return;
     }
@@ -145,6 +157,7 @@ export class Governor implements vscode.Disposable {
       holdingRoot: this.holdingRoot,
       markerDir: this.markerDir,
       resultDir: this.resultDir,
+      progress,
     };
     this.writeConfig(config);
     this.installer.exposeToTerminals([this.shimDir]);
@@ -285,28 +298,50 @@ export class Governor implements vscode.Disposable {
         continue;
       }
       try {
-        const notice = JSON.parse(readFileSync(nodePath.join(this.resultDir, name), "utf8")) as Notice;
-        this.applyNotice(notice);
+        const notice = readNotice(readFileSync(nodePath.join(this.resultDir, name), "utf8"));
+        if (notice) {
+          this.applyNotice(notice);
+        }
       } catch {
         // A notice being written. The next change reads it.
       }
     }
   }
 
-  private applyNotice(notice: Notice): void {
+  private applyNotice(notice: GovernNotice): void {
     const folder = (vscode.workspace.workspaceFolders ?? []).find((item) => item.uri.fsPath === notice.repo);
-    if (!folder || typeof notice.at !== "number" || this.seen.get(notice.repo) === notice.at) {
+    const mark = `${notice.at}:${notice.phase}:${notice.step ?? ""}`;
+    if (!folder || this.seen.get(notice.repo) === mark) {
       return;
     }
-    this.seen.set(notice.repo, notice.at);
+    this.seen.set(notice.repo, mark);
+    if (notice.phase === "checking") {
+      this.model.setChecking(folder, notice.step);
+      return;
+    }
+    this.model.clearChecking(folder);
     rmSync(nodePath.join(this.markerDir, folderKey(notice.repo)), { force: true });
-    if (notice.released) {
+    if (notice.phase === "applied") {
       this.model.setHeld(folder, undefined);
+      this.alerts.applied(folder.name, notice.verdict ?? "clean");
     } else {
-      this.model.setHeld(folder, { verdict: notice.verdict, reasons: notice.reasons ?? [], released: false, at: notice.at });
-      this.alerts.held(folder.name, notice.verdict);
+      this.model.setHeld(folder, { verdict: notice.verdict ?? "incomplete", reasons: notice.reasons, released: false, at: notice.at });
+      this.alerts.held(folder.name, notice.verdict ?? "incomplete");
     }
     this.controller.request(folder, { immediate: true });
+  }
+
+  /** True once the git file's text differs from the copy this window already saw. */
+  private gitMoved(file: string): boolean {
+    let text: string;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch {
+      text = "";
+    }
+    const previous = this.gitMarks.get(file);
+    this.gitMarks.set(file, text);
+    return previous !== undefined && previous !== text;
   }
 
   dispose(): void {

@@ -172,6 +172,8 @@ function folderInput(state: FolderState, decide: Decide, lastFix: (folder: vscod
     reasons: last?.reasons ?? [],
     findings,
     ...(held ? { held } : {}),
+    ...(state.checking ? { checking: true, ...(state.checkStep ? { checkStep: state.checkStep } : {}) } : {}),
+    ...(state.unheld ? { unheld: true } : {}),
     ...decisionOf(state, decide),
     ...cleanupOf(lastFix(state.folder)),
   };

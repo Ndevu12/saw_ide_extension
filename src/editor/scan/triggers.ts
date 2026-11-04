@@ -19,12 +19,13 @@ const RUNS_CODE = [
 export function registerTriggers(
   controller: Controller,
   settings: () => Settings,
-  moves?: { claim(uri: vscode.Uri): boolean },
+  moves?: { claim(uri: vscode.Uri): boolean; missed?(uri: vscode.Uri): void },
 ): vscode.Disposable[] {
   const onChange = (uri: vscode.Uri) => {
     if (moves?.claim(uri)) {
       return;
     }
+    moves?.missed?.(uri);
     if (settings().scanOnChange) {
       controller.requestFor(uri);
     }

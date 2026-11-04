@@ -2,9 +2,10 @@ import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 
-import { applyArgs, prepareArgs, readApply, readPrepare, type GovernConfig } from "./core/govern/contract";
+import { applyArgs, prepareArgs, readApply, readPrepare, type GovernConfig, type GovernPhase } from "./core/govern/contract";
 import { folderKey, plan } from "./core/govern/plan";
 import { runProgram } from "./core/run";
+import { describeProgress, ProgressLines } from "./core/scan/progress";
 import type { FolderVerdict } from "./core/scan/verdict";
 
 // The program the editor runs instead of git and gh. It asks saw to check an update that brings
@@ -29,10 +30,17 @@ function readConfig(file: string): GovernConfig | undefined {
   }
 }
 
-function notice(config: GovernConfig, repo: string, verdict: FolderVerdict, reasons: string[], released: boolean): void {
+function notice(config: GovernConfig, repo: string, phase: GovernPhase, reasons: string[], verdict?: FolderVerdict, step?: string): void {
   const file = path.join(config.resultDir, `${folderKey(repo)}.json`);
   mkdirSync(config.resultDir, { recursive: true });
-  writeFileSync(`${file}.tmp`, JSON.stringify({ repo, verdict, reasons, released, at: Date.now() }));
+  writeFileSync(`${file}.tmp`, JSON.stringify({
+    repo,
+    phase,
+    reasons,
+    at: Date.now(),
+    ...(verdict ? { verdict } : {}),
+    ...(step ? { step } : {}),
+  }));
   renameSync(`${file}.tmp`, file);
 }
 
@@ -66,7 +74,21 @@ async function main(): Promise<void> {
     runReal(action.program, args);
     return;
   }
-  const prepared = await runProgram(config.saw, prepareArgs(action.repo, action.holding, action.tool, action.args), { timeoutMs: config.timeoutMs });
+  const steps = new ProgressLines((progress) => {
+    if (progress) {
+      notice(config, action.repo, "checking", [], undefined, describeProgress(progress));
+    }
+  });
+  notice(config, action.repo, "checking", []);
+  const prepared = await runProgram(config.saw, prepareArgs(action.repo, action.holding, action.tool, action.args, config.progress), {
+    timeoutMs: config.timeoutMs,
+    onOutput: (text, stream) => {
+      if (stream === "stderr") {
+        steps.feed(text);
+      }
+    },
+  });
+  steps.end();
   const reading = readPrepare(prepared.stdout, prepared.exitCode);
   if (!reading.release || prepared.timedOut || prepared.spawnError) {
     const reason = prepared.spawnError
@@ -74,7 +96,7 @@ async function main(): Promise<void> {
       : prepared.timedOut
         ? "the check did not finish in time"
         : reading.reasons[0] ?? reading.verdict;
-    notice(config, action.repo, reading.verdict, reading.reasons, false);
+    notice(config, action.repo, "held", reading.reasons, reading.verdict);
     process.stderr.write(`saw held this update (${reading.verdict}). The folder was not changed. ${reason}\n`);
     process.exit(1);
   }
@@ -84,11 +106,11 @@ async function main(): Promise<void> {
   const result = readApply(applied.stdout);
   if (!result.applied || applied.timedOut || applied.spawnError) {
     const reason = result.reason ?? (applied.timedOut ? "the update did not finish in time" : "saw did not update the folder");
-    notice(config, action.repo, reading.verdict, [reason], false);
+    notice(config, action.repo, "held", [reason], reading.verdict);
     process.stderr.write(`saw checked this update (${reading.verdict}) but did not change the folder. ${reason}\n`);
     process.exit(1);
   }
-  notice(config, action.repo, reading.verdict, reading.reasons, true);
+  notice(config, action.repo, "applied", reading.reasons, reading.verdict);
   process.exit(0);
 }
 

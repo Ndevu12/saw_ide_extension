@@ -15,6 +15,8 @@ export interface GovernConfig {
   holdingRoot: string;
   markerDir: string;
   resultDir: string;
+  /** Ask `saw govern prepare` for the same progress events a scan reports. */
+  progress: boolean;
 }
 
 /** Clean and residue may change the open folder. Anything else waits. */
@@ -22,8 +24,8 @@ export function mayRelease(verdict: FolderVerdict): boolean {
   return verdict === "clean" || verdict === "residue";
 }
 
-export function prepareArgs(repo: string, into: string, tool: Tool, args: readonly string[]): string[] {
-  return ["govern", "prepare", "--json", "--repo", repo, "--into", into, "--tool", tool, "--", ...args];
+export function prepareArgs(repo: string, into: string, tool: Tool, args: readonly string[], progress = false): string[] {
+  return ["govern", "prepare", "--json", "--repo", repo, "--into", into, "--tool", tool, ...(progress ? ["--progress=jsonl"] : []), "--", ...args];
 }
 
 export function applyArgs(repo: string, into: string): string[] {
@@ -77,6 +79,52 @@ export function readPrepare(stdout: string, exitCode: number | null): PrepareRea
 export interface ApplyReading {
   applied: boolean;
   reason: string | undefined;
+}
+
+export type GovernPhase = "checking" | "held" | "applied";
+
+/** What the stand-in writes while an update is in flight, and when it finishes. */
+export interface GovernNotice {
+  repo: string;
+  phase: GovernPhase;
+  step?: string;
+  verdict?: FolderVerdict;
+  reasons: string[];
+  at: number;
+}
+
+const PHASES = new Set<GovernPhase>(["checking", "held", "applied"]);
+const VERDICTS = new Set<FolderVerdict>(["clean", "residue", "suspicious", "incomplete", "infected"]);
+
+/** Read one stand-in notice. Undefined when the file is not a notice this extension shows. */
+export function readNotice(text: string): GovernNotice | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return undefined;
+  }
+  const record = parsed as Record<string, unknown>;
+  const phase = record["phase"];
+  const repo = record["repo"];
+  const at = record["at"];
+  if (typeof phase !== "string" || !PHASES.has(phase as GovernPhase) || typeof repo !== "string" || repo === "" || typeof at !== "number") {
+    return undefined;
+  }
+  const verdict = record["verdict"];
+  const step = record["step"];
+  const reasons = Array.isArray(record["reasons"]) ? record["reasons"].filter((reason): reason is string => typeof reason === "string") : [];
+  return {
+    repo,
+    phase: phase as GovernPhase,
+    ...(typeof step === "string" && step !== "" ? { step } : {}),
+    ...(typeof verdict === "string" && VERDICTS.has(verdict as FolderVerdict) ? { verdict: verdict as FolderVerdict } : {}),
+    reasons,
+    at,
+  };
 }
 
 /** Read `saw govern apply`. Anything other than an explicit applied report did not change the folder. */
