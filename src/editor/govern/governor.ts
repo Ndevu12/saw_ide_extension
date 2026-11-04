@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 import { FEATURES, supports } from "../../core/capabilities";
 import { readNotice, type GovernConfig, type GovernNotice } from "../../core/govern/contract";
 import type { Tool } from "../../core/govern/command";
-import { folderKey, posixWrapper, standinBeside, windowsWrapper } from "../../core/govern/plan";
+import { folderKey, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
 import { defaultIsExecutableFile } from "../../core/install/locate";
 import type { Controller } from "../scan/controller";
 import type { Installer } from "../install/installer";
@@ -38,6 +38,8 @@ export class Governor implements vscode.Disposable {
   private readonly gitMarks = new Map<string, string>();
   private watcher: FSWatcher | undefined;
   private active = false;
+  /** Set when `saw govern install` already covers terminals, so this window does not add a second stand-in. */
+  private systemBin: string | undefined;
   private starting = false;
   private pending = false;
   private signature = "";
@@ -73,7 +75,8 @@ export class Governor implements vscode.Disposable {
    * changed; the scan that follows is of what landed.
    */
   missed(uri: vscode.Uri): void {
-    if (!this.active || this.claim(uri)) {
+    // A terminal saw already covers leaves no marker here, so this watch stays quiet.
+    if (!this.active || this.systemBin || this.claim(uri)) {
       return;
     }
     const name = nodePath.basename(uri.fsPath);
@@ -109,6 +112,7 @@ export class Governor implements vscode.Disposable {
         this.active = false;
         this.writeEnabled(false);
         this.installer.exposeToTerminals();
+        this.context.environmentVariableCollection.delete("SAW_GOVERN_SYSTEM");
         void this.restoreGit();
       }
       return;
@@ -128,10 +132,12 @@ export class Governor implements vscode.Disposable {
   }
 
   private async enable(saw: string, progress: boolean): Promise<void> {
+    const systemBin = this.systemPlacement();
+    this.systemBin = systemBin;
     const realGit = await this.realBinary("git");
     const realGh = await this.realBinary("gh");
     const standin = standinBeside(saw, defaultIsExecutableFile);
-    const signature = JSON.stringify({ saw, realGit, realGh, progress, standin, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
+    const signature = JSON.stringify({ saw, realGit, realGh, progress, standin, systemBin, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
     if (signature === this.signature && this.active) {
       return;
     }
@@ -163,12 +169,35 @@ export class Governor implements vscode.Disposable {
       ...(standin ? { standin } : {}),
     };
     this.writeConfig(config);
-    this.installer.exposeToTerminals([this.shimDir]);
+    this.coverTerminals(systemBin);
     this.signature = signature;
     this.active = true;
     this.watchResults();
     await this.pointGit(nodePath.join(this.shimDir, process.platform === "win32" ? "git.cmd" : "git"));
-    this.log.info("Incoming git updates in open folders wait for saw.");
+    this.log.info(systemBin
+      ? "Terminals already use saw's stand-in. The Git view still checks an incoming update."
+      : "Incoming git updates in open folders wait for saw.");
+  }
+
+  /** `saw govern install` wrote this directory. Absent when that step has not been run. */
+  private systemPlacement(): string | undefined {
+    const dir = systemGovernBin(process.env["XDG_CONFIG_HOME"], homedir());
+    return defaultIsExecutableFile(nodePath.join(dir, "git")) ? dir : undefined;
+  }
+
+  /**
+   * One stand-in in the integrated terminal. When saw already covers terminals, use that
+   * directory and turn it on. Otherwise use this window's own.
+   */
+  private coverTerminals(systemBin: string | undefined): void {
+    const env = this.context.environmentVariableCollection;
+    if (systemBin) {
+      this.installer.exposeToTerminals([systemBin]);
+      env.replace("SAW_GOVERN_SYSTEM", "1");
+      return;
+    }
+    env.delete("SAW_GOVERN_SYSTEM");
+    this.installer.exposeToTerminals([this.shimDir]);
   }
 
   private writeEnabled(enabled: boolean): void {
@@ -206,16 +235,16 @@ export class Governor implements vscode.Disposable {
 
   private async realBinary(name: "git" | "gh"): Promise<string> {
     const saved = this.savedReal(name);
-    if (saved && defaultIsExecutableFile(saved) && !this.isShim(saved)) {
+    if (saved && defaultIsExecutableFile(saved) && this.realProgram(saved)) {
       return saved;
     }
     if (name === "git") {
       const resolved = await gitBinary();
-      if (resolved && !this.isShim(resolved)) {
+      if (resolved && this.realProgram(resolved)) {
         return resolved;
       }
     }
-    return lookUp(name, this.shimDir) ?? "";
+    return lookUp(name, [this.shimDir, this.systemBin ?? ""]) ?? "";
   }
 
   private savedReal(name: "git" | "gh"): string {
@@ -229,7 +258,19 @@ export class Governor implements vscode.Disposable {
   }
 
   private isShim(file: string): boolean {
-    const relative = nodePath.relative(this.shimDir, file);
+    return this.inDir(file, this.shimDir);
+  }
+
+  /** A path this window may call. A stand-in directory is not the real program. */
+  private realProgram(file: string): boolean {
+    return !this.isShim(file) && !this.inDir(file, this.systemBin);
+  }
+
+  private inDir(file: string, dir: string | undefined): boolean {
+    if (!dir) {
+      return false;
+    }
+    const relative = nodePath.relative(dir, file);
     return relative === "" || (!relative.startsWith("..") && !nodePath.isAbsolute(relative));
   }
 
@@ -388,10 +429,11 @@ async function gitBinary(): Promise<string | undefined> {
   }
 }
 
-function lookUp(name: string, skipDir: string): string | undefined {
+function lookUp(name: string, skipDirs: readonly string[]): string | undefined {
+  const skip = new Set(skipDirs.filter((dir) => dir).map((dir) => nodePath.resolve(dir)));
   const names = process.platform === "win32" ? [`${name}.exe`, `${name}.cmd`, name] : [name];
   for (const dir of (process.env["PATH"] ?? "").split(nodePath.delimiter)) {
-    if (!dir || nodePath.resolve(dir) === nodePath.resolve(skipDir)) {
+    if (!dir || skip.has(nodePath.resolve(dir))) {
       continue;
     }
     for (const file of names) {

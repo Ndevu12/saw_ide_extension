@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit } from "../../src/core/govern/command";
 import { mayRelease, prepareArgs, readApply, readNotice, readPrepare, type GovernConfig } from "../../src/core/govern/contract";
-import { activationEnv, plan, posixWrapper, standinBeside } from "../../src/core/govern/plan";
+import { activationEnv, plan, posixWrapper, standinBeside, systemGovernBin } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
 const config = (overrides: Partial<GovernConfig> = {}): GovernConfig => ({
@@ -120,6 +120,8 @@ describe("what the stand-in does", () => {
     const present = new Set([standin]);
     expect(standinBeside(saw, (file) => present.has(file))).toBe(standin);
     expect(standinBeside(saw, () => false)).toBeUndefined();
+    expect(systemGovernBin("/xdg", "/home/me")).toBe(path.join("/xdg", "saw", "govern", "bin"));
+    expect(systemGovernBin(undefined, "/home/me")).toBe(path.join("/home/me", ".config", "saw", "govern", "bin"));
     expect(activationEnv(config(), "git", "/tmp/holding/app")).toEqual({
       SAW_GOVERN_HOLDING: "/tmp/holding/app",
       SAW_REAL_GIT: "/usr/bin/git",

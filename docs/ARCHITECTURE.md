@@ -143,7 +143,10 @@ verdict never comes from progress.
   cannot queue later scans behind it.
 - **An incoming update is checked before the open folder changes**, when saw lists `govern.json`.
   When that saw includes its stand-in beside its own program, the editor places it and turns it on
-  for this window. Otherwise the editor's own stand-in asks saw. Either way the folder itself is
+  for this window. When `saw govern install` has already put a stand-in ahead of git for terminals,
+  the integrated terminal uses that one directory and does not add a second. The Git view still
+  uses this window's stand-in, and the real git it calls is not the terminal one. Otherwise the
+  editor's own stand-in asks saw. Either way the folder itself is
   unchanged until the check finishes. Clean and residue are applied by saw.
   Anything else is shown as held. While the check runs, the status bar, the saw view, and Chat say
   saw is checking the update. The open folder is scanned again after that check finishes. A change

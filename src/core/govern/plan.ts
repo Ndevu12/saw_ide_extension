@@ -55,6 +55,12 @@ export function standinBeside(saw: string, isFile: (file: string) => boolean, na
   return isFile(candidate) ? candidate : undefined;
 }
 
+/** The folder `saw govern install` puts ahead of git and gh. `$XDG_CONFIG_HOME`, otherwise `~/.config`. */
+export function systemGovernBin(xdg: string | undefined, home: string): string {
+  const base = xdg ? xdg : path.join(home, ".config");
+  return path.join(base, "saw", "govern", "bin");
+}
+
 /** The environment that turns saw's stand-in on for one command. */
 export function activationEnv(config: GovernConfig, tool: Tool, holding: string): Record<string, string> {
   return {
