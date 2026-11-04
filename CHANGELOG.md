@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-04
+
 ### Added
 
 - The saw sidebar opens on a Chat view. Each folder is a card with its verdict and buttons for the next action. Fixing the checkout and amending history are described apart: the checkout fix puts the clean-up on a new local branch and does not rewrite past commits or push, and amending history rewrites the commits that still carry the malicious code. A scan only reads the folder. When a fix is waiting, the card says which of those acts the question belongs to.
@@ -97,7 +99,8 @@
 - The log of a successful install no longer shows the expected "no pipx yet" check as a warning,
   or a step twice.
 
-[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.1.0...v0.1.1
