@@ -5,10 +5,9 @@ import * as nodePath from "node:path";
 import * as vscode from "vscode";
 
 import { FEATURES, supports } from "../../core/capabilities";
-import { applyArgs, mayRelease, readApply, readRestore, restoreArgs, type GovernConfig } from "../../core/govern/contract";
+import type { GovernConfig } from "../../core/govern/contract";
 import type { Tool } from "../../core/govern/command";
 import { folderKey, posixWrapper, windowsWrapper } from "../../core/govern/plan";
-import { runProgram } from "../../core/run";
 import type { FolderVerdict } from "../../core/scan/verdict";
 import { defaultIsExecutableFile } from "../../core/install/locate";
 import type { Controller } from "../scan/controller";
@@ -44,7 +43,6 @@ export class Governor implements vscode.Disposable {
   private readonly holdingRoot: string;
   private readonly markerDir: string;
   private readonly resultDir: string;
-  private readonly heads = new Map<string, string>();
   private readonly seen = new Map<string, number>();
   private watcher: FSWatcher | undefined;
   private active = false;
@@ -74,24 +72,19 @@ export class Governor implements vscode.Disposable {
     this.refresh();
   }
 
-  /** True when this HEAD change is already being checked, so the ordinary scan waits. */
+  /**
+   * True while saw is copying a checked update into this folder, so a watcher does not scan a
+   * half-written tree. The scan runs when that copy finishes.
+   */
   claim(uri: vscode.Uri): boolean {
     if (!this.active) {
       return false;
     }
     const folder = vscode.workspace.getWorkspaceFolder(uri);
-    if (!folder || uri.fsPath !== nodePath.join(folder.uri.fsPath, ".git", "HEAD")) {
+    if (!folder || folder.uri.scheme !== "file") {
       return false;
     }
-    if (existsSync(nodePath.join(this.markerDir, folderKey(folder.uri.fsPath)))) {
-      return true;
-    }
-    const backTo = this.heads.get(folder.uri.fsPath);
-    if (!backTo) {
-      return false;
-    }
-    void this.restore(folder, backTo);
-    return true;
+    return this.markerFresh(folder.uri.fsPath);
   }
 
   private refresh(): void {
@@ -105,7 +98,6 @@ export class Governor implements vscode.Disposable {
         this.writeEnabled(false);
         this.installer.exposeToTerminals();
       }
-      this.rememberHeads();
       return;
     }
     if (this.starting) {
@@ -159,7 +151,6 @@ export class Governor implements vscode.Disposable {
     this.signature = signature;
     this.active = true;
     this.watchResults();
-    this.rememberHeads();
     await this.pointGit(nodePath.join(this.shimDir, process.platform === "win32" ? "git.cmd" : "git"));
     this.log.info("Incoming git updates in open folders wait for saw.");
   }
@@ -251,17 +242,23 @@ export class Governor implements vscode.Disposable {
     }
   }
 
-  private rememberHeads(): void {
-    for (const folder of this.folders()) {
-      if (existsSync(nodePath.join(this.markerDir, folderKey(folder)))) {
-        continue;
-      }
-      try {
-        this.heads.set(folder, readFileSync(nodePath.join(folder, ".git", "HEAD"), "utf8").trim());
-      } catch {
-        // Not a git checkout, or HEAD is not readable yet.
-      }
+  /** A marker left behind by a stand-in that did not finish must not keep the folder from being scanned. */
+  private markerFresh(folder: string): boolean {
+    const file = nodePath.join(this.markerDir, folderKey(folder));
+    if (!existsSync(file)) {
+      return false;
     }
+    let started: number;
+    try {
+      started = Number(readFileSync(file, "utf8"));
+    } catch {
+      started = Number.NaN;
+    }
+    if (Number.isFinite(started) && Date.now() - started <= this.settings().timeoutMs) {
+      return true;
+    }
+    rmSync(file, { force: true });
+    return false;
   }
 
   private watchResults(): void {
@@ -305,36 +302,10 @@ export class Governor implements vscode.Disposable {
     rmSync(nodePath.join(this.markerDir, folderKey(notice.repo)), { force: true });
     if (notice.released) {
       this.model.setHeld(folder, undefined);
-      this.controller.request(folder, { immediate: true });
-      return;
+    } else {
+      this.model.setHeld(folder, { verdict: notice.verdict, reasons: notice.reasons ?? [], released: false, at: notice.at });
+      this.alerts.held(folder.name, notice.verdict);
     }
-    this.model.setHeld(folder, { verdict: notice.verdict, reasons: notice.reasons ?? [], released: false, at: notice.at });
-    this.alerts.held(folder.name, notice.verdict);
-  }
-
-  private async restore(folder: vscode.WorkspaceFolder, backTo: string): Promise<void> {
-    const engine = this.model.engine;
-    if (engine?.kind !== "ready") {
-      return;
-    }
-    const key = folderKey(folder.uri.fsPath);
-    mkdirSync(this.markerDir, { recursive: true });
-    writeFileSync(nodePath.join(this.markerDir, key), String(Date.now()));
-    const into = nodePath.join(this.holdingRoot, key);
-    const run = await runProgram(engine.binary, restoreArgs(folder.uri.fsPath, into, backTo), { timeoutMs: this.settings().timeoutMs });
-    const reading = readRestore(run.stdout, run.exitCode);
-    if (reading.restored && mayRelease(reading.verdict)) {
-      const applied = await runProgram(engine.binary, applyArgs(folder.uri.fsPath, into), { timeoutMs: this.settings().timeoutMs });
-      if (readApply(applied.stdout).applied && !applied.timedOut && !applied.spawnError) {
-        rmSync(nodePath.join(this.markerDir, key), { force: true });
-        this.model.setHeld(folder, undefined);
-        this.controller.request(folder, { immediate: true });
-        return;
-      }
-    }
-    rmSync(nodePath.join(this.markerDir, key), { force: true });
-    this.model.setHeld(folder, { verdict: reading.verdict, reasons: reading.reasons, released: false, at: Date.now() });
-    this.alerts.held(folder.name, reading.verdict);
     this.controller.request(folder, { immediate: true });
   }
 

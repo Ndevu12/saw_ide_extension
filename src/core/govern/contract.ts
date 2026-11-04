@@ -30,10 +30,6 @@ export function applyArgs(repo: string, into: string): string[] {
   return ["govern", "apply", "--json", "--repo", repo, "--into", into];
 }
 
-export function restoreArgs(repo: string, into: string, backTo: string): string[] {
-  return ["govern", "restore", "--json", "--repo", repo, "--into", into, "--back-to", backTo];
-}
-
 export interface PrepareReading {
   verdict: FolderVerdict;
   reasons: string[];
@@ -95,18 +91,3 @@ export function readApply(stdout: string): ApplyReading {
   return { applied: false, reason: typeof parsed["reason"] === "string" ? parsed["reason"] : "saw did not update the folder" };
 }
 
-export interface RestoreReading {
-  restored: boolean;
-  verdict: FolderVerdict;
-  reasons: string[];
-}
-
-/** Read `saw govern restore`. A restore that did not put the folder back is not treated as done. */
-export function readRestore(stdout: string, exitCode: number | null): RestoreReading {
-  const parsed = object(stdout);
-  if (typeof parsed === "string") {
-    return { restored: false, verdict: "incomplete", reasons: [parsed] };
-  }
-  const prepared = readPrepare(stdout, exitCode);
-  return { restored: parsed["restored"] === true, verdict: prepared.verdict, reasons: prepared.reasons };
-}

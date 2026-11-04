@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit } from "../../src/core/govern/command";
-import { mayRelease, prepareArgs, readApply, readPrepare, readRestore, type GovernConfig } from "../../src/core/govern/contract";
+import { mayRelease, prepareArgs, readApply, readPrepare, type GovernConfig } from "../../src/core/govern/contract";
 import { plan, posixWrapper } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
@@ -142,11 +142,5 @@ describe("saw govern's report", () => {
     expect(readApply(JSON.stringify({ schema_version: 1, applied: true }))).toEqual({ applied: true, reason: undefined });
     expect(readApply(JSON.stringify({ schema_version: 1, applied: false, reason: "left unchanged" })).applied).toBe(false);
     expect(readApply("").applied).toBe(false);
-  });
-
-  it("reads a restore as unfinished unless saw put the folder back", () => {
-    const body = JSON.stringify({ schema_version: 1, restored: true, scan: JSON.parse(report([target({ verdict: "suspicious" })])) });
-    expect(readRestore(body, 0)).toMatchObject({ restored: true, verdict: "suspicious" });
-    expect(readRestore(JSON.stringify({ schema_version: 1, restored: false, reason: "could not put the folder back" }), 2).restored).toBe(false);
   });
 });

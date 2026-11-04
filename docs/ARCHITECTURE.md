@@ -143,5 +143,5 @@ verdict never comes from progress.
   cannot queue later scans behind it.
 - **An incoming update is checked before the open folder changes**, when saw lists `govern.json`.
   The stand-in asks saw and does not change the folder itself. Clean and residue are applied by saw.
-  Anything else is shown as held. A change that arrives without the stand-in is put back by saw and
-  then judged the same way.
+  Anything else is shown as held. The open folder is scanned again after that check finishes. Git the
+  stand-in did not run is still scanned by the scan-on-clone hooks.
