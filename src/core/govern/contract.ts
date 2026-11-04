@@ -43,6 +43,15 @@ export function offersGovernVerdict(help: string): boolean {
   return help.split("\n").some((line) => /^\s*verdict(\s|$)/.test(line) || /\{[^{}\n]*\bverdict\b/.test(line));
 }
 
+/** Whether this saw's `govern` help offers `restore`. */
+export function offersGovernRestore(help: string): boolean {
+  return help.split("\n").some((line) => /^\s*restore(\s|$)/.test(line) || /\{[^{}\n]*\brestore\b/.test(line));
+}
+
+export function restoreArgs(repo: string): string[] {
+  return ["govern", "restore", "--json", "--repo", repo];
+}
+
 export interface PrepareReading {
   verdict: FolderVerdict;
   reasons: string[];
@@ -94,19 +103,71 @@ export interface ApplyReading {
 
 export type Governed = "let-in" | "not-let-in" | "could-not-answer";
 
+/** Saw's machine code. `reason` is prose and is not matched. */
+export type GovernCode = "let-in" | "unknown-commit" | "tree-changed" | "could-not-answer";
+
 const GOVERNED = new Set<Governed>(["let-in", "not-let-in", "could-not-answer"]);
+const CODES = new Set<GovernCode>(["let-in", "unknown-commit", "tree-changed", "could-not-answer"]);
+
+export interface GovernedReading {
+  answer: Governed;
+  code?: GovernCode;
+  head?: string;
+  letIn?: string;
+}
+
+function commitId(value: unknown): string | undefined {
+  return typeof value === "string" && /^[0-9a-f]{40,64}$/.test(value) ? value : undefined;
+}
 
 /**
- * Read `saw govern verdict`. An unreadable report, or any value other than the three answers,
- * is `could-not-answer`. That is not a tree saw let in.
+ * Read `saw govern verdict`. An unreadable report is `could-not-answer`. `code` is absent on a
+ * saw that only sends the three answers. That is not a tree saw let in.
  */
-export function readVerdict(stdout: string): Governed {
+export function readGoverned(stdout: string): GovernedReading {
   const parsed = object(stdout);
   if (typeof parsed === "string") {
-    return "could-not-answer";
+    return { answer: "could-not-answer" };
   }
   const governed = parsed["governed"];
-  return typeof governed === "string" && GOVERNED.has(governed as Governed) ? (governed as Governed) : "could-not-answer";
+  const answer = typeof governed === "string" && GOVERNED.has(governed as Governed) ? (governed as Governed) : "could-not-answer";
+  const codeRaw = parsed["code"];
+  const code = typeof codeRaw === "string" && CODES.has(codeRaw as GovernCode) ? (codeRaw as GovernCode) : undefined;
+  const head = commitId(parsed["head"]);
+  const letIn = commitId(parsed["let_in"]);
+  return {
+    answer,
+    ...(code ? { code } : {}),
+    ...(head ? { head } : {}),
+    ...(letIn ? { letIn } : {}),
+  };
+}
+
+export function readVerdict(stdout: string): Governed {
+  return readGoverned(stdout).answer;
+}
+
+/** Put the folder back only for a commit saw did not let in, and only when this saw can do it. */
+export function shouldRestore(code: GovernCode | undefined, restoreAvailable: boolean): boolean {
+  return restoreAvailable && code === "unknown-commit";
+}
+
+export interface RestoreReading {
+  restored: boolean;
+  reason?: string;
+}
+
+/** Read `saw govern restore`. Anything other than an explicit restored report left the folder as it was. */
+export function readRestore(stdout: string): RestoreReading {
+  const parsed = object(stdout);
+  if (typeof parsed === "string") {
+    return { restored: false, reason: parsed };
+  }
+  if (parsed["restored"] === true) {
+    return { restored: true };
+  }
+  const reason = parsed["reason"];
+  return { restored: false, ...(typeof reason === "string" && reason !== "" ? { reason } : {}) };
 }
 
 export type UnheldDecision = "clear" | "mark" | "leave";

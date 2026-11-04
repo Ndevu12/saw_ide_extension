@@ -151,8 +151,11 @@ verdict never comes from progress.
   Anything else is shown as held. While the check runs, the status bar, the saw view, and Chat say
   saw is checking the update. The open folder is scanned again after that check finishes. A change
   to `.git/HEAD` the stand-in did not make is scanned afterwards. When saw offers
-  `govern verdict`, that answer decides the Chat line: a tree saw let in is not called out, one it
-  did not is, and an answer saw could not give is not treated as let in. A saw that cannot answer
+  `govern verdict`, the machine `code` decides the Chat line: a tree saw let in is not called out,
+  one it did not is, and an answer saw could not give is not treated as let in. `head` and
+  `let_in` are the commits saw names. When saw offers `govern restore` and the code is
+  `unknown-commit`, the editor calls that and does not check a commit out itself. `tree-changed`
+  is not put back. A saw that cannot answer
   still calls out the change, except while a terminal stand-in is already in place, which leaves
   no marker here. saw writes one record per open folder under `$XDG_STATE_HOME/saw/govern/status`
   (otherwise `~/.local/state/saw/govern/status`). The editor reads those with the same notice

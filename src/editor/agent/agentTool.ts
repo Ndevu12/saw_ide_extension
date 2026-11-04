@@ -2,7 +2,7 @@ import * as path from "node:path";
 
 import * as vscode from "vscode";
 
-import { agentReport, type AgentFolder } from "../../core/agent/agent";
+import { agentReport, agentUpdate, type AgentFolder } from "../../core/agent/agent";
 import type { Controller } from "../scan/controller";
 import type { Engine } from "../install/engine";
 import type { FolderState, Model } from "../model";
@@ -89,16 +89,27 @@ export class FolderVerdictTool implements vscode.LanguageModelTool<FolderVerdict
 export function describeFolder(state: FolderState, engine: Engine | undefined, waited = false): AgentFolder {
   const folder = state.folder;
   const base = { name: folder.name, path: folder.uri.fsPath, reasons: [], findings: [] };
+  const update = agentUpdate({
+    checking: state.checking,
+    ...(state.checkStep ? { checkStep: state.checkStep } : {}),
+    ...(state.held && !state.held.released ? { held: { verdict: state.held.verdict } } : {}),
+    unheld: state.unheld,
+  });
+  if (update && "wait" in update) {
+    return { ...base, verdict: undefined, problem: update.wait };
+  }
+  const notice = update && "notice" in update ? { notice: update.notice } : {};
   const busy = state.scanning || state.fixing || waited;
   const last = state.last;
   if (!last || busy) {
-    return { ...base, verdict: undefined, problem: why(state, busy, engine) };
+    return { ...base, ...notice, verdict: undefined, problem: why(state, busy, engine) };
   }
   if (last.kind === "failed") {
-    return { ...base, verdict: last.verdict, reasons: last.reasons };
+    return { ...base, ...notice, verdict: last.verdict, reasons: last.reasons };
   }
   return {
     ...base,
+    ...notice,
     verdict: last.verdict,
     scannedAt: last.payload.generatedAt,
     reasons: last.reasons,

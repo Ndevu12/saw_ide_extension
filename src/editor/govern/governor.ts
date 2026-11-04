@@ -5,7 +5,7 @@ import * as nodePath from "node:path";
 import * as vscode from "vscode";
 
 import { FEATURES, supports } from "../../core/capabilities";
-import { offersGovernVerdict, readNotice, readVerdict, sameCheck, unheldAfter, verdictArgs, type GovernConfig, type Governed, type GovernNotice } from "../../core/govern/contract";
+import { offersGovernRestore, offersGovernVerdict, readGoverned, readNotice, readRestore, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig, type Governed, type GovernNotice } from "../../core/govern/contract";
 import type { Tool } from "../../core/govern/command";
 import { folderKey, governStatusDir, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
 import { defaultIsExecutableFile } from "../../core/install/locate";
@@ -43,6 +43,7 @@ export class Governor implements vscode.Disposable {
   private statusWatcher: FSWatcher | undefined;
   private sawBinary = "";
   private verdictReady = false;
+  private restoreReady = false;
   private statusDir = "";
   private active = false;
   /** Set when `saw govern install` already covers terminals, so this window does not add a second stand-in. */
@@ -118,8 +119,30 @@ export class Governor implements vscode.Disposable {
       timeoutMs: this.settings().timeoutMs,
       maxOutputBytes: 64 * 1024,
     });
-    const answer = run.timedOut || run.spawnError || run.cancelled ? "could-not-answer" : readVerdict(run.stdout);
-    this.applyUnheld(folder, answer);
+    const reading = run.timedOut || run.spawnError || run.cancelled ? undefined : readGoverned(run.stdout);
+    const code = reading?.code;
+    const answer = reading?.answer ?? "could-not-answer";
+    if (answer === "let-in" || code === "let-in") {
+      this.applyUnheld(folder, "let-in");
+      return;
+    }
+    if (shouldRestore(code, this.restoreReady) && await this.putBack(folder)) {
+      this.applyUnheld(folder, "let-in");
+      return;
+    }
+    this.applyUnheld(folder, code === "could-not-answer" ? "could-not-answer" : answer);
+  }
+
+  /** Ask saw to put the folder back. Saw keeps uncommitted work and writes the check record. */
+  private async putBack(folder: vscode.WorkspaceFolder): Promise<boolean> {
+    const run = await runProgram(this.sawBinary, restoreArgs(folder.uri.fsPath), {
+      timeoutMs: this.settings().timeoutMs,
+      maxOutputBytes: 64 * 1024,
+    });
+    if (run.timedOut || run.spawnError || run.cancelled) {
+      return false;
+    }
+    return readRestore(run.stdout).restored;
   }
 
   claim(uri: vscode.Uri): boolean {
@@ -170,8 +193,10 @@ export class Governor implements vscode.Disposable {
     const standin = standinBeside(saw, defaultIsExecutableFile);
     this.sawBinary = saw;
     this.statusDir = governStatusDir(process.env["XDG_STATE_HOME"], homedir());
-    this.verdictReady = await this.probeVerdict(saw);
-    const signature = JSON.stringify({ saw, realGit, realGh, progress, standin, systemBin, verdict: this.verdictReady, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
+    const help = await this.governHelp(saw);
+    this.verdictReady = offersGovernVerdict(help);
+    this.restoreReady = offersGovernRestore(help);
+    const signature = JSON.stringify({ saw, realGit, realGh, progress, standin, systemBin, verdict: this.verdictReady, restore: this.restoreReady, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
     if (signature === this.signature && this.active) {
       return;
     }
@@ -355,9 +380,9 @@ export class Governor implements vscode.Disposable {
     return false;
   }
 
-  private async probeVerdict(saw: string): Promise<boolean> {
+  private async governHelp(saw: string): Promise<string> {
     const help = await runProgram(saw, ["govern", "-h"], { timeoutMs: 10_000, maxOutputBytes: 64 * 1024 });
-    return offersGovernVerdict(`${help.stdout}\n${help.stderr}`);
+    return `${help.stdout}\n${help.stderr}`;
   }
 
   private watchResults(): void {

@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit } from "../../src/core/govern/command";
-import { mayRelease, offersGovernVerdict, prepareArgs, readApply, readNotice, readPrepare, readVerdict, sameCheck, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
+import { mayRelease, offersGovernRestore, offersGovernVerdict, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
 import { activationEnv, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
@@ -183,6 +183,25 @@ describe("saw govern's report", () => {
     expect(readVerdict(JSON.stringify({ schema_version: 1, governed: "clean" }))).toBe("could-not-answer");
     expect(readVerdict("not json")).toBe("could-not-answer");
     expect(readVerdict(JSON.stringify({ schema_version: 2, governed: "let-in" }))).toBe("could-not-answer");
+  });
+
+  it("keys off saw's machine code and the commits it names, not the prose", () => {
+    const commit = "a".repeat(40);
+    const other = "b".repeat(40);
+    expect(readGoverned(JSON.stringify({
+      schema_version: 1, governed: "not-let-in", code: "unknown-commit", reason: "this tree is not one saw let in", head: other, let_in: commit,
+    }))).toEqual({ answer: "not-let-in", code: "unknown-commit", head: other, letIn: commit });
+    expect(readGoverned(JSON.stringify({ schema_version: 1, governed: "not-let-in", code: "tree-changed", reason: "rewritten prose" })).code).toBe("tree-changed");
+    expect(readGoverned(JSON.stringify({ schema_version: 1, governed: "let-in", reason: "this tree is one saw let in" })).code).toBeUndefined();
+    expect(restoreArgs("/work/app")).toEqual(["govern", "restore", "--json", "--repo", "/work/app"]);
+    expect(readRestore(JSON.stringify({ schema_version: 1, restored: true, commit })).restored).toBe(true);
+    expect(readRestore(JSON.stringify({ schema_version: 1, restored: false, reason: "nothing to put back" }))).toMatchObject({ restored: false });
+    expect(shouldRestore("unknown-commit", true)).toBe(true);
+    expect(shouldRestore("tree-changed", true)).toBe(false);
+    expect(shouldRestore("unknown-commit", false)).toBe(false);
+    expect(shouldRestore(undefined, true)).toBe(false);
+    expect(offersGovernRestore("  {prepare,apply,verdict,restore}\n")).toBe(true);
+    expect(offersGovernRestore("  {prepare,apply,verdict}\n")).toBe(false);
   });
 
   it("calls out a tree saw did not let in, and stays quiet when saw already let it in", () => {
