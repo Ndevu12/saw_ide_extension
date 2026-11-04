@@ -97,7 +97,9 @@ While the check runs, the status bar, the saw view, and Chat say saw is checking
 the step saw names when it names one. The folder is unchanged until the check finishes. Suspicious,
 infected, and a check that could not finish leave the folder as it was, and the saw view says the
 update was held. The open folder is scanned again after the check finishes. A git command this
-window did not run can still change the folder first; Chat says that change was not held.
+window did not run can still change the folder first. When saw can say whether it let that tree
+in, Chat says the change was not held only when saw did not. A check that runs outside this window
+shows the same checking, applied, or held.
 
 When you have asked saw to cover your terminals, the editor's terminal uses that and does not
 check the same command again. The Git view still checks. A terminal saw does not cover keeps

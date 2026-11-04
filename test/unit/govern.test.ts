@@ -3,8 +3,8 @@ import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit } from "../../src/core/govern/command";
-import { mayRelease, prepareArgs, readApply, readNotice, readPrepare, type GovernConfig } from "../../src/core/govern/contract";
-import { activationEnv, plan, posixWrapper, standinBeside, systemGovernBin } from "../../src/core/govern/plan";
+import { mayRelease, offersGovernVerdict, prepareArgs, readApply, readNotice, readPrepare, readVerdict, sameCheck, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
+import { activationEnv, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
 const config = (overrides: Partial<GovernConfig> = {}): GovernConfig => ({
@@ -122,6 +122,9 @@ describe("what the stand-in does", () => {
     expect(standinBeside(saw, () => false)).toBeUndefined();
     expect(systemGovernBin("/xdg", "/home/me")).toBe(path.join("/xdg", "saw", "govern", "bin"));
     expect(systemGovernBin(undefined, "/home/me")).toBe(path.join("/home/me", ".config", "saw", "govern", "bin"));
+    expect(governStatusDir("/state", "/home/me")).toBe(path.join("/state", "saw", "govern", "status"));
+    expect(governStatusDir(undefined, "/home/me")).toBe(path.join("/home/me", ".local", "state", "saw", "govern", "status"));
+    expect(governStatusDir("  ", "/home/me")).toBe(path.join("/home/me", ".local", "state", "saw", "govern", "status"));
     expect(activationEnv(config(), "git", "/tmp/holding/app")).toEqual({
       SAW_GOVERN_HOLDING: "/tmp/holding/app",
       SAW_REAL_GIT: "/usr/bin/git",
@@ -170,6 +173,40 @@ describe("saw govern's report", () => {
     expect(readNotice(JSON.stringify({ repo: "/work/app", phase: "finished", reasons: [], at: 3 }))?.phase).toBe("finished");
     expect(readNotice("not json")).toBeUndefined();
     expect(readNotice(JSON.stringify({ released: true }))).toBeUndefined();
+  });
+
+  it("reads whether saw let the tree in, and treats anything else as no answer", () => {
+    expect(verdictArgs("/work/app")).toEqual(["govern", "verdict", "--json", "--repo", "/work/app"]);
+    expect(readVerdict(JSON.stringify({ schema_version: 1, governed: "let-in", reason: "this tree is one saw let in" }))).toBe("let-in");
+    expect(readVerdict(JSON.stringify({ schema_version: 1, governed: "not-let-in", reason: "this tree is not one saw let in" }))).toBe("not-let-in");
+    expect(readVerdict(JSON.stringify({ schema_version: 1, governed: "could-not-answer", reason: "the open folder has no commit yet" }))).toBe("could-not-answer");
+    expect(readVerdict(JSON.stringify({ schema_version: 1, governed: "clean" }))).toBe("could-not-answer");
+    expect(readVerdict("not json")).toBe("could-not-answer");
+    expect(readVerdict(JSON.stringify({ schema_version: 2, governed: "let-in" }))).toBe("could-not-answer");
+  });
+
+  it("calls out a tree saw did not let in, and stays quiet when saw already let it in", () => {
+    expect(unheldAfter("let-in", true)).toBe("clear");
+    expect(unheldAfter("let-in", false)).toBe("clear");
+    expect(unheldAfter("not-let-in", true)).toBe("mark");
+    expect(unheldAfter("not-let-in", false)).toBe("mark");
+    expect(unheldAfter("could-not-answer", true)).toBe("leave");
+    expect(unheldAfter("could-not-answer", false)).toBe("leave");
+    expect(unheldAfter(undefined, true)).toBe("leave");
+    expect(unheldAfter(undefined, false)).toBe("mark");
+  });
+
+  it("recognises saw's verdict command from its help, and not an older govern", () => {
+    expect(offersGovernVerdict("  {prepare,apply,verdict,install}\n")).toBe(true);
+    expect(offersGovernVerdict("  verdict  say whether the open folder's tree is one saw let in\n")).toBe(true);
+    expect(offersGovernVerdict("  {prepare,apply,install,status,uninstall}\n")).toBe(false);
+  });
+
+  it("shows one check once when saw and this window both write it", () => {
+    expect(sameCheck(undefined, 5_000, 5_000)).toBe(false);
+    expect(sameCheck(1_000, 1_050, 5_000)).toBe(true);
+    expect(sameCheck(1_050, 1_000, 5_000)).toBe(true);
+    expect(sameCheck(1_000, 7_000, 5_000)).toBe(false);
   });
 
   it("treats apply as done only when saw says the folder was updated", () => {

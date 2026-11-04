@@ -61,6 +61,13 @@ export function systemGovernBin(xdg: string | undefined, home: string): string {
   return path.join(base, "saw", "govern", "bin");
 }
 
+/** Where saw writes one check record per open folder. `$XDG_STATE_HOME`, otherwise `~/.local/state`. */
+export function governStatusDir(xdgState: string | undefined, home: string): string {
+  const trimmed = xdgState?.trim();
+  const base = trimmed ? trimmed : path.join(home, ".local", "state");
+  return path.join(base, "saw", "govern", "status");
+}
+
 /** The environment that turns saw's stand-in on for one command. */
 export function activationEnv(config: GovernConfig, tool: Tool, holding: string): Record<string, string> {
   return {

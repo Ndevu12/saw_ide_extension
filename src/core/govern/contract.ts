@@ -34,6 +34,15 @@ export function applyArgs(repo: string, into: string): string[] {
   return ["govern", "apply", "--json", "--repo", repo, "--into", into];
 }
 
+export function verdictArgs(repo: string): string[] {
+  return ["govern", "verdict", "--json", "--repo", repo];
+}
+
+/** Whether this saw's `govern` help offers `verdict`. Older saw lists prepare and apply only. */
+export function offersGovernVerdict(help: string): boolean {
+  return help.split("\n").some((line) => /^\s*verdict(\s|$)/.test(line) || /\{[^{}\n]*\bverdict\b/.test(line));
+}
+
 export interface PrepareReading {
   verdict: FolderVerdict;
   reasons: string[];
@@ -81,6 +90,54 @@ export function readPrepare(stdout: string, exitCode: number | null): PrepareRea
 export interface ApplyReading {
   applied: boolean;
   reason: string | undefined;
+}
+
+export type Governed = "let-in" | "not-let-in" | "could-not-answer";
+
+const GOVERNED = new Set<Governed>(["let-in", "not-let-in", "could-not-answer"]);
+
+/**
+ * Read `saw govern verdict`. An unreadable report, or any value other than the three answers,
+ * is `could-not-answer`. That is not a tree saw let in.
+ */
+export function readVerdict(stdout: string): Governed {
+  const parsed = object(stdout);
+  if (typeof parsed === "string") {
+    return "could-not-answer";
+  }
+  const governed = parsed["governed"];
+  return typeof governed === "string" && GOVERNED.has(governed as Governed) ? (governed as Governed) : "could-not-answer";
+}
+
+export type UnheldDecision = "clear" | "mark" | "leave";
+
+/**
+ * What to say after a HEAD move. `undefined` means this saw cannot answer. A covered terminal
+ * stays quiet in that case, because it leaves no marker for a check it already ran.
+ */
+export function unheldAfter(answer: Governed | undefined, systemCovered: boolean): UnheldDecision {
+  if (answer === "let-in") {
+    return "clear";
+  }
+  if (answer === "not-let-in") {
+    return "mark";
+  }
+  if (answer === "could-not-answer") {
+    return "leave";
+  }
+  return systemCovered ? "leave" : "mark";
+}
+
+/**
+ * True when two notices are the same check shown twice. Takes a time already shown, the new
+ * time, and how far apart the two writers of one check may be.
+ */
+export function sameCheck(shownAt: number | undefined, at: number, windowMs: number): boolean {
+  if (shownAt === undefined) {
+    return false;
+  }
+  const delta = at - shownAt;
+  return delta < windowMs && delta >= -1000;
 }
 
 export type GovernPhase = "checking" | "held" | "applied" | "finished";
