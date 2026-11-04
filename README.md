@@ -99,8 +99,10 @@ infected, and a check that could not finish leave the folder as it was, and the 
 update was held. The open folder is scanned again after the check finishes. A git command this
 window did not run can still change the folder first; Chat says that change was not held.
 
-A terminal outside the editor keeps saw's scan-on-clone check. Turn this off with `saw.governUpdates`;
-the Git view then uses the path it had before.
+When you have asked saw to cover your terminals, the editor's terminal uses that and does not
+check the same command again. The Git view still checks. A terminal saw does not cover keeps
+saw's scan-on-clone check. Turn the editor's check off with `saw.governUpdates`; the Git view
+then uses the path it had before.
 
 ### Guards for AI agents
 
