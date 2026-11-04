@@ -5,10 +5,11 @@ import * as nodePath from "node:path";
 import * as vscode from "vscode";
 
 import { FEATURES, supports } from "../../core/capabilities";
-import { readNotice, type GovernConfig, type GovernNotice } from "../../core/govern/contract";
+import { offersGovernVerdict, readNotice, readVerdict, sameCheck, unheldAfter, verdictArgs, type GovernConfig, type Governed, type GovernNotice } from "../../core/govern/contract";
 import type { Tool } from "../../core/govern/command";
-import { folderKey, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
+import { folderKey, governStatusDir, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
 import { defaultIsExecutableFile } from "../../core/install/locate";
+import { runProgram } from "../../core/run";
 import type { Controller } from "../scan/controller";
 import type { Installer } from "../install/installer";
 import type { Model } from "../model";
@@ -35,8 +36,14 @@ export class Governor implements vscode.Disposable {
   private readonly markerDir: string;
   private readonly resultDir: string;
   private readonly seen = new Map<string, string>();
+  /** First time a phase was shown for a folder, so the other writer of that check is skipped. */
+  private readonly shownAt = new Map<string, number>();
   private readonly gitMarks = new Map<string, string>();
   private watcher: FSWatcher | undefined;
+  private statusWatcher: FSWatcher | undefined;
+  private sawBinary = "";
+  private verdictReady = false;
+  private statusDir = "";
   private active = false;
   /** Set when `saw govern install` already covers terminals, so this window does not add a second stand-in. */
   private systemBin: string | undefined;
@@ -72,11 +79,11 @@ export class Governor implements vscode.Disposable {
    */
   /**
    * A `.git/HEAD` or `ORIG_HEAD` change this window's stand-in did not make. The folder already
-   * changed; the scan that follows is of what landed.
+   * changed; the scan that follows is of what landed. When saw can say whether it let this tree
+   * in, that answer decides the Chat line.
    */
   missed(uri: vscode.Uri): void {
-    // A terminal saw already covers leaves no marker here, so this watch stays quiet.
-    if (!this.active || this.systemBin || this.claim(uri)) {
+    if (!this.active || this.claim(uri)) {
       return;
     }
     const name = nodePath.basename(uri.fsPath);
@@ -87,8 +94,32 @@ export class Governor implements vscode.Disposable {
     if (!folder || !this.gitMoved(uri.fsPath)) {
       return;
     }
-    this.model.setUnheld(folder, true);
-    this.alerts.unheld(folder.name);
+    if (!this.verdictReady || !this.sawBinary) {
+      this.applyUnheld(folder, undefined);
+      return;
+    }
+    void this.askVerdict(folder);
+  }
+
+  private applyUnheld(folder: vscode.WorkspaceFolder, answer: Governed | undefined): void {
+    const decision = unheldAfter(answer, this.systemBin !== undefined);
+    if (decision === "clear") {
+      this.model.setUnheld(folder, false);
+      return;
+    }
+    if (decision === "mark") {
+      this.model.setUnheld(folder, true);
+      this.alerts.unheld(folder.name);
+    }
+  }
+
+  private async askVerdict(folder: vscode.WorkspaceFolder): Promise<void> {
+    const run = await runProgram(this.sawBinary, verdictArgs(folder.uri.fsPath), {
+      timeoutMs: this.settings().timeoutMs,
+      maxOutputBytes: 64 * 1024,
+    });
+    const answer = run.timedOut || run.spawnError || run.cancelled ? "could-not-answer" : readVerdict(run.stdout);
+    this.applyUnheld(folder, answer);
   }
 
   claim(uri: vscode.Uri): boolean {
@@ -137,7 +168,10 @@ export class Governor implements vscode.Disposable {
     const realGit = await this.realBinary("git");
     const realGh = await this.realBinary("gh");
     const standin = standinBeside(saw, defaultIsExecutableFile);
-    const signature = JSON.stringify({ saw, realGit, realGh, progress, standin, systemBin, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
+    this.sawBinary = saw;
+    this.statusDir = governStatusDir(process.env["XDG_STATE_HOME"], homedir());
+    this.verdictReady = await this.probeVerdict(saw);
+    const signature = JSON.stringify({ saw, realGit, realGh, progress, standin, systemBin, verdict: this.verdictReady, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
     if (signature === this.signature && this.active) {
       return;
     }
@@ -173,6 +207,9 @@ export class Governor implements vscode.Disposable {
     this.signature = signature;
     this.active = true;
     this.watchResults();
+    if (this.verdictReady) {
+      this.watchStatus();
+    }
     await this.pointGit(nodePath.join(this.shimDir, process.platform === "win32" ? "git.cmd" : "git"));
     this.log.info(systemBin
       ? "Terminals already use saw's stand-in. The Git view still checks an incoming update."
@@ -318,22 +355,41 @@ export class Governor implements vscode.Disposable {
     return false;
   }
 
+  private async probeVerdict(saw: string): Promise<boolean> {
+    const help = await runProgram(saw, ["govern", "-h"], { timeoutMs: 10_000, maxOutputBytes: 64 * 1024 });
+    return offersGovernVerdict(`${help.stdout}\n${help.stderr}`);
+  }
+
   private watchResults(): void {
     if (this.watcher) {
       return;
     }
     try {
-      this.watcher = watch(this.resultDir, () => this.readResults());
+      this.watcher = watch(this.resultDir, () => this.readNotices(this.resultDir));
     } catch (error) {
       this.log.warn(`saw could not watch held updates: ${String(error)}`);
     }
-    this.readResults();
+    this.readNotices(this.resultDir);
   }
 
-  private readResults(): void {
+  /** Records saw writes for a check this window did not start. They outlive the holding directory. */
+  private watchStatus(): void {
+    if (this.statusWatcher || !this.statusDir) {
+      return;
+    }
+    try {
+      mkdirSync(this.statusDir, { recursive: true });
+      this.statusWatcher = watch(this.statusDir, () => this.readNotices(this.statusDir));
+    } catch (error) {
+      this.log.warn(`saw could not watch a check it did not start: ${String(error)}`);
+    }
+    this.readNotices(this.statusDir);
+  }
+
+  private readNotices(dir: string): void {
     let names: string[];
     try {
-      names = readdirSync(this.resultDir);
+      names = readdirSync(dir);
     } catch {
       return;
     }
@@ -342,7 +398,7 @@ export class Governor implements vscode.Disposable {
         continue;
       }
       try {
-        const notice = readNotice(readFileSync(nodePath.join(this.resultDir, name), "utf8"));
+        const notice = readNotice(readFileSync(nodePath.join(dir, name), "utf8"));
         if (notice) {
           this.applyNotice(notice);
         }
@@ -353,12 +409,21 @@ export class Governor implements vscode.Disposable {
   }
 
   private applyNotice(notice: GovernNotice): void {
-    const folder = (vscode.workspace.workspaceFolders ?? []).find((item) => item.uri.fsPath === notice.repo);
+    const repo = nodePath.resolve(notice.repo);
+    const folder = (vscode.workspace.workspaceFolders ?? []).find((item) => nodePath.resolve(item.uri.fsPath) === repo);
     const mark = `${notice.at}:${notice.phase}:${notice.step ?? ""}`;
-    if (!folder || this.seen.get(notice.repo) === mark) {
+    const key = `${repo}:${notice.phase}`;
+    const shown = this.shownAt.get(key);
+    if (sameCheck(shown, notice.at, SAME_CHECK_MS) && shown !== notice.at) {
       return;
     }
-    this.seen.set(notice.repo, mark);
+    if (!folder || this.seen.get(repo) === mark) {
+      return;
+    }
+    this.seen.set(repo, mark);
+    if (shown === undefined) {
+      this.shownAt.set(key, notice.at);
+    }
     if (notice.phase === "checking") {
       this.model.setChecking(folder, notice.step);
       return;
@@ -368,7 +433,7 @@ export class Governor implements vscode.Disposable {
       this.controller.request(folder, { immediate: true });
       return;
     }
-    rmSync(nodePath.join(this.markerDir, folderKey(notice.repo)), { force: true });
+    rmSync(nodePath.join(this.markerDir, folderKey(folder.uri.fsPath)), { force: true });
     if (notice.phase === "applied") {
       this.model.setHeld(folder, undefined);
       if (notice.verdict) {
@@ -398,6 +463,7 @@ export class Governor implements vscode.Disposable {
 
   dispose(): void {
     this.watcher?.close();
+    this.statusWatcher?.close();
     this.writeEnabled(false);
   }
 
@@ -415,6 +481,9 @@ export class Governor implements vscode.Disposable {
     await git.update("path", previous, vscode.ConfigurationTarget.Global);
   }
 }
+
+/** Saw and this window write one check a few seconds apart. A later check is a new one. */
+const SAME_CHECK_MS = 5_000;
 
 async function gitBinary(): Promise<string | undefined> {
   const extension = vscode.extensions.getExtension<GitExtension>("vscode.git");

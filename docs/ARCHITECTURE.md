@@ -150,5 +150,11 @@ verdict never comes from progress.
   unchanged until the check finishes. Clean and residue are applied by saw.
   Anything else is shown as held. While the check runs, the status bar, the saw view, and Chat say
   saw is checking the update. The open folder is scanned again after that check finishes. A change
-  to `.git/HEAD` the stand-in did not make is scanned afterwards, and Chat says that change was not
-  held. Git the stand-in did not run is still scanned by the scan-on-clone hooks.
+  to `.git/HEAD` the stand-in did not make is scanned afterwards. When saw offers
+  `govern verdict`, that answer decides the Chat line: a tree saw let in is not called out, one it
+  did not is, and an answer saw could not give is not treated as let in. A saw that cannot answer
+  still calls out the change, except while a terminal stand-in is already in place, which leaves
+  no marker here. saw writes one record per open folder under `$XDG_STATE_HOME/saw/govern/status`
+  (otherwise `~/.local/state/saw/govern/status`). The editor reads those with the same notice
+  reader. Two notices for one phase a few seconds apart are one check. Git the stand-in did not
+  run is still scanned by the scan-on-clone hooks.
