@@ -197,6 +197,11 @@
     "views": {
       "saw": [
         {
+          "id": "saw.chat",
+          "name": "Chat",
+          "type": "webview"
+        },
+        {
           "id": "saw.findings",
           "name": "Verdict"
         },
@@ -217,7 +222,7 @@
       "view/title": [
         {
           "command": "saw.scanWorkspace",
-          "when": "view == saw.findings",
+          "when": "view == saw.findings || view == saw.chat",
           "group": "navigation"
         },
         {

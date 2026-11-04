@@ -16,6 +16,7 @@ import { Model } from "./editor/model";
 import { Reports } from "./editor/view/reports";
 import { readSettings } from "./editor/settings";
 import { StatusBar } from "./editor/view/statusBar";
+import { ChatView } from "./editor/view/chatView";
 import { FindingsTree } from "./editor/view/tree";
 import { registerTriggers } from "./editor/scan/triggers";
 
@@ -56,6 +57,14 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     govern,
     cursorGuard,
     tree,
+    new ChatView(
+      model,
+      controller,
+      () => void actions.refreshHooks(),
+      (folder) => reports.lastFix(folder),
+      (folder) => void reports.open(reports.fixUri(folder)),
+      decide,
+    ),
     new StatusBar(model),
     new SawMcpRegistration(model, readSettings, log),
     vscode.window.registerTreeDataProvider("saw.findings", tree),

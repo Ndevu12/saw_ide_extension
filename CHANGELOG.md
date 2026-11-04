@@ -4,6 +4,7 @@
 
 ### Added
 
+- The saw sidebar opens on a Chat view. Each folder is a card with its verdict and buttons for the next action. Fixing the checkout and amending history are described apart: the checkout fix puts the clean-up on a new local branch and does not rewrite past commits or push, and amending history rewrites the commits that still carry the malicious code. A scan only reads the folder. When a fix is waiting, the card says which of those acts the question belongs to.
 - When the installed saw can check an incoming update, a pull, checkout, or similar command in an open folder waits for that check. The folder changes only when the update is clean or residue. Otherwise it stays as it was, and saw says why. The open folder is scanned again after the check finishes. Turn it off with `saw.governUpdates`.
 
 ## [0.3.0] - 2026-10-22
