@@ -83,6 +83,16 @@ The saw view shows whether saw's [scan-on-clone hooks](https://saw-docs.ndevuspa
 are in place, so every clone, pull and branch switch is scanned. It installs or repairs them in one
 click.
 
+### Updates wait for a check
+
+When the installed saw can check an incoming update, a pull, fetch, checkout, merge, rebase, or a
+GitHub command that lands files waits before it changes an open folder. The editor's integrated
+terminal is covered, and so is the Git view, except on Windows. Clean and residue are applied.
+Suspicious, infected, and a check that could not finish leave the folder as it was, and the saw view
+says the update was held. The open folder is scanned again after the check finishes.
+
+A terminal outside the editor keeps saw's scan-on-clone check. Turn this off with `saw.governUpdates`.
+
 ### Guards for AI agents
 
 - **`saw_folderVerdict` tool:** agents in the editor can ask for a folder's verdict before they
@@ -166,6 +176,7 @@ All commands are in the Command Palette under **saw:**.
 | `saw.scanTimeoutSeconds` | `120` | How long one folder's scan may take. |
 | `saw.registerMcpServer` | `true` | Offer saw's read-only MCP server to AI agents, when saw provides one. |
 | `saw.guardAgentCommands` | `true` | In Cursor, check saw's verdict before the agent installs or runs a folder's code. |
+| `saw.governUpdates` | `true` | When saw can, check a pull, checkout, or similar update before it changes an open folder. |
 
 These are read from your **user** settings only. A folder's own `.vscode/settings.json` can't choose
 which program runs or switch scanning off.

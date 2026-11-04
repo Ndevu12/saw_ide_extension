@@ -336,6 +336,12 @@
           "scope": "machine",
           "markdownDescription": "In Cursor, check saw's verdict before the agent runs a command that installs or runs a folder's code (a package manager, build tool, interpreter, `./script`, or a git command that runs the repository's hooks). It refuses the command in a folder saw found infected, and asks you first when saw found it suspicious or could not check it."
         },
+        "saw.governUpdates": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "markdownDescription": "When the installed saw can check an incoming update, wait for that check before a pull, checkout, or similar command changes an open folder. Clean and residue are applied. Anything else leaves the folder as it was. Covers the editor's integrated terminal and, except on Windows, its Git view."
+        },
         "saw.configPath": {
           "type": "string",
           "default": "",

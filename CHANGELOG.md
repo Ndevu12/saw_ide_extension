@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- When the installed saw can check an incoming update, a pull, checkout, or similar command in an open folder waits for that check. The folder changes only when the update is clean or residue. Otherwise it stays as it was, and saw says why. The open folder is scanned again after the check finishes. Turn it off with `saw.governUpdates`.
+
 ## [0.3.0] - 2026-10-22
 
 ### Added

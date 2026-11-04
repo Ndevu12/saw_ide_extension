@@ -16,8 +16,15 @@ const RUNS_CODE = [
   "**/{.gitattributes,.gitmodules}",
 ];
 
-export function registerTriggers(controller: Controller, settings: () => Settings): vscode.Disposable[] {
+export function registerTriggers(
+  controller: Controller,
+  settings: () => Settings,
+  moves?: { claim(uri: vscode.Uri): boolean },
+): vscode.Disposable[] {
   const onChange = (uri: vscode.Uri) => {
+    if (moves?.claim(uri)) {
+      return;
+    }
     if (settings().scanOnChange) {
       controller.requestFor(uri);
     }

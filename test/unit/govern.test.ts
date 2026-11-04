@@ -1,0 +1,146 @@
+import * as path from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit } from "../../src/core/govern/command";
+import { mayRelease, prepareArgs, readApply, readPrepare, type GovernConfig } from "../../src/core/govern/contract";
+import { plan, posixWrapper } from "../../src/core/govern/plan";
+import { report, target } from "./helpers";
+
+const config = (overrides: Partial<GovernConfig> = {}): GovernConfig => ({
+  enabled: true,
+  saw: "/usr/local/bin/saw",
+  realGit: "/usr/bin/git",
+  realGh: "/usr/bin/gh",
+  timeoutMs: 1000,
+  folders: ["/work/app"],
+  holdingRoot: "/tmp/holding",
+  markerDir: "/tmp/markers",
+  resultDir: "/tmp/results",
+  ...overrides,
+});
+
+function git(argv: string[], cwd = "/work/app") {
+  const command = parseGit(argv, cwd);
+  return { command, brings: command ? gitBringsFiles(command) : false };
+}
+
+describe("which git commands bring files in", () => {
+  it("holds a pull, fetch, merge, rebase, checkout, switch, and submodule update", () => {
+    for (const argv of [
+      ["pull"],
+      ["fetch", "origin"],
+      ["merge", "main"],
+      ["rebase", "origin/main"],
+      ["checkout", "main"],
+      ["switch", "main"],
+      ["submodule", "update", "--init"],
+      ["-C", "/work/app", "pull"],
+    ]) {
+      expect(git(argv).brings, argv.join(" ")).toBe(true);
+    }
+  });
+
+  it("leaves status, commit, push, a path checkout, a new branch, and an abort alone", () => {
+    for (const argv of [
+      ["status"],
+      ["diff"],
+      ["log"],
+      ["commit", "-m", "wip"],
+      ["push"],
+      ["checkout", "--", "README.md"],
+      ["checkout", "-b", "feature"],
+      ["switch", "-c", "feature"],
+      ["merge", "--abort"],
+      ["rebase", "--quit"],
+      ["fetch", "--dry-run"],
+      ["submodule", "status"],
+    ]) {
+      expect(git(argv).brings, argv.join(" ")).toBe(false);
+    }
+  });
+
+  it("uses -C as the directory, including the attached form", () => {
+    expect(parseGit(["-C", "/other", "pull"], "/work/app")?.directory).toBe(path.resolve("/other"));
+    expect(parseGit(["-C/other", "status"], "/work/app")?.directory).toBe(path.resolve("/other"));
+    expect(parseGit(["-c", "a.b=c", "pull"], "/work/app")?.subcommand).toBe("pull");
+  });
+});
+
+describe("which gh commands land files", () => {
+  it("holds a pull-request checkout, a sync, and a download", () => {
+    expect(ghBringsFiles(["pr", "checkout", "12"])).toBe(true);
+    expect(ghBringsFiles(["repo", "sync"])).toBe(true);
+    expect(ghBringsFiles(["release", "download"])).toBe(true);
+    expect(ghBringsFiles(["run", "download", "4"])).toBe(true);
+  });
+
+  it("leaves reading GitHub alone", () => {
+    expect(ghBringsFiles(["pr", "view"])).toBe(false);
+    expect(ghBringsFiles(["issue", "list"])).toBe(false);
+    expect(ghBringsFiles(["repo", "clone", "acme/app"])).toBe(false);
+  });
+});
+
+describe("the open folder a command targets", () => {
+  it("is the innermost open folder that contains the directory", () => {
+    expect(enclosingFolder(["/work", "/work/app"], "/work/app/src")).toBe(path.resolve("/work/app"));
+    expect(enclosingFolder(["/work/app"], "/other")).toBeUndefined();
+  });
+});
+
+describe("what the stand-in does", () => {
+  it("runs the real git unless the command brings files into an open folder", () => {
+    expect(plan(config(), "git", ["status"], "/work/app")).toEqual({ kind: "passthrough", program: "/usr/bin/git" });
+    expect(plan(config(), "git", ["-C", "/other", "pull"], "/work/app")).toEqual({ kind: "passthrough", program: "/usr/bin/git" });
+    expect(plan(config({ enabled: false }), "git", ["pull"], "/work/app")).toEqual({ kind: "passthrough", program: "/usr/bin/git" });
+    const held = plan(config(), "git", ["pull", "origin", "main"], "/work/app/src");
+    expect(held.kind).toBe("hold");
+    if (held.kind === "hold") {
+      expect(held.repo).toBe(path.resolve("/work/app"));
+      expect(held.args).toEqual(["pull", "origin", "main"]);
+    }
+  });
+
+  it("asks saw to prepare that folder, and nothing else", () => {
+    expect(prepareArgs("/work/app", "/tmp/holding/abc", "git", ["pull", "origin"])).toEqual([
+      "govern", "prepare", "--json", "--repo", "/work/app", "--into", "/tmp/holding/abc", "--tool", "git", "--", "pull", "origin",
+    ]);
+  });
+
+  it("falls through to the real program when its configuration is gone", () => {
+    const wrapper = posixWrapper("/usr/bin/node", "/ext/govern-shim.js", "/ext/config.json", "/usr/bin/git", "git");
+    expect(wrapper).toContain("exec '/usr/bin/git' \"$@\"");
+    expect(wrapper).toContain("--tool git");
+  });
+});
+
+describe("saw govern's report", () => {
+  it("releases a clean or residue scan and holds every other verdict", () => {
+    expect(mayRelease("clean")).toBe(true);
+    expect(mayRelease("residue")).toBe(true);
+    expect(mayRelease("suspicious")).toBe(false);
+    expect(mayRelease("infected")).toBe(false);
+    expect(mayRelease("incomplete")).toBe(false);
+    const clean = readPrepare(JSON.stringify({ schema_version: 1, scan: JSON.parse(report([target()])) }), 0);
+    expect(clean).toMatchObject({ verdict: "clean", release: true });
+    const infected = readPrepare(JSON.stringify({ schema_version: 1, scan: JSON.parse(report([target({ verdict: "infected" })])) }), 1);
+    expect(infected.release).toBe(false);
+    expect(infected.verdict).toBe("infected");
+  });
+
+  it("does not release a report it cannot read", () => {
+    expect(readPrepare("not json", 0)).toMatchObject({ verdict: "incomplete", release: false });
+    expect(readPrepare(JSON.stringify({ schema_version: 2, scan: {} }), 0).reasons.join(" ")).toMatch(/update the extension/);
+    expect(readPrepare(JSON.stringify({ schema_version: 1, reason: "the update could not be prepared" }), 2)).toMatchObject({
+      verdict: "incomplete",
+      release: false,
+    });
+  });
+
+  it("treats apply as done only when saw says the folder was updated", () => {
+    expect(readApply(JSON.stringify({ schema_version: 1, applied: true }))).toEqual({ applied: true, reason: undefined });
+    expect(readApply(JSON.stringify({ schema_version: 1, applied: false, reason: "left unchanged" })).applied).toBe(false);
+    expect(readApply("").applied).toBe(false);
+  });
+});

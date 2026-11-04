@@ -5,6 +5,14 @@ import type { ScanOutcome } from "../core/scan/scan";
 import { strongest, type FolderVerdict } from "../core/scan/verdict";
 import type { Engine } from "./install/engine";
 
+/** An update that was checked before it was allowed to change the folder. */
+export interface HeldUpdate {
+  verdict: FolderVerdict;
+  reasons: string[];
+  released: boolean;
+  at: number;
+}
+
 export type Settled = Exclude<ScanOutcome, { kind: "cancelled" }>;
 
 export interface FolderState {
@@ -15,6 +23,8 @@ export interface FolderState {
   deciding: boolean;
   /** What saw says it is doing, while it scans; from a saw with `--progress=jsonl`. */
   progress: string | undefined;
+  /** Set while an incoming update is held. Cleared once that update is applied. */
+  held: HeldUpdate | undefined;
   last: Settled | undefined;
 }
 
@@ -85,7 +95,7 @@ export class Model implements vscode.Disposable {
     const key = folder.uri.toString();
     let state = this.folders.get(key);
     if (!state) {
-      state = { folder, scanning: false, fixing: false, deciding: false, progress: undefined, last: undefined };
+      state = { folder, scanning: false, fixing: false, deciding: false, progress: undefined, held: undefined, last: undefined };
       this.folders.set(key, state);
     }
     return state;
@@ -104,6 +114,12 @@ export class Model implements vscode.Disposable {
       state.progress = progress;
       this.changed.fire();
     }
+  }
+
+  setHeld(folder: vscode.WorkspaceFolder, held: HeldUpdate | undefined): void {
+    const state = this.get(folder);
+    state.held = held;
+    this.changed.fire();
   }
 
   setOutcome(folder: vscode.WorkspaceFolder, outcome: Settled): void {

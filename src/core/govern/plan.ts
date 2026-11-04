@@ -1,0 +1,75 @@
+import { createHash } from "node:crypto";
+import * as path from "node:path";
+
+import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit, type Tool } from "./command";
+import type { GovernConfig } from "./contract";
+
+export interface Hold {
+  kind: "hold";
+  tool: Tool;
+  repo: string;
+  holding: string;
+  args: readonly string[];
+}
+
+export interface Passthrough {
+  kind: "passthrough";
+  program: string;
+}
+
+/** What the stand-in does with one command: run the real program, or ask saw to check it first. */
+export function plan(config: GovernConfig, tool: Tool, args: readonly string[], cwd: string): Hold | Passthrough {
+  const program = tool === "git" ? config.realGit : config.realGh;
+  const through = (): Passthrough => ({ kind: "passthrough", program });
+  if (!config.enabled || !config.saw || !program) {
+    return through();
+  }
+  const target = tool === "git" ? gitTarget(args, cwd) : path.resolve(cwd);
+  const brings = tool === "git" ? gitTargetBrings(args, cwd) : ghBringsFiles(args);
+  const repo = target && brings ? enclosingFolder(config.folders, target) : undefined;
+  if (!repo) {
+    return through();
+  }
+  return { kind: "hold", tool, repo, holding: path.join(config.holdingRoot, folderKey(repo)), args };
+}
+
+function gitTarget(args: readonly string[], cwd: string): string | undefined {
+  return parseGit(args, cwd)?.directory;
+}
+
+function gitTargetBrings(args: readonly string[], cwd: string): boolean {
+  const command = parseGit(args, cwd);
+  return command ? gitBringsFiles(command) : false;
+}
+
+export function folderKey(folderPath: string): string {
+  return createHash("sha256").update(path.resolve(folderPath)).digest("hex").slice(0, 32);
+}
+
+/** A POSIX stand-in. Missing config runs the real program, so a removed extension does not keep git. */
+export function posixWrapper(node: string, shim: string, configPath: string, real: string, tool: Tool): string {
+  const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
+  return [
+    "#!/bin/sh",
+    `if [ ! -f ${quote(configPath)} ]; then`,
+    `  exec ${quote(real)} "$@"`,
+    "fi",
+    "export ELECTRON_RUN_AS_NODE=1",
+    `exec ${quote(node)} ${quote(shim)} --config ${quote(configPath)} --tool ${tool} -- "$@"`,
+    "",
+  ].join("\n");
+}
+
+/** A Windows stand-in for the integrated terminal. The Git view is not pointed at a batch file. */
+export function windowsWrapper(node: string, shim: string, configPath: string, real: string, tool: Tool): string {
+  return [
+    "@echo off",
+    `if not exist "${configPath}" (`,
+    `  "${real}" %*`,
+    "  exit /b %ERRORLEVEL%",
+    ")",
+    "set ELECTRON_RUN_AS_NODE=1",
+    `"${node}" "${shim}" --config "${configPath}" --tool ${tool} -- %*`,
+    "",
+  ].join("\r\n");
+}
