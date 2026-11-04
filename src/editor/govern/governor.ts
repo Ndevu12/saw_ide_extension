@@ -5,9 +5,9 @@ import * as nodePath from "node:path";
 import * as vscode from "vscode";
 
 import { FEATURES, supports } from "../../core/capabilities";
-import { offersGovernVerdict, readNotice, readVerdict, sameCheck, unheldAfter, verdictArgs, type GovernConfig, type Governed, type GovernNotice } from "../../core/govern/contract";
+import { canRestore, offersGovernVerdict, readGoverned, readNotice, sameCheck, unheldAfter, verdictArgs, type GovernConfig, type Governed, type GovernNotice } from "../../core/govern/contract";
 import type { Tool } from "../../core/govern/command";
-import { folderKey, governStatusDir, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
+import { cleanTreeArgs, folderKey, governStatusDir, headArgs, posixWrapper, readCommit, restoreArgs, standinBeside, systemGovernBin, windowsWrapper, workTreeClean } from "../../core/govern/plan";
 import { defaultIsExecutableFile } from "../../core/install/locate";
 import { runProgram } from "../../core/run";
 import type { Controller } from "../scan/controller";
@@ -42,6 +42,10 @@ export class Governor implements vscode.Disposable {
   private watcher: FSWatcher | undefined;
   private statusWatcher: FSWatcher | undefined;
   private sawBinary = "";
+  private realGit = "";
+  /** A commit saw let in, so a later commit it did not can be put back. */
+  private readonly released = new Map<string, string>();
+  private readonly restoring = new Set<string>();
   private verdictReady = false;
   private statusDir = "";
   private active = false;
@@ -94,6 +98,9 @@ export class Governor implements vscode.Disposable {
     if (!folder || !this.gitMoved(uri.fsPath)) {
       return;
     }
+    if (this.restoring.has(folder.uri.fsPath)) {
+      return;
+    }
     if (!this.verdictReady || !this.sawBinary) {
       this.applyUnheld(folder, undefined);
       return;
@@ -114,12 +121,64 @@ export class Governor implements vscode.Disposable {
   }
 
   private async askVerdict(folder: vscode.WorkspaceFolder): Promise<void> {
+    this.model.setChecking(folder, undefined);
     const run = await runProgram(this.sawBinary, verdictArgs(folder.uri.fsPath), {
       timeoutMs: this.settings().timeoutMs,
       maxOutputBytes: 64 * 1024,
     });
-    const answer = run.timedOut || run.spawnError || run.cancelled ? "could-not-answer" : readVerdict(run.stdout);
-    this.applyUnheld(folder, answer);
+    const reading = run.timedOut || run.spawnError || run.cancelled ? { answer: "could-not-answer" as const } : readGoverned(run.stdout);
+    if (reading.answer === "let-in") {
+      await this.remember(folder);
+      this.model.clearChecking(folder);
+      this.applyUnheld(folder, "let-in");
+      return;
+    }
+    if (reading.answer === "not-let-in" && await this.tryRestore(folder, reading.reason)) {
+      return;
+    }
+    this.model.clearChecking(folder);
+    this.applyUnheld(folder, reading.answer);
+  }
+
+  /** Remember the commit saw let in. The real git is used, so this read is not itself a check. */
+  private async remember(folder: vscode.WorkspaceFolder): Promise<void> {
+    if (!this.realGit) {
+      return;
+    }
+    const run = await runProgram(this.realGit, headArgs(folder.uri.fsPath), { timeoutMs: 10_000, maxOutputBytes: 4096 });
+    const commit = run.exitCode === 0 ? readCommit(run.stdout) : undefined;
+    if (commit) {
+      this.released.set(folder.uri.fsPath, commit);
+    }
+  }
+
+  /**
+   * Put a commit saw did not let in back to the one it did, through this window's stand-in.
+   * Returns false when that cannot be done, so the folder stays and Chat says so.
+   */
+  private async tryRestore(folder: vscode.WorkspaceFolder, reason: string | undefined): Promise<boolean> {
+    const repo = folder.uri.fsPath;
+    const remembered = this.released.get(repo);
+    if (!this.realGit || !remembered) {
+      return false;
+    }
+    const status = await runProgram(this.realGit, cleanTreeArgs(repo), { timeoutMs: 10_000, maxOutputBytes: 64 * 1024 });
+    const clean = status.exitCode === 0 && !status.spawnError && workTreeClean(status.stdout);
+    if (!canRestore({ answer: "not-let-in", reason, remembered: true, workTreeClean: clean, windows: process.platform === "win32" })) {
+      return false;
+    }
+    const current = await runProgram(this.realGit, headArgs(repo), { timeoutMs: 10_000, maxOutputBytes: 4096 });
+    if (readCommit(current.stdout) === remembered) {
+      return false;
+    }
+    const shim = nodePath.join(this.shimDir, "git");
+    this.restoring.add(repo);
+    const restored = await runProgram(shim, restoreArgs(repo, remembered), {
+      timeoutMs: this.settings().timeoutMs,
+      maxOutputBytes: 64 * 1024,
+    });
+    this.restoring.delete(repo);
+    return !restored.spawnError;
   }
 
   claim(uri: vscode.Uri): boolean {
@@ -169,6 +228,7 @@ export class Governor implements vscode.Disposable {
     const realGh = await this.realBinary("gh");
     const standin = standinBeside(saw, defaultIsExecutableFile);
     this.sawBinary = saw;
+    this.realGit = realGit;
     this.statusDir = governStatusDir(process.env["XDG_STATE_HOME"], homedir());
     this.verdictReady = await this.probeVerdict(saw);
     const signature = JSON.stringify({ saw, realGit, realGh, progress, standin, systemBin, verdict: this.verdictReady, timeoutMs: this.settings().timeoutMs, folders: this.folders() });

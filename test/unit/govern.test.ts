@@ -3,8 +3,8 @@ import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit } from "../../src/core/govern/command";
-import { mayRelease, offersGovernVerdict, prepareArgs, readApply, readNotice, readPrepare, readVerdict, sameCheck, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
-import { activationEnv, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin } from "../../src/core/govern/plan";
+import { canRestore, mayRelease, offersGovernVerdict, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readVerdict, sameCheck, UNKNOWN_COMMIT, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
+import { activationEnv, cleanTreeArgs, governStatusDir, headArgs, plan, posixWrapper, readCommit, restoreArgs, standinBeside, systemGovernBin, workTreeClean } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
 const config = (overrides: Partial<GovernConfig> = {}): GovernConfig => ({
@@ -178,6 +178,7 @@ describe("saw govern's report", () => {
   it("reads whether saw let the tree in, and treats anything else as no answer", () => {
     expect(verdictArgs("/work/app")).toEqual(["govern", "verdict", "--json", "--repo", "/work/app"]);
     expect(readVerdict(JSON.stringify({ schema_version: 1, governed: "let-in", reason: "this tree is one saw let in" }))).toBe("let-in");
+    expect(readGoverned(JSON.stringify({ schema_version: 1, governed: "not-let-in", reason: UNKNOWN_COMMIT }))).toEqual({ answer: "not-let-in", reason: UNKNOWN_COMMIT });
     expect(readVerdict(JSON.stringify({ schema_version: 1, governed: "not-let-in", reason: "this tree is not one saw let in" }))).toBe("not-let-in");
     expect(readVerdict(JSON.stringify({ schema_version: 1, governed: "could-not-answer", reason: "the open folder has no commit yet" }))).toBe("could-not-answer");
     expect(readVerdict(JSON.stringify({ schema_version: 1, governed: "clean" }))).toBe("could-not-answer");
@@ -194,6 +195,24 @@ describe("saw govern's report", () => {
     expect(unheldAfter("could-not-answer", false)).toBe("leave");
     expect(unheldAfter(undefined, true)).toBe("leave");
     expect(unheldAfter(undefined, false)).toBe("mark");
+  });
+
+  it("puts back only a commit saw did not let in, and only when the work tree is clean", () => {
+    const commit = "a".repeat(40);
+    expect(headArgs("/work/app")).toEqual(["-C", "/work/app", "rev-parse", "--verify", "--quiet", "HEAD"]);
+    expect(cleanTreeArgs("/work/app")).toEqual(["-C", "/work/app", "status", "--porcelain"]);
+    expect(restoreArgs("/work/app", commit)).toEqual(["-C", "/work/app", "checkout", commit]);
+    expect(readCommit(` ${commit}\n`)).toBe(commit);
+    expect(readCommit("not-a-commit")).toBeUndefined();
+    expect(workTreeClean("\n")).toBe(true);
+    expect(workTreeClean(" M README.md\n")).toBe(false);
+    const ready = { answer: "not-let-in" as const, reason: UNKNOWN_COMMIT, remembered: true, workTreeClean: true, windows: false };
+    expect(canRestore(ready)).toBe(true);
+    expect(canRestore({ ...ready, reason: "the working tree changed on top of a tree saw let in" })).toBe(false);
+    expect(canRestore({ ...ready, workTreeClean: false })).toBe(false);
+    expect(canRestore({ ...ready, remembered: false })).toBe(false);
+    expect(canRestore({ ...ready, windows: true })).toBe(false);
+    expect(canRestore({ ...ready, answer: "let-in" })).toBe(false);
   });
 
   it("recognises saw's verdict command from its help, and not an older govern", () => {

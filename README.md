@@ -99,7 +99,10 @@ infected, and a check that could not finish leave the folder as it was, and the 
 update was held. The open folder is scanned again after the check finishes. A git command this
 window did not run can still change the folder first. When saw can say whether it let that tree
 in, Chat says the change was not held only when saw did not. A check that runs outside this window
-shows the same checking, applied, or held.
+shows the same checking, applied, or held. A commit saw did not let in, when you have no other
+uncommitted work, is put back to the tree saw let in and checked again. Unsaved work is left as
+it is. An agent that asks saw about a folder hears the same checking, held, or not-held state,
+and is told to wait while a check is running.
 
 When you have asked saw to cover your terminals, the editor's terminal uses that and does not
 check the same command again. The Git view still checks. A terminal saw does not cover keeps

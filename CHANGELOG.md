@@ -6,7 +6,7 @@
 
 - While saw checks an incoming update, the status bar, the saw view, and Chat say saw is checking it, including the step saw names. The folder is unchanged until that check finishes. When the installed saw includes its git and gh stand-in, the editor places that and a bringing-files command is checked by saw. A git command saw did not run still changes the folder first; Chat says that change was not held.
 - When saw already covers your terminals, the editor's terminal uses that and does not check the same command again. The Git view still checks on its own.
-- When saw can say whether it let the current tree in, Chat names a change only when saw did not. A check that runs outside this window shows the same checking, applied, or held as one the editor started.
+- When saw can say whether it let the current tree in, Chat names a change only when saw did not. A check that runs outside this window shows the same checking, applied, or held as one the editor started. A commit saw did not let in, when the folder has no other uncommitted work, is put back to the tree saw let in and checked again. Unsaved work is left as it is. An agent that asks saw about a folder is told the same checking, held, or not-held state, and waits while a check is running.
 
 ## [0.4.0] - 2026-11-04
 

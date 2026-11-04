@@ -100,13 +100,28 @@ const GOVERNED = new Set<Governed>(["let-in", "not-let-in", "could-not-answer"])
  * Read `saw govern verdict`. An unreadable report, or any value other than the three answers,
  * is `could-not-answer`. That is not a tree saw let in.
  */
-export function readVerdict(stdout: string): Governed {
+/** Saw's sentence when the commit itself is not one it let in. A dirty tree uses a different sentence. */
+export const UNKNOWN_COMMIT = "this tree is not one saw let in";
+
+export interface GovernedReading {
+  answer: Governed;
+  reason?: string;
+}
+
+/** Read `saw govern verdict`, including the sentence saw gives. An unreadable report is `could-not-answer`. */
+export function readGoverned(stdout: string): GovernedReading {
   const parsed = object(stdout);
   if (typeof parsed === "string") {
-    return "could-not-answer";
+    return { answer: "could-not-answer" };
   }
   const governed = parsed["governed"];
-  return typeof governed === "string" && GOVERNED.has(governed as Governed) ? (governed as Governed) : "could-not-answer";
+  const answer = typeof governed === "string" && GOVERNED.has(governed as Governed) ? (governed as Governed) : "could-not-answer";
+  const reason = typeof parsed["reason"] === "string" && parsed["reason"] !== "" ? parsed["reason"] : undefined;
+  return reason === undefined ? { answer } : { answer, reason };
+}
+
+export function readVerdict(stdout: string): Governed {
+  return readGoverned(stdout).answer;
 }
 
 export type UnheldDecision = "clear" | "mark" | "leave";
@@ -126,6 +141,15 @@ export function unheldAfter(answer: Governed | undefined, systemCovered: boolean
     return "leave";
   }
   return systemCovered ? "leave" : "mark";
+}
+
+/**
+ * Whether the editor can put back the tree saw let in. Only a commit saw did not let in, with a
+ * tree already remembered, a clean work tree, and a machine where this window's git stand-in runs.
+ * Unsaved work is not reverted.
+ */
+export function canRestore(input: { answer: Governed; reason: string | undefined; remembered: boolean; workTreeClean: boolean; windows: boolean }): boolean {
+  return !input.windows && input.answer === "not-let-in" && input.reason === UNKNOWN_COMMIT && input.remembered && input.workTreeClean;
 }
 
 /**

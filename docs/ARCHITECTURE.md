@@ -156,5 +156,9 @@ verdict never comes from progress.
   still calls out the change, except while a terminal stand-in is already in place, which leaves
   no marker here. saw writes one record per open folder under `$XDG_STATE_HOME/saw/govern/status`
   (otherwise `~/.local/state/saw/govern/status`). The editor reads those with the same notice
-  reader. Two notices for one phase a few seconds apart are one check. Git the stand-in did not
-  run is still scanned by the scan-on-clone hooks.
+  reader. Two notices for one phase a few seconds apart are one check. While that answer is
+  `let-in`, the editor remembers the commit. A later commit saw did not let in, with a clean work
+  tree, is put back through this window's stand-in, so the same checking, applied, or held state
+  is shown. A dirty work tree is not put back. On Windows that return is not run. An agent that
+  asks this extension is told the same state and waits while a check runs. Git the stand-in did
+  not run is still scanned by the scan-on-clone hooks.

@@ -61,6 +61,30 @@ export function systemGovernBin(xdg: string | undefined, home: string): string {
   return path.join(base, "saw", "govern", "bin");
 }
 
+/** The commit now checked out. A value that is not a commit id is ignored. */
+export function headArgs(repo: string): string[] {
+  return ["-C", repo, "rev-parse", "--verify", "--quiet", "HEAD"];
+}
+
+/** Empty output means the work tree matches HEAD. */
+export function cleanTreeArgs(repo: string): string[] {
+  return ["-C", repo, "status", "--porcelain"];
+}
+
+/** Put the work tree back on a commit saw already let in. The stand-in checks it again. */
+export function restoreArgs(repo: string, commit: string): string[] {
+  return ["-C", repo, "checkout", commit];
+}
+
+export function readCommit(stdout: string): string | undefined {
+  const commit = stdout.trim();
+  return /^[0-9a-f]{40,64}$/.test(commit) ? commit : undefined;
+}
+
+export function workTreeClean(porcelain: string): boolean {
+  return porcelain.trim() === "";
+}
+
 /** Where saw writes one check record per open folder. `$XDG_STATE_HOME`, otherwise `~/.local/state`. */
 export function governStatusDir(xdgState: string | undefined, home: string): string {
   const trimmed = xdgState?.trim();
