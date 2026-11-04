@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 import { FEATURES, supports } from "../../core/capabilities";
 import { readNotice, type GovernConfig, type GovernNotice } from "../../core/govern/contract";
 import type { Tool } from "../../core/govern/command";
-import { folderKey, posixWrapper, windowsWrapper } from "../../core/govern/plan";
+import { folderKey, posixWrapper, standinBeside, windowsWrapper } from "../../core/govern/plan";
 import { defaultIsExecutableFile } from "../../core/install/locate";
 import type { Controller } from "../scan/controller";
 import type { Installer } from "../install/installer";
@@ -109,6 +109,7 @@ export class Governor implements vscode.Disposable {
         this.active = false;
         this.writeEnabled(false);
         this.installer.exposeToTerminals();
+        void this.restoreGit();
       }
       return;
     }
@@ -129,7 +130,8 @@ export class Governor implements vscode.Disposable {
   private async enable(saw: string, progress: boolean): Promise<void> {
     const realGit = await this.realBinary("git");
     const realGh = await this.realBinary("gh");
-    const signature = JSON.stringify({ saw, realGit, realGh, progress, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
+    const standin = standinBeside(saw, defaultIsExecutableFile);
+    const signature = JSON.stringify({ saw, realGit, realGh, progress, standin, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
     if (signature === this.signature && this.active) {
       return;
     }
@@ -158,6 +160,7 @@ export class Governor implements vscode.Disposable {
       markerDir: this.markerDir,
       resultDir: this.resultDir,
       progress,
+      ...(standin ? { standin } : {}),
     };
     this.writeConfig(config);
     this.installer.exposeToTerminals([this.shimDir]);
@@ -320,10 +323,18 @@ export class Governor implements vscode.Disposable {
       return;
     }
     this.model.clearChecking(folder);
+    if (notice.phase === "finished") {
+      this.controller.request(folder, { immediate: true });
+      return;
+    }
     rmSync(nodePath.join(this.markerDir, folderKey(notice.repo)), { force: true });
     if (notice.phase === "applied") {
       this.model.setHeld(folder, undefined);
-      this.alerts.applied(folder.name, notice.verdict ?? "clean");
+      if (notice.verdict) {
+        this.alerts.applied(folder.name, notice.verdict);
+      } else {
+        this.alerts.applied(folder.name);
+      }
     } else {
       this.model.setHeld(folder, { verdict: notice.verdict ?? "incomplete", reasons: notice.reasons, released: false, at: notice.at });
       this.alerts.held(folder.name, notice.verdict ?? "incomplete");
@@ -346,6 +357,21 @@ export class Governor implements vscode.Disposable {
 
   dispose(): void {
     this.watcher?.close();
+    this.writeEnabled(false);
+  }
+
+  /** Put Git's path back when this window stops standing in front of it. */
+  private async restoreGit(): Promise<void> {
+    if (process.platform === "win32") {
+      return;
+    }
+    const git = vscode.workspace.getConfiguration("git");
+    const current = git.get<string>("path") ?? "";
+    if (!current || !this.isShim(current)) {
+      return;
+    }
+    const previous = this.context.globalState.get<string>("govern.previousGitPath") ?? "";
+    await git.update("path", previous, vscode.ConfigurationTarget.Global);
   }
 }
 

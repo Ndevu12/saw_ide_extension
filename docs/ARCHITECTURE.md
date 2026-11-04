@@ -142,7 +142,9 @@ verdict never comes from progress.
 - **A notification never holds up a scan.** Alerts are not awaited, so an unanswered notification
   cannot queue later scans behind it.
 - **An incoming update is checked before the open folder changes**, when saw lists `govern.json`.
-  The stand-in asks saw and does not change the folder itself. Clean and residue are applied by saw.
+  When that saw includes its stand-in beside its own program, the editor places it and turns it on
+  for this window. Otherwise the editor's own stand-in asks saw. Either way the folder itself is
+  unchanged until the check finishes. Clean and residue are applied by saw.
   Anything else is shown as held. While the check runs, the status bar, the saw view, and Chat say
   saw is checking the update. The open folder is scanned again after that check finishes. A change
   to `.git/HEAD` the stand-in did not make is scanned afterwards, and Chat says that change was not

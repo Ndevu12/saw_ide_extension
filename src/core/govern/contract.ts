@@ -17,6 +17,8 @@ export interface GovernConfig {
   resultDir: string;
   /** Ask `saw govern prepare` for the same progress events a scan reports. */
   progress: boolean;
+  /** saw's git/gh stand-in, when this saw ships one beside its own program. */
+  standin?: string;
 }
 
 /** Clean and residue may change the open folder. Anything else waits. */
@@ -81,7 +83,7 @@ export interface ApplyReading {
   reason: string | undefined;
 }
 
-export type GovernPhase = "checking" | "held" | "applied";
+export type GovernPhase = "checking" | "held" | "applied" | "finished";
 
 /** What the stand-in writes while an update is in flight, and when it finishes. */
 export interface GovernNotice {
@@ -93,7 +95,7 @@ export interface GovernNotice {
   at: number;
 }
 
-const PHASES = new Set<GovernPhase>(["checking", "held", "applied"]);
+const PHASES = new Set<GovernPhase>(["checking", "held", "applied", "finished"]);
 const VERDICTS = new Set<FolderVerdict>(["clean", "residue", "suspicious", "incomplete", "infected"]);
 
 /** Read one stand-in notice. Undefined when the file is not a notice this extension shows. */

@@ -3,7 +3,8 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 
 import { applyArgs, prepareArgs, readApply, readPrepare, type GovernConfig, type GovernPhase } from "./core/govern/contract";
-import { folderKey, plan } from "./core/govern/plan";
+import { activationEnv, folderKey, plan } from "./core/govern/plan";
+import type { Tool } from "./core/govern/command";
 import { runProgram } from "./core/run";
 import { describeProgress, ProgressLines } from "./core/scan/progress";
 import type { FolderVerdict } from "./core/scan/verdict";
@@ -44,6 +45,48 @@ function notice(config: GovernConfig, repo: string, phase: GovernPhase, reasons:
   renameSync(`${file}.tmp`, file);
 }
 
+function runPlaced(config: GovernConfig, tool: Tool, args: readonly string[], holding: string, onStderr: (text: string) => void, onExit: (code: number, spawnFailed: boolean) => void): void {
+  const standin = config.standin;
+  if (!standin) {
+    onExit(1, true);
+    return;
+  }
+  const child = spawn(standin, args, {
+    stdio: ["inherit", "inherit", "pipe"],
+    shell: false,
+    env: { ...process.env, ...activationEnv(config, tool, holding) },
+  });
+  let failed = false;
+  child.stderr?.on("data", (chunk: Buffer) => {
+    const text = chunk.toString("utf8");
+    process.stderr.write(text);
+    onStderr(text);
+  });
+  child.on("error", () => {
+    failed = true;
+    onExit(127, true);
+  });
+  child.on("exit", (code, signal) => {
+    if (failed) {
+      return;
+    }
+    if (signal) {
+      process.kill(process.pid, signal);
+      return;
+    }
+    onExit(code ?? 1, false);
+  });
+}
+
+function runRealOrExit(config: GovernConfig, tool: Tool, args: readonly string[]): void {
+  const program = tool === "git" ? config.realGit : config.realGh;
+  if (!program) {
+    process.stderr.write(`saw could not find ${tool}.\n`);
+    process.exit(127);
+  }
+  runReal(program, args);
+}
+
 function runReal(program: string, args: readonly string[]): void {
   const child = spawn(program, args, { stdio: "inherit", shell: false });
   child.on("error", () => process.exit(127));
@@ -66,6 +109,43 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const action = plan(config, tool, args, process.cwd());
+  if (config.standin && action.kind === "passthrough") {
+    runPlaced(config, tool, args, config.holdingRoot, () => undefined, (code, spawnFailed) => {
+      if (spawnFailed) {
+        runRealOrExit(config, tool, args);
+        return;
+      }
+      process.exit(code);
+    });
+    return;
+  }
+  if (config.standin && action.kind === "hold") {
+    const steps = new ProgressLines((progress) => {
+      if (progress) {
+        notice(config, action.repo, "checking", [], undefined, describeProgress(progress));
+      }
+    });
+    let stderr = "";
+    notice(config, action.repo, "checking", []);
+    runPlaced(config, tool, args, action.holding, (text) => {
+      stderr += text;
+      steps.feed(text);
+    }, (code, spawnFailed) => {
+      steps.end();
+      if (stderr.includes("held this update")) {
+        notice(config, action.repo, "held", ["saw held this update. The folder was not changed."]);
+        process.exit(code);
+        return;
+      }
+      notice(config, action.repo, "finished", []);
+      if (spawnFailed) {
+        runRealOrExit(config, tool, args);
+        return;
+      }
+      process.exit(code);
+    });
+    return;
+  }
   if (action.kind === "passthrough") {
     if (!action.program) {
       process.stderr.write(`saw could not find ${tool}.\n`);
