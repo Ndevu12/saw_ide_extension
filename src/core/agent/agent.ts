@@ -12,6 +12,8 @@ export interface AgentFolder {
   scannedAt?: string;
   reasons: string[];
   findings: Finding[];
+  /** A govern check the agent must hear about, in the same words the editor shows. */
+  notice?: string;
 }
 
 const MAX_FINDINGS = 10;
@@ -52,10 +54,16 @@ function folderReport(folder: AgentFolder): string {
   const lines = [`Folder "${plain(folder.name, 80)}" (${plain(folder.path, 300)})`];
   if (!folder.verdict) {
     lines.push(`Verdict: unknown. ${plain(folder.problem ?? "saw has no verdict for it yet.", 300)}`, GUIDANCE.unknown);
+    if (folder.notice) {
+      lines.push(folder.notice);
+    }
     return lines.join("\n");
   }
   lines.push(`Verdict: ${HEADLINE[folder.verdict]}${folder.scannedAt ? `, scanned at ${plain(folder.scannedAt, 40)}` : ""}.`);
   lines.push(GUIDANCE[folder.verdict]);
+  if (folder.notice) {
+    lines.push(folder.notice);
+  }
   for (const reason of folder.reasons) {
     lines.push(`Not verified: ${plain(reason, 300)}`);
   }
@@ -65,6 +73,32 @@ function folderReport(folder: AgentFolder): string {
     lines.push(`Findings${more > 0 ? ` (the ${top.length} strongest of ${folder.findings.length})` : ""}:`, ...top.map(findingLine));
   }
   return lines.join("\n");
+}
+
+export interface AgentUpdateInput {
+  checking: boolean;
+  checkStep?: string;
+  held?: { verdict: string };
+  unheld: boolean;
+}
+
+export type AgentUpdate = { wait: string } | { notice: string };
+
+/** The govern state an agent is told. Checking waits. Held and not-held use the editor's words. */
+export function agentUpdate(state: AgentUpdateInput): AgentUpdate | undefined {
+  if (state.checking) {
+    const step = state.checkStep
+      ? `saw is checking this update: ${state.checkStep}. The folder has not changed.`
+      : "saw is checking this update. The folder has not changed.";
+    return { wait: `${step} Wait for that check before you bring files in or run anything here.` };
+  }
+  if (state.held) {
+    return { notice: `An update was held (${state.held.verdict}). The folder was not changed.` };
+  }
+  if (state.unheld) {
+    return { notice: "A change reached this folder that saw did not let in. It was not held before it landed. The verdict below is the folder as it is now." };
+  }
+  return undefined;
 }
 
 /**

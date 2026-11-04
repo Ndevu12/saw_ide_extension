@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { agentReport, type AgentFolder } from "../../src/core/agent/agent";
+import { agentReport, agentUpdate, type AgentFolder } from "../../src/core/agent/agent";
 import type { Finding } from "../../src/core/scan/contract";
 
 const found = (overrides: Partial<Finding> = {}): Finding => ({
@@ -64,6 +64,16 @@ describe("what an AI agent is told about a folder", () => {
     expect(text).toContain("Findings (the 10 strongest of 12):");
     expect(text).toContain("- confirmed, critical: .vscode/tasks.json:3 (strong-0) A folder-open task runs a file disguised as a font");
     expect(text).not.toContain("weak");
+  });
+
+  it("tells an agent the same checking, held, and not-held state the editor shows", () => {
+    const checking = agentUpdate({ checking: true, checkStep: "scanning what arrived", unheld: false });
+    expect(checking).toEqual({ wait: "saw is checking this update: scanning what arrived. The folder has not changed. Wait for that check before you bring files in or run anything here." });
+    expect(agentUpdate({ checking: false, held: { verdict: "infected" }, unheld: false })).toEqual({ notice: "An update was held (infected). The folder was not changed." });
+    const landed = agentUpdate({ checking: false, unheld: true });
+    expect(landed && "notice" in landed ? landed.notice : "").toContain("was not held before it landed");
+    expect(agentReport([folder({ notice: "An update was held (infected). The folder was not changed." })])).toContain("The folder was not changed.");
+    expect(agentUpdate({ checking: false, unheld: false })).toBeUndefined();
   });
 
   it("never passes on evidence, and flattens names from the folder to one plain line", () => {
