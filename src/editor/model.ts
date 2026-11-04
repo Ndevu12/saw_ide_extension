@@ -23,6 +23,12 @@ export interface FolderState {
   deciding: boolean;
   /** What saw says it is doing, while it scans; from a saw with `--progress=jsonl`. */
   progress: string | undefined;
+  /** Set while an incoming update is being checked and has not landed. */
+  checking: boolean;
+  /** The step saw named during that check, when it named one. */
+  checkStep: string | undefined;
+  /** A git command this window did not run changed the folder. That change was not held. */
+  unheld: boolean;
   /** Set while an incoming update is held. Cleared once that update is applied. */
   held: HeldUpdate | undefined;
   last: Settled | undefined;
@@ -95,7 +101,7 @@ export class Model implements vscode.Disposable {
     const key = folder.uri.toString();
     let state = this.folders.get(key);
     if (!state) {
-      state = { folder, scanning: false, fixing: false, deciding: false, progress: undefined, held: undefined, last: undefined };
+      state = { folder, scanning: false, fixing: false, deciding: false, progress: undefined, checking: false, checkStep: undefined, unheld: false, held: undefined, last: undefined };
       this.folders.set(key, state);
     }
     return state;
@@ -116,9 +122,42 @@ export class Model implements vscode.Disposable {
     }
   }
 
+  setChecking(folder: vscode.WorkspaceFolder, step: string | undefined): void {
+    const state = this.get(folder);
+    if (state.checking && state.checkStep === step) {
+      return;
+    }
+    state.checking = true;
+    state.checkStep = step;
+    state.unheld = false;
+    this.changed.fire();
+  }
+
+  clearChecking(folder: vscode.WorkspaceFolder): void {
+    const state = this.get(folder);
+    if (!state.checking && state.checkStep === undefined) {
+      return;
+    }
+    state.checking = false;
+    state.checkStep = undefined;
+    this.changed.fire();
+  }
+
+  setUnheld(folder: vscode.WorkspaceFolder, unheld: boolean): void {
+    const state = this.get(folder);
+    if (state.unheld === unheld) {
+      return;
+    }
+    state.unheld = unheld;
+    this.changed.fire();
+  }
+
   setHeld(folder: vscode.WorkspaceFolder, held: HeldUpdate | undefined): void {
     const state = this.get(folder);
     state.held = held;
+    if (held) {
+      state.unheld = false;
+    }
     this.changed.fire();
   }
 

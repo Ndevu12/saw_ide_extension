@@ -92,8 +92,11 @@ click.
 When the installed saw can check an incoming update, a pull, fetch, checkout, merge, rebase, or a
 GitHub command that lands files waits before it changes an open folder. The editor's integrated
 terminal is covered, and so is the Git view, except on Windows. Clean and residue are applied.
-Suspicious, infected, and a check that could not finish leave the folder as it was, and the saw view
-says the update was held. The open folder is scanned again after the check finishes.
+While the check runs, the status bar, the saw view, and Chat say saw is checking the update, and
+the step saw names when it names one. The folder is unchanged until the check finishes. Suspicious,
+infected, and a check that could not finish leave the folder as it was, and the saw view says the
+update was held. The open folder is scanned again after the check finishes. A git command this
+window did not run can still change the folder first; Chat says that change was not held.
 
 A terminal outside the editor keeps saw's scan-on-clone check. Turn this off with `saw.governUpdates`.
 

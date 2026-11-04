@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit } from "../../src/core/govern/command";
-import { mayRelease, prepareArgs, readApply, readPrepare, type GovernConfig } from "../../src/core/govern/contract";
+import { mayRelease, prepareArgs, readApply, readNotice, readPrepare, type GovernConfig } from "../../src/core/govern/contract";
 import { plan, posixWrapper } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
@@ -17,6 +17,7 @@ const config = (overrides: Partial<GovernConfig> = {}): GovernConfig => ({
   holdingRoot: "/tmp/holding",
   markerDir: "/tmp/markers",
   resultDir: "/tmp/results",
+  progress: false,
   ...overrides,
 });
 
@@ -102,6 +103,11 @@ describe("what the stand-in does", () => {
     }
   });
 
+  it("asks saw for progress events only when that saw reports them", () => {
+    expect(prepareArgs("/work/app", "/tmp/holding/abc", "git", ["pull"], true)).toContain("--progress=jsonl");
+    expect(prepareArgs("/work/app", "/tmp/holding/abc", "git", ["pull"])).not.toContain("--progress=jsonl");
+  });
+
   it("asks saw to prepare that folder, and nothing else", () => {
     expect(prepareArgs("/work/app", "/tmp/holding/abc", "git", ["pull", "origin"])).toEqual([
       "govern", "prepare", "--json", "--repo", "/work/app", "--into", "/tmp/holding/abc", "--tool", "git", "--", "pull", "origin",
@@ -136,6 +142,16 @@ describe("saw govern's report", () => {
       verdict: "incomplete",
       release: false,
     });
+  });
+
+  it("reads a checking notice, and ignores a file that is not one", () => {
+    expect(readNotice(JSON.stringify({ repo: "/work/app", phase: "checking", step: "reading git history (2/6)", reasons: [], at: 1 }))).toMatchObject({
+      phase: "checking",
+      step: "reading git history (2/6)",
+    });
+    expect(readNotice(JSON.stringify({ repo: "/work/app", phase: "held", verdict: "infected", reasons: ["a workflow arrived"], at: 2 }))?.phase).toBe("held");
+    expect(readNotice("not json")).toBeUndefined();
+    expect(readNotice(JSON.stringify({ released: true }))).toBeUndefined();
   });
 
   it("treats apply as done only when saw says the folder was updated", () => {

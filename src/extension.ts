@@ -112,7 +112,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
         controller.requestAll({ immediate: true });
       }
     }),
-    ...registerTriggers(controller, readSettings, govern),
+    ...registerTriggers(controller, readSettings, { claim: (uri) => govern.claim(uri), missed: (uri) => govern.missed(uri) }),
   );
   // Forks of VS Code may leave out the language-model API; scanning does not depend on it.
   if (typeof vscode.lm?.registerTool === "function") {

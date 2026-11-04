@@ -97,12 +97,18 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
         } else if (state.fixing) {
           item.description = "fixing…";
           item.iconPath = new vscode.ThemeIcon("sync~spin");
+        } else if (state.checking) {
+          item.description = state.checkStep ? `checking: ${state.checkStep}` : "checking this update";
+          item.iconPath = new vscode.ThemeIcon("sync~spin");
         } else if (state.scanning) {
           item.description = state.progress ? `scanning: ${state.progress}` : "scanning…";
           item.iconPath = new vscode.ThemeIcon("sync~spin");
         } else if (state.held && !state.held.released) {
           item.description = `update held: ${VERDICT_LABEL[state.held.verdict]}`;
           item.iconPath = VERDICT_ICON[state.held.verdict];
+        } else if (state.unheld && state.last) {
+          item.description = `${VERDICT_LABEL[state.last.verdict]} · not held`;
+          item.iconPath = VERDICT_ICON[state.last.verdict];
         } else if (state.last) {
           item.description = VERDICT_LABEL[state.last.verdict];
           item.iconPath = VERDICT_ICON[state.last.verdict];

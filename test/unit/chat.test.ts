@@ -63,6 +63,14 @@ describe("the sidebar chat", () => {
     expect(html).not.toContain("fix:0");
   });
 
+  it("says saw is checking an update, and when a git command was not held", () => {
+    const checking = page([folder({ verdict: "clean", checking: true, checkStep: "reading git history (2/6)" })]);
+    expect(checking).toContain("saw is checking this update: reading git history (2/6). The folder has not changed.");
+    expect(checking).toContain("checking: reading git history (2/6)");
+    const landed = page([folder({ verdict: "clean", unheld: true })]);
+    expect(landed).toContain("was not held before it landed");
+  });
+
   it("puts the primary action on its own row of the card", () => {
     const html = page([folder({ verdict: "infected" })]);
     expect(html).toContain(".actions button.primary, .actions button.danger { flex: 1 1 100%; }");

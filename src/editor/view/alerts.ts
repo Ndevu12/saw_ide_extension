@@ -69,6 +69,14 @@ export class Alerts {
     }
   }
 
+  applied(name: string, verdict: FolderVerdict): void {
+    void vscode.window.showInformationMessage(`saw checked the update to ${name} (${VERDICT_LABEL[verdict]}). The folder was updated.`);
+  }
+
+  unheld(name: string): void {
+    void vscode.window.showWarningMessage(`saw did not check a git command in ${name} before it changed the folder. The scan is of the folder as it is now.`);
+  }
+
   held(name: string, verdict: FolderVerdict): void {
     const message = `saw held an update to ${name} (${VERDICT_LABEL[verdict]}). The folder was not changed.`;
     const show = verdict === "infected" ? vscode.window.showErrorMessage : vscode.window.showWarningMessage;
