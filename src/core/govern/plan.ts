@@ -46,6 +46,26 @@ export function folderKey(folderPath: string): string {
   return createHash("sha256").update(path.resolve(folderPath)).digest("hex").slice(0, 32);
 }
 
+/** saw's stand-in beside its own program, when that file is present. */
+export function standinBeside(saw: string, isFile: (file: string) => boolean, name = "saw-git-standin"): string | undefined {
+  if (!saw) {
+    return undefined;
+  }
+  const candidate = path.join(path.dirname(saw), name);
+  return isFile(candidate) ? candidate : undefined;
+}
+
+/** The environment that turns saw's stand-in on for one command. */
+export function activationEnv(config: GovernConfig, tool: Tool, holding: string): Record<string, string> {
+  return {
+    SAW_GOVERN_HOLDING: holding,
+    SAW_REAL_GIT: config.realGit,
+    SAW_REAL_GH: config.realGh,
+    SAW_BIN: config.saw,
+    SAW_STANDIN_TOOL: tool,
+  };
+}
+
 /** A POSIX stand-in. Missing config runs the real program, so a removed extension does not keep git. */
 export function posixWrapper(node: string, shim: string, configPath: string, real: string, tool: Tool): string {
   const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
