@@ -167,7 +167,13 @@ verdict never comes from progress.
   `unknown-commit`, the editor calls that and does not check a commit out itself. `tree-changed`
   is not put back. A saw that cannot answer
   still calls out the change, except while a terminal stand-in is already in place, which leaves
-  no marker here. saw writes one record per open folder under `$XDG_STATE_HOME/saw/govern/status`
+  no marker here. Opening a folder asks `govern verdict` once for this saw, after the stand-in is
+  ready and before Git is pointed at it. `let-in` clears the arrival. `unknown-commit` is put back
+  when `restore` is offered; without it, and for `tree-changed`, the arrival is marked. No answer
+  leaves the folder alone, and the terminal stand-in's quiet case does not apply. The checking
+  line says saw is checking whether it let this folder in. A marker covers the restore, then the
+  folder is scanned and the HEAD mark is seeded so that restore is not later called unheld. saw
+  writes one record per open folder under `$XDG_STATE_HOME/saw/govern/status`
   (otherwise `~/.local/state/saw/govern/status`). The editor reads those with the same notice
   reader. Two notices for one phase a few seconds apart are one check. Git the stand-in did not
   run is still scanned by the scan-on-clone hooks.

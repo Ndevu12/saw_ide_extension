@@ -5,7 +5,7 @@ import * as nodePath from "node:path";
 import * as vscode from "vscode";
 
 import { FEATURES, supports } from "../../core/capabilities";
-import { offersGovernRestore, offersGovernVerdict, readGoverned, readNotice, readRestore, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig, type Governed, type GovernNotice } from "../../core/govern/contract";
+import { offersGovernRestore, offersGovernVerdict, openAdmission, readGoverned, readNotice, readRestore, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig, type Governed, type GovernedReading, type GovernNotice } from "../../core/govern/contract";
 import type { Tool } from "../../core/govern/command";
 import { folderKey, governStatusDir, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
 import { defaultIsExecutableFile } from "../../core/install/locate";
@@ -39,6 +39,10 @@ export class Governor implements vscode.Disposable {
   /** First time a phase was shown for a folder, so the other writer of that check is skipped. */
   private readonly shownAt = new Map<string, number>();
   private readonly gitMarks = new Map<string, string>();
+  /** Folders already asked, once per saw binary, for this window. */
+  private readonly askedOpen = new Set<string>();
+  /** A folder whose open verdict is running, so its restore does not start a second one. */
+  private readonly admitting = new Set<string>();
   private watcher: FSWatcher | undefined;
   private statusWatcher: FSWatcher | undefined;
   private sawBinary = "";
@@ -69,7 +73,10 @@ export class Governor implements vscode.Disposable {
     this.resultDir = nodePath.join(this.root, "results");
     context.subscriptions.push(
       model.onDidChange(() => this.refresh()),
-      vscode.workspace.onDidChangeWorkspaceFolders(() => this.refresh()),
+      vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        this.forgetClosed();
+        this.refresh();
+      }),
     );
     this.refresh();
   }
@@ -92,7 +99,7 @@ export class Governor implements vscode.Disposable {
       return;
     }
     const folder = vscode.workspace.getWorkspaceFolder(uri);
-    if (!folder || !this.gitMoved(uri.fsPath)) {
+    if (!folder || this.admitting.has(folder.uri.fsPath) || !this.gitMoved(uri.fsPath)) {
       return;
     }
     if (!this.verdictReady || !this.sawBinary) {
@@ -115,11 +122,7 @@ export class Governor implements vscode.Disposable {
   }
 
   private async askVerdict(folder: vscode.WorkspaceFolder): Promise<void> {
-    const run = await runProgram(this.sawBinary, verdictArgs(folder.uri.fsPath), {
-      timeoutMs: this.settings().timeoutMs,
-      maxOutputBytes: 64 * 1024,
-    });
-    const reading = run.timedOut || run.spawnError || run.cancelled ? undefined : readGoverned(run.stdout);
+    const reading = await this.verdictOf(folder);
     const code = reading?.code;
     const answer = reading?.answer ?? "could-not-answer";
     if (answer === "let-in" || code === "let-in") {
@@ -234,11 +237,121 @@ export class Governor implements vscode.Disposable {
     this.watchResults();
     if (this.verdictReady) {
       this.watchStatus();
+      await this.askOpenFolders();
     }
     await this.pointGit(nodePath.join(this.shimDir, process.platform === "win32" ? "git.cmd" : "git"));
     this.log.info(systemBin
       ? "Terminals already use saw's stand-in. The Git view still checks an incoming update."
       : "Incoming git updates in open folders wait for saw.");
+  }
+
+  /**
+   * Ask whether saw let each open folder in, once per saw for this window. A restore finishes
+   * before Git is pointed at the stand-in, because that step can reload the window.
+   */
+  private async askOpenFolders(): Promise<void> {
+    if (!this.verdictReady || !this.sawBinary) {
+      return;
+    }
+    this.forgetClosed();
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      if (folder.uri.scheme !== "file") {
+        continue;
+      }
+      const key = `${this.sawBinary}\0${folder.uri.fsPath}`;
+      if (this.askedOpen.has(key)) {
+        continue;
+      }
+      this.askedOpen.add(key);
+      await this.askOpen(folder);
+    }
+  }
+
+  private async askOpen(folder: vscode.WorkspaceFolder): Promise<void> {
+    const repo = folder.uri.fsPath;
+    this.admitting.add(repo);
+    const shown = !this.model.get(folder).checking;
+    if (shown) {
+      this.model.setChecking(folder, undefined, "admission");
+    }
+    try {
+      const decision = openAdmission(await this.verdictOf(folder), this.restoreReady);
+      const restored = decision === "restore" ? await this.restoreOpen(folder) : false;
+      if (shown && this.model.get(folder).checkAbout === "admission") {
+        this.model.clearChecking(folder);
+      }
+      if (decision === "clear" || (decision === "restore" && restored)) {
+        this.applyUnheld(folder, "let-in");
+      } else if (decision === "mark" || decision === "restore") {
+        this.applyUnheld(folder, "not-let-in");
+      }
+      if (decision === "restore" && restored) {
+        this.controller.request(folder, { immediate: true });
+      }
+    } catch (error) {
+      this.log.warn(`saw could not check whether it let ${folder.name} in: ${String(error)}`);
+    } finally {
+      this.admitting.delete(repo);
+      if (shown && this.model.get(folder).checkAbout === "admission") {
+        this.model.clearChecking(folder);
+      }
+    }
+  }
+
+  /** Put the folder back while a marker keeps a scan off the half-written tree, then record HEAD. */
+  private async restoreOpen(folder: vscode.WorkspaceFolder): Promise<boolean> {
+    const repo = folder.uri.fsPath;
+    this.holdMarker(repo);
+    try {
+      return await this.putBack(folder);
+    } finally {
+      this.seedGit(repo);
+      this.releaseMarker(repo);
+    }
+  }
+
+  private async verdictOf(folder: vscode.WorkspaceFolder): Promise<GovernedReading | undefined> {
+    const run = await runProgram(this.sawBinary, verdictArgs(folder.uri.fsPath), {
+      timeoutMs: this.settings().timeoutMs,
+      maxOutputBytes: 64 * 1024,
+    });
+    if (run.timedOut || run.spawnError || run.cancelled) {
+      return undefined;
+    }
+    return readGoverned(run.stdout);
+  }
+
+  private holdMarker(folder: string): void {
+    mkdirSync(this.markerDir, { recursive: true });
+    writeFileSync(nodePath.join(this.markerDir, folderKey(folder)), String(Date.now()));
+  }
+
+  private releaseMarker(folder: string): void {
+    rmSync(nodePath.join(this.markerDir, folderKey(folder)), { force: true });
+  }
+
+  /** The restore's HEAD is the one this window has now, so a later watcher does not call it unheld. */
+  private seedGit(folder: string): void {
+    for (const name of ["HEAD", "ORIG_HEAD"]) {
+      const file = nodePath.join(folder, ".git", name);
+      let text: string;
+      try {
+        text = readFileSync(file, "utf8");
+      } catch {
+        text = "";
+      }
+      this.gitMarks.set(file, text);
+    }
+  }
+
+  private forgetClosed(): void {
+    const open = new Set(this.folders());
+    for (const key of this.askedOpen) {
+      const folder = key.slice(key.indexOf("\0") + 1);
+      if (!open.has(folder)) {
+        this.askedOpen.delete(key);
+      }
+    }
   }
 
   /** `saw govern install` wrote this directory. Absent when that step has not been run. */

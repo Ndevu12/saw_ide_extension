@@ -1,3 +1,4 @@
+import { checkingSentence } from "../chat/transcript";
 import { CONFIDENCES, SEVERITIES, type Finding } from "../scan/contract";
 import { plain } from "../text";
 import type { FolderVerdict } from "../scan/verdict";
@@ -78,6 +79,8 @@ function folderReport(folder: AgentFolder): string {
 export interface AgentUpdateInput {
   checking: boolean;
   checkStep?: string;
+  /** An update landing, or the tree already open. The words differ. */
+  checkAbout?: "update" | "admission";
   held?: { verdict: string };
   unheld: boolean;
 }
@@ -87,10 +90,7 @@ export type AgentUpdate = { wait: string } | { notice: string };
 /** The govern state an agent is told. Checking waits. Held and not-held use the editor's words. */
 export function agentUpdate(state: AgentUpdateInput): AgentUpdate | undefined {
   if (state.checking) {
-    const step = state.checkStep
-      ? `saw is checking this update: ${state.checkStep}. The folder has not changed.`
-      : "saw is checking this update. The folder has not changed.";
-    return { wait: `${step} Wait for that check before you bring files in or run anything here.` };
+    return { wait: `${checkingSentence(state.checkAbout, state.checkStep)} Wait for that check before you bring files in or run anything here.` };
   }
   if (state.held) {
     return { notice: `An update was held (${state.held.verdict}). The folder was not changed.` };

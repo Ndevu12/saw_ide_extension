@@ -74,6 +74,8 @@ describe("what an AI agent is told about a folder", () => {
     expect(landed && "notice" in landed ? landed.notice : "").toContain("was not held before it landed");
     expect(agentReport([folder({ notice: "An update was held (infected). The folder was not changed." })])).toContain("The folder was not changed.");
     expect(agentUpdate({ checking: false, unheld: false })).toBeUndefined();
+    const opening = agentUpdate({ checking: true, checkAbout: "admission", unheld: false });
+    expect(opening).toEqual({ wait: "saw is checking whether it let this folder in. The folder has not changed. Wait for that check before you bring files in or run anything here." });
   });
 
   it("never passes on evidence, and flattens names from the folder to one plain line", () => {

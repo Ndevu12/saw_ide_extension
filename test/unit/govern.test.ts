@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit } from "../../src/core/govern/command";
-import { mayRelease, offersGovernRestore, offersGovernVerdict, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
+import { mayRelease, offersGovernRestore, offersGovernVerdict, openAdmission, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
 import { activationEnv, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
@@ -202,6 +202,20 @@ describe("saw govern's report", () => {
     expect(shouldRestore(undefined, true)).toBe(false);
     expect(offersGovernRestore("  {prepare,apply,verdict,restore}\n")).toBe(true);
     expect(offersGovernRestore("  {prepare,apply,verdict}\n")).toBe(false);
+  });
+
+  it("decides an open folder from the verdict, and leaves no answer alone", () => {
+    const unknown = { answer: "not-let-in" as const, code: "unknown-commit" as const };
+    const changed = { answer: "not-let-in" as const, code: "tree-changed" as const };
+    expect(openAdmission({ answer: "let-in" }, false)).toBe("clear");
+    expect(openAdmission({ answer: "let-in", code: "let-in" }, true)).toBe("clear");
+    expect(openAdmission(unknown, true)).toBe("restore");
+    expect(openAdmission(unknown, false)).toBe("mark");
+    expect(openAdmission(changed, true)).toBe("mark");
+    expect(openAdmission({ answer: "not-let-in" }, true)).toBe("mark");
+    expect(openAdmission({ answer: "could-not-answer" }, true)).toBe("leave");
+    expect(openAdmission({ answer: "not-let-in", code: "could-not-answer" }, false)).toBe("leave");
+    expect(openAdmission(undefined, true)).toBe("leave");
   });
 
   it("calls out a tree saw did not let in, and stays quiet when saw already let it in", () => {

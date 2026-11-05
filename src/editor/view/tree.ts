@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 
+import { checkingBadge } from "../../core/chat/transcript";
 import type { Finding } from "../../core/scan/contract";
 import { plain } from "../../core/text";
 import { findingRange, findingUri } from "../scan/diagnostics";
@@ -98,7 +99,7 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
           item.description = "fixing…";
           item.iconPath = new vscode.ThemeIcon("sync~spin");
         } else if (state.checking) {
-          item.description = state.checkStep ? `checking: ${state.checkStep}` : "checking this update";
+          item.description = checkingBadge(state.checkAbout, state.checkStep);
           item.iconPath = new vscode.ThemeIcon("sync~spin");
         } else if (state.scanning) {
           item.description = state.progress ? `scanning: ${state.progress}` : "scanning…";
