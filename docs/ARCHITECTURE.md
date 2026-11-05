@@ -23,7 +23,7 @@ src/
     scan/               controller, triggers, diagnostics
     fix/                Fix…, the Decide view, diffs
     install/            find saw, install it, the install lock
-    view/               the saw sidebar, the chat webview, status bar, alerts, reports
+    view/               the saw sidebar, the chat webview, the verdict and decide editor tabs, status bar, alerts, reports
     feedback/           opens the rating, star, and issue pages; stores the dismissal
     agent/              the language-model tool, MCP registration, the Cursor guard
 test/

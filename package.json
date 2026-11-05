@@ -120,8 +120,14 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "saw.openVerdict",
+        "title": "Open Verdict",
+        "category": "saw",
+        "icon": "$(open-preview)"
+      },
+      {
         "command": "saw.decideShow",
-        "title": "Show the Decision",
+        "title": "Open the Decision",
         "category": "saw",
         "icon": "$(open-preview)"
       },
@@ -230,6 +236,11 @@
           "command": "saw.scanWorkspace",
           "when": "view == saw.findings || view == saw.chat",
           "group": "navigation"
+        },
+        {
+          "command": "saw.openVerdict",
+          "when": "view == saw.findings || view == saw.chat",
+          "group": "navigation@2"
         },
         {
           "command": "saw.openDocumentation",

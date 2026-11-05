@@ -1,7 +1,8 @@
-// The sidebar chat, as data and HTML. No editor API: every VS Code-based IDE hosts the same webview.
+// The sidebar chat and the editor tab, as data and HTML. No editor API: every VS Code-based IDE hosts the same webview.
 
-import { plain } from "../text";
 import type { FolderVerdict } from "../scan/verdict";
+import { plain } from "../text";
+import { pageDocument } from "./brand";
 
 /** How many findings a card lists. The rest stay in the report. */
 export const SHOWN_FINDINGS = 6;
@@ -158,6 +159,9 @@ function folderCard(folder: ChatFolderInput, index: string | number): ChatCard {
   if (folder.checking) {
     paragraphs.unshift(checkingSentence(folder.checkAbout, folder.checkStep));
   }
+  if (folder.phase === "scanning" && folder.progress) {
+    paragraphs.unshift(folder.progress);
+  }
   if (folder.held) {
     paragraphs.push(`An update was held (${VERDICT_BADGE[folder.held.verdict]}). The folder was not changed.`);
     paragraphs.push(...folder.held.reasons);
@@ -195,10 +199,10 @@ function folderCard(folder: ChatFolderInput, index: string | number): ChatCard {
 
 function badge(folder: ChatFolderInput): string {
   if (folder.checking) {
-    return checkingBadge(folder.checkAbout, folder.checkStep);
+    return "checking";
   }
   if (folder.phase === "scanning") {
-    return folder.progress ? `scanning: ${folder.progress}` : "scanning";
+    return "scanning";
   }
   if (folder.phase === "fixing") {
     return "fixing";
@@ -212,13 +216,14 @@ function badge(folder: ChatFolderInput): string {
 function folderActions(folder: ChatFolderInput, index: string | number): ChatButton[] {
   const actions: ChatButton[] = [];
   if (folder.phase === "deciding") {
-    actions.push({ act: `decide:${index}`, label: "Show the decision", tone: "primary" });
+    actions.push({ act: `decide:${index}`, label: "Open the decision", tone: "primary" });
   } else if (folder.verdict === "infected" && folder.phase === "idle") {
     actions.push({ act: `fix:${index}`, label: "Fix the checkout", tone: "danger" });
   }
   if (folder.phase !== "scanning") {
     actions.push({ act: `scan:${index}`, label: folder.verdict ? "Scan again" : "Scan this folder", tone: folder.verdict ? "secondary" : "primary" });
   }
+  actions.push({ act: `verdict:${index}`, label: "Open verdict", tone: "secondary" });
   if (folder.verdict) {
     actions.push({ act: `report:${index}`, label: "Open the scan report", tone: "secondary" });
   }
@@ -284,58 +289,22 @@ function machineCard(machine: ChatMachineInput): ChatCard {
   };
 }
 
-/** Buttons that match the editor's own button colors, in a webview. */
-export function buttonCss(): string {
-  return `
-    button { font: inherit; cursor: pointer; border-radius: 6px; padding: 6px 12px; border: 1px solid transparent; }
-    button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
-    button.primary:hover { background: var(--vscode-button-hoverBackground); }
-    button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
-    button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
-    button.danger { background: transparent; color: var(--vscode-errorForeground); border-color: var(--vscode-errorForeground); }
-    button:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
-  `;
-}
-
-/** The chat page. Every string from a scan is escaped, so it cannot become markup. */
-export function renderChat(cards: ChatCard[], nonce: string): string {
-  const body = cards.map((card) => cardHtml(card)).join("");
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${escapeHtml(nonce)}'; script-src 'nonce-${escapeHtml(nonce)}'">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style nonce="${escapeHtml(nonce)}">
-  body { margin: 0; padding: 12px; font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-sideBar-background); font-size: var(--vscode-font-size); }
-  .thread { display: flex; flex-direction: column; gap: 12px; }
-  .who { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin: 0 0 4px; }
-  .card { border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border)); border-radius: 8px; padding: 10px 12px; background: var(--vscode-editor-background); }
-  .card.bad { border-color: var(--vscode-inputValidation-errorBorder); }
-  .card.warn { border-color: var(--vscode-inputValidation-warningBorder); }
-  .card.ok { border-color: var(--vscode-testing-iconPassed, var(--vscode-inputValidation-infoBorder)); }
-  .head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
-  .title { font-weight: 600; }
-  p { margin: 0 0 8px; line-height: 1.45; }
-  .rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
-  .rows button { text-align: left; width: 100%; background: var(--vscode-list-hoverBackground); color: var(--vscode-foreground); }
-  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-  .actions button.primary, .actions button.danger { flex: 1 1 100%; }
-  ${buttonCss()}
-</style>
-</head>
-<body>
-<div class="thread">${body}</div>
-<script nonce="${escapeHtml(nonce)}">
+const CHAT_SCRIPT = `
   const vscode = acquireVsCodeApi();
   document.body.addEventListener("click", (event) => {
     const button = event.target instanceof Element ? event.target.closest("button[data-act]") : null;
     if (!button) return;
     vscode.postMessage({ act: button.getAttribute("data-act") });
   });
-</script>
-</body>
-</html>`;
+`;
+
+/** The chat page. Every string from a scan is escaped, so it cannot become markup. */
+export function renderChat(cards: ChatCard[], nonce: string, place: "side" | "editor" = "side"): string {
+  const mark = place === "editor"
+    ? `<header class="mark"><p class="word">stayAwakeBot</p><p class="tag">the sentinel saw the worm</p></header>`
+    : "";
+  const body = `${mark}<div class="thread">${cards.map((card) => cardHtml(card)).join("")}</div>`;
+  return pageDocument(nonce, body, CHAT_SCRIPT, place);
 }
 
 function cardHtml(card: ChatCard): string {
@@ -349,7 +318,7 @@ function cardHtml(card: ChatCard): string {
   return `<article>
     <p class="who">saw</p>
     <section class="card ${card.tone}">
-      <div class="head"><span class="badge">${escapeHtml(plain(card.badge, 80))}</span><span class="title">${escapeHtml(plain(card.title, 120))}</span></div>
+      <div class="head"><span class="badge">${escapeHtml(plain(card.badge, 40))}</span><h2 class="title">${escapeHtml(plain(card.title, 120))}</h2></div>
       ${paragraphs}${rows}${actions}
     </section>
   </article>`;
