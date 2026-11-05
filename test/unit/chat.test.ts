@@ -69,6 +69,9 @@ describe("the sidebar chat", () => {
     expect(checking).toContain("checking: reading git history (2/6)");
     const landed = page([folder({ verdict: "clean", unheld: true })]);
     expect(landed).toContain("was not held before it landed");
+    const opened = page([folder({ verdict: "clean", unheld: true, unheldFrom: "open" })]);
+    expect(opened).toContain("This folder is not a commit saw let in, and it was not put back.");
+    expect(opened).not.toContain("git command");
     const opening = page([folder({ verdict: "clean", checking: true, checkAbout: "admission" })]);
     expect(opening).toContain("saw is checking whether it let this folder in. The folder has not changed.");
     expect(opening).toContain("checking this folder");

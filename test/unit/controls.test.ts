@@ -30,7 +30,11 @@ describe("owned settings", () => {
     const properties = Object.keys((JSON.parse(readFileSync("package.json", "utf8")) as { contributes: { configuration: { properties: Record<string, unknown> } } }).contributes.configuration.properties);
     expect(properties.sort()).toEqual(SAW_KEYS.map((key) => `saw.${key}`).sort());
     expect(PROJECT_GIT).toBe("git.path");
-    expect(STRICT_SETTINGS).toEqual([{ key: "security.workspace.trust.untrustedFiles", value: "newWindow" }]);
+    expect(STRICT_SETTINGS).toEqual([
+      { key: "security.workspace.trust.untrustedFiles", value: "newWindow" },
+      { key: "extensions.ignoreRecommendations", value: true },
+      { key: "task.autoDetect", value: "off" },
+    ]);
     expect(AUTOMATIC_TASKS).toBe("task.allowAutomaticTasks");
   });
 

@@ -102,6 +102,35 @@ export type Probed =
   | { kind: "too-old"; binary: string; version: Version; minimum: string }
   | { kind: "unrecognised"; binary: string; detail: string };
 
+/** True when both paths are the saw this extension installed, including when one is a symlink to the other. */
+export function sameInstall(found: string, installed: string | undefined, canonical: (file: string) => string | undefined): boolean {
+  if (!installed) {
+    return false;
+  }
+  if (found === installed) {
+    return true;
+  }
+  const left = canonical(found);
+  const right = canonical(installed);
+  return left !== undefined && left === right;
+}
+
+/**
+ * The saw this extension installed is moved to the pin when it is older. `saw.path` decides on
+ * its own, and a saw someone else installed is not replaced.
+ */
+export function movesToPin(configured: string, autoInstall: boolean, ours: boolean, version: Version, pin: string): boolean {
+  if (configured.trim() || !autoInstall || !ours) {
+    return false;
+  }
+  return !atLeast(version, pin);
+}
+
+/** The first saw that meets the pin. An older one earlier on PATH is not chosen once a pinned one is present. */
+export function sawToRun<T extends { version: Version }>(candidates: readonly T[], pin: string): T | undefined {
+  return candidates.find((candidate) => atLeast(candidate.version, pin)) ?? candidates[0];
+}
+
 /** Ask a located program for its version, so a stale or foreign `saw` is never trusted with a verdict. */
 export async function probe(binary: string, timeoutMs = 15_000): Promise<Probed> {
   const run = await runProgram(binary, ["--version"], { timeoutMs, maxOutputBytes: 64 * 1024 });

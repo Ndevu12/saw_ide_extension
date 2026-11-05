@@ -180,7 +180,7 @@ function folderInput(state: FolderState, decide: Decide, lastFix: (folder: vscod
     findings,
     ...(held ? { held } : {}),
     ...(state.checking ? { checking: true, ...(state.checkStep ? { checkStep: state.checkStep } : {}), ...(state.checkAbout ? { checkAbout: state.checkAbout } : {}) } : {}),
-    ...(state.unheld ? { unheld: true } : {}),
+    ...(state.unheld ? { unheld: true, ...(state.unheldFrom ? { unheldFrom: state.unheldFrom } : {}) } : {}),
     ...decisionOf(state, decide),
     ...cleanupOf(lastFix(state.folder)),
   };

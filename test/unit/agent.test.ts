@@ -71,11 +71,14 @@ describe("what an AI agent is told about a folder", () => {
     expect(checking).toEqual({ wait: "saw is checking this update: scanning what arrived. The folder has not changed. Wait for that check before you bring files in or run anything here." });
     expect(agentUpdate({ checking: false, held: { verdict: "infected" }, unheld: false })).toEqual({ notice: "An update was held (infected). The folder was not changed." });
     const landed = agentUpdate({ checking: false, unheld: true });
-    expect(landed && "notice" in landed ? landed.notice : "").toContain("was not held before it landed");
+    expect(landed && "notice" in landed ? landed.notice : "").toContain("A change reached this folder that saw did not let in. It was not held before it landed.");
+    expect(landed && "notice" in landed ? landed.notice : "").not.toContain("git command");
     expect(agentReport([folder({ notice: "An update was held (infected). The folder was not changed." })])).toContain("The folder was not changed.");
     expect(agentUpdate({ checking: false, unheld: false })).toBeUndefined();
     const opening = agentUpdate({ checking: true, checkAbout: "admission", unheld: false });
     expect(opening).toEqual({ wait: "saw is checking whether it let this folder in. The folder has not changed. Wait for that check before you bring files in or run anything here." });
+    const admitted = agentUpdate({ checking: false, unheld: true, unheldFrom: "open" });
+    expect(admitted && "notice" in admitted ? admitted.notice : "").toContain("not a commit saw let in, and it was not put back.");
   });
 
   it("never passes on evidence, and flattens names from the folder to one plain line", () => {

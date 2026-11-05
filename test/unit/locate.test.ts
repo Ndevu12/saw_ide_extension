@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { locate, probe, type LocateEnv } from "../../src/core/install/locate";
+import { locate, movesToPin, probe, sameInstall, sawToRun, type LocateEnv } from "../../src/core/install/locate";
 import { fakeSaw, onWindows } from "./helpers";
 
 function env(executables: string[], overrides: Partial<LocateEnv> = {}): LocateEnv {
@@ -65,6 +65,31 @@ describe("locate", () => {
   it("names every place it looked when saw is missing", () => {
     const result = locate("", env([]));
     expect(result).toEqual({ kind: "missing", searched: ["/usr/bin/saw", "/bin/saw", "/home/me/.local/bin/saw"] });
+  });
+});
+
+describe("which saw runs", () => {
+  it("treats a symlink and its target as the saw this extension installed", () => {
+    const canonical = (file: string) => (file === "/usr/bin/saw" || file === "/home/me/.local/bin/saw" ? "/data/saw" : file);
+    expect(sameInstall("/usr/bin/saw", "/home/me/.local/bin/saw", canonical)).toBe(true);
+    expect(sameInstall("/opt/saw", "/home/me/.local/bin/saw", canonical)).toBe(false);
+    expect(sameInstall("/opt/saw", undefined, canonical)).toBe(false);
+  });
+
+  it("moves the extension's saw up to the pin, and leaves anyone else's where it is", () => {
+    expect(movesToPin("", true, true, [0, 15, 0], "0.16.0")).toBe(true);
+    expect(movesToPin("", true, true, [0, 16, 0], "0.16.0")).toBe(false);
+    expect(movesToPin("", true, false, [0, 15, 0], "0.16.0")).toBe(false);
+    expect(movesToPin("/opt/saw", true, true, [0, 15, 0], "0.16.0")).toBe(false);
+    expect(movesToPin("", false, true, [0, 15, 0], "0.16.0")).toBe(false);
+  });
+
+  it("runs a saw that meets the pin ahead of an older one earlier on PATH", () => {
+    const older = { version: [0, 15, 0] as const, binary: "/usr/bin/saw" };
+    const pinned = { version: [0, 16, 0] as const, binary: "/home/me/.local/bin/saw" };
+    expect(sawToRun([older, pinned], "0.16.0")).toBe(pinned);
+    expect(sawToRun([pinned, older], "0.16.0")).toBe(pinned);
+    expect(sawToRun([older], "0.16.0")).toBe(older);
   });
 });
 

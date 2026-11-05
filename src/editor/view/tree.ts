@@ -108,7 +108,7 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
           item.description = `update held: ${VERDICT_LABEL[state.held.verdict]}`;
           item.iconPath = VERDICT_ICON[state.held.verdict];
         } else if (state.unheld && state.last) {
-          item.description = `${VERDICT_LABEL[state.last.verdict]} · not held`;
+          item.description = state.unheldFrom === "open" ? `${VERDICT_LABEL[state.last.verdict]} · not let in` : `${VERDICT_LABEL[state.last.verdict]} · not held`;
           item.iconPath = VERDICT_ICON[state.last.verdict];
         } else if (state.last) {
           item.description = VERDICT_LABEL[state.last.verdict];

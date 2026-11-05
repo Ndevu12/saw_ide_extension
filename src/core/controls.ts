@@ -25,7 +25,11 @@ export const PROJECT_GIT = "git.path";
  * User settings put back while a folder is not in the clear. The previous user value is restored
  * when every open folder is.
  */
-export const STRICT_SETTINGS = [{ key: "security.workspace.trust.untrustedFiles", value: "newWindow" }] as const;
+export const STRICT_SETTINGS = [
+  { key: "security.workspace.trust.untrustedFiles", value: "newWindow" },
+  { key: "extensions.ignoreRecommendations", value: true },
+  { key: "task.autoDetect", value: "off" },
+] as const;
 
 /** The editor's own switch for tasks that run because a folder opened. Held off; the extension asks first. */
 export const AUTOMATIC_TASKS = "task.allowAutomaticTasks";

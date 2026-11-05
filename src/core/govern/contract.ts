@@ -19,6 +19,11 @@ export interface GovernConfig {
   progress: boolean;
   /** saw's git/gh stand-in, when this saw ships one beside its own program. */
   standin?: string;
+  /**
+   * `core.hooksPath` for git aimed at an open folder. The operator's own hooks when those sit
+   * outside the folder, otherwise an empty directory this extension owns.
+   */
+  quietHooks?: string;
 }
 
 /** Clean and residue may change the open folder. Anything else waits. */

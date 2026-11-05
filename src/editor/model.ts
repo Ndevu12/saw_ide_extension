@@ -29,8 +29,10 @@ export interface FolderState {
   checkStep: string | undefined;
   /** An update landing, or the tree already open. The words differ. */
   checkAbout: "update" | "admission" | undefined;
-  /** A git command this window did not run changed the folder. That change was not held. */
+  /** A git command this window did not run changed the folder, or the open folder is not a commit saw let in. */
   unheld: boolean;
+  /** Which of those two the line should name. Unset when nothing is unheld. */
+  unheldFrom: "command" | "open" | undefined;
   /** Set while an incoming update is held. Cleared once that update is applied. */
   held: HeldUpdate | undefined;
   last: Settled | undefined;
@@ -103,7 +105,7 @@ export class Model implements vscode.Disposable {
     const key = folder.uri.toString();
     let state = this.folders.get(key);
     if (!state) {
-      state = { folder, scanning: false, fixing: false, deciding: false, progress: undefined, checking: false, checkStep: undefined, checkAbout: undefined, unheld: false, held: undefined, last: undefined };
+      state = { folder, scanning: false, fixing: false, deciding: false, progress: undefined, checking: false, checkStep: undefined, checkAbout: undefined, unheld: false, unheldFrom: undefined, held: undefined, last: undefined };
       this.folders.set(key, state);
     }
     return state;
@@ -133,6 +135,7 @@ export class Model implements vscode.Disposable {
     state.checkStep = step;
     state.checkAbout = about;
     state.unheld = false;
+    state.unheldFrom = undefined;
     this.changed.fire();
   }
 
@@ -147,12 +150,14 @@ export class Model implements vscode.Disposable {
     this.changed.fire();
   }
 
-  setUnheld(folder: vscode.WorkspaceFolder, unheld: boolean): void {
+  setUnheld(folder: vscode.WorkspaceFolder, unheld: boolean, from: "command" | "open" = "command"): void {
     const state = this.get(folder);
-    if (state.unheld === unheld) {
+    const next = unheld ? from : undefined;
+    if (state.unheld === unheld && state.unheldFrom === next) {
       return;
     }
     state.unheld = unheld;
+    state.unheldFrom = next;
     this.changed.fire();
   }
 
@@ -161,6 +166,7 @@ export class Model implements vscode.Disposable {
     state.held = held;
     if (held) {
       state.unheld = false;
+      state.unheldFrom = undefined;
     }
     this.changed.fire();
   }

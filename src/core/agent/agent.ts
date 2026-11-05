@@ -1,4 +1,4 @@
-import { checkingSentence } from "../chat/transcript";
+import { checkingSentence, unheldSentence } from "../chat/transcript";
 import { CONFIDENCES, SEVERITIES, type Finding } from "../scan/contract";
 import { plain } from "../text";
 import type { FolderVerdict } from "../scan/verdict";
@@ -83,6 +83,8 @@ export interface AgentUpdateInput {
   checkAbout?: "update" | "admission";
   held?: { verdict: string };
   unheld: boolean;
+  /** A missed git command, or a folder that was already not a commit saw let in. */
+  unheldFrom?: "command" | "open";
 }
 
 export type AgentUpdate = { wait: string } | { notice: string };
@@ -96,7 +98,7 @@ export function agentUpdate(state: AgentUpdateInput): AgentUpdate | undefined {
     return { notice: `An update was held (${state.held.verdict}). The folder was not changed.` };
   }
   if (state.unheld) {
-    return { notice: "A change reached this folder that saw did not let in. It was not held before it landed. The verdict below is the folder as it is now." };
+    return { notice: `${unheldSentence(state.unheldFrom, "agent")} The verdict below is the folder as it is now.` };
   }
   return undefined;
 }

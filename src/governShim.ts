@@ -4,7 +4,7 @@ import * as path from "node:path";
 
 import { applyArgs, prepareArgs, readApply, readPrepare, type GovernConfig, type GovernPhase } from "./core/govern/contract";
 import { activationEnv, folderKey, plan } from "./core/govern/plan";
-import type { Tool } from "./core/govern/command";
+import { enclosingFolder, parseGit, quietGit, repoConfigText, silencedRepoConfig, type Tool } from "./core/govern/command";
 import { runProgram } from "./core/run";
 import { describeProgress, ProgressLines } from "./core/scan/progress";
 import type { FolderVerdict } from "./core/scan/verdict";
@@ -51,10 +51,11 @@ function runPlaced(config: GovernConfig, tool: Tool, args: readonly string[], ho
     onExit(1, true);
     return;
   }
-  const child = spawn(standin, args, {
+  const guarded = guardGit(config, tool, args);
+  const child = spawn(standin, guarded.args, {
     stdio: ["inherit", "inherit", "pipe"],
     shell: false,
-    env: { ...process.env, ...activationEnv(config, tool, holding) },
+    env: { ...guarded.env, ...activationEnv(config, tool, holding) },
   });
   let failed = false;
   child.stderr?.on("data", (chunk: Buffer) => {
@@ -84,11 +85,40 @@ function runRealOrExit(config: GovernConfig, tool: Tool, args: readonly string[]
     process.stderr.write(`saw could not find ${tool}.\n`);
     process.exit(127);
   }
-  runReal(program, args);
+  const guarded = guardGit(config, tool, args);
+  runReal(program, guarded.args, guarded.env);
 }
 
-function runReal(program: string, args: readonly string[]): void {
-  const child = spawn(program, args, { stdio: "inherit", shell: false });
+/** Git aimed at an open folder does not run that folder's fsmonitor, external diff, hooks, or other filters. */
+function guardGit(config: GovernConfig, tool: Tool, args: readonly string[]): { args: readonly string[]; env: NodeJS.ProcessEnv } {
+  if (tool !== "git" || !config.quietHooks) {
+    return { args, env: process.env };
+  }
+  const directory = parseGit(args, process.cwd())?.directory ?? process.cwd();
+  const repo = enclosingFolder(config.folders, directory);
+  if (!repo) {
+    return { args, env: process.env };
+  }
+  const text = repoConfigText(repo, (file) => {
+    try {
+      return readFileSync(file, "utf8");
+    } catch {
+      return undefined;
+    }
+  });
+  return { args: quietGit(args, config.quietHooks, silencedRepoConfig(text)), env: withoutConfigInjection(process.env) };
+}
+
+function injectsConfig(key: string): boolean {
+  return key === "GIT_CONFIG" || key === "GIT_CONFIG_PARAMETERS" || key === "GIT_CONFIG_COUNT" || /^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(key);
+}
+
+function withoutConfigInjection(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(source).filter(([key]) => !injectsConfig(key)));
+}
+
+function runReal(program: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): void {
+  const child = spawn(program, args, { stdio: "inherit", shell: false, env });
   child.on("error", () => process.exit(127));
   child.on("exit", (code, signal) => {
     if (signal) {
@@ -151,7 +181,8 @@ async function main(): Promise<void> {
       process.stderr.write(`saw could not find ${tool}.\n`);
       process.exit(127);
     }
-    runReal(action.program, args);
+    const guarded = guardGit(config, tool, args);
+    runReal(action.program, guarded.args, guarded.env);
     return;
   }
   const steps = new ProgressLines((progress) => {
