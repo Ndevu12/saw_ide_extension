@@ -11,6 +11,7 @@ type Node =
   | { kind: "machine" }
   | { kind: "audit" }
   | { kind: "hooks" }
+  | { kind: "watch" }
   | { kind: "folder"; state: FolderState }
   | { kind: "reason"; text: string }
   | { kind: "finding"; target: string; finding: Finding; advisory: boolean }
@@ -38,7 +39,7 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
       return [...this.model.states().map((state): Node => ({ kind: "folder", state })), { kind: "machine" }];
     }
     if (node.kind === "machine") {
-      return [{ kind: "audit" }, { kind: "hooks" }];
+      return [{ kind: "audit" }, { kind: "hooks" }, { kind: "watch" }];
     }
     if (node.kind === "hooks") {
       const hooks = this.model.machine.hooks;
@@ -87,6 +88,8 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
         return this.auditItem();
       case "hooks":
         return this.hooksItem();
+      case "watch":
+        return this.watchItem();
       case "folder": {
         const { state } = node;
         const item = new vscode.TreeItem(state.folder.name, vscode.TreeItemCollapsibleState.Expanded);
@@ -219,6 +222,28 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
         item.tooltip = plain(hooks.detail, 600);
         return item;
     }
+  }
+
+  private watchItem(): vscode.TreeItem {
+    const { readingWatch, watch } = this.model.machine;
+    const item = new vscode.TreeItem("Watch report");
+    item.contextValue = "watch";
+    item.command = { command: "saw.openWatchReport", title: "Open Watch Report" };
+    if (readingWatch) {
+      item.description = "reading…";
+      item.iconPath = new vscode.ThemeIcon("sync~spin");
+      return item;
+    }
+    if (!watch) {
+      item.description = "not read yet";
+      item.iconPath = new vscode.ThemeIcon("eye");
+      item.tooltip = "Open what saw watch has reported: whether it is in place, what is still open, and what happened since the last report.";
+      return item;
+    }
+    item.description = plain(watch.line, 80);
+    item.iconPath = new vscode.ThemeIcon("eye");
+    item.tooltip = `${plain(watch.line, 600)}\nRead ${new Date(watch.at).toLocaleString()}. Click to read it again.`;
+    return item;
   }
 
   dispose(): void {

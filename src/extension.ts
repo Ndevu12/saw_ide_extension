@@ -93,13 +93,14 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     vscode.commands.registerCommand("saw.openReport", async (arg?: unknown) => {
       const kind = (arg as { kind?: unknown } | undefined)?.kind;
       const folder = folderOf(arg);
-      const uri = kind === "audit" || kind === "hooks" ? reports.machineUri(kind) : folder ? reports.scanUri(folder) : await reports.choose();
+      const uri = kind === "audit" || kind === "hooks" || kind === "watch" ? reports.machineUri(kind) : folder ? reports.scanUri(folder) : await reports.choose();
       if (uri) {
         await reports.open(uri);
       }
     }),
     vscode.commands.registerCommand("saw.fixFolder", (arg?: unknown) => actions.fixFolder(folderOf(arg))),
     vscode.commands.registerCommand("saw.auditMachine", () => actions.auditMachine()),
+    vscode.commands.registerCommand("saw.openWatchReport", () => actions.openWatchReport()),
     vscode.commands.registerCommand("saw.installHooks", () => actions.hooks("install")),
     vscode.commands.registerCommand("saw.repairHooks", () => actions.hooks("repair")),
     vscode.commands.registerCommand("saw.copyDiagnostics", async () => {

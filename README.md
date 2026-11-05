@@ -48,9 +48,10 @@ The saw sidebar opens on **Chat**. Each open folder is a card: the verdict, what
 ### Reports you can read
 
 **Open Report** opens a folder's scan as a document in an editor tab: the verdict, what to do, and
-every finding with its remedy and evidence. Fix, Audit and the hook commands open their own reports,
-which update live as saw works. Reports are kept in the extension's own storage, never in your
-project.
+every finding with its remedy and evidence. Fix, Audit, the hook commands, and **Open Watch Report**
+open their own reports, which update live as saw works. The watch report is what `saw watch status`
+says: whether the watcher is in place, what is still open, and what happened since the last report.
+Reports are kept in the extension's own storage, never in your project.
 
 ### Fix an infected folder
 
@@ -179,7 +180,8 @@ All commands are in the Command Palette under **saw:**.
 | Command | What it does |
 | --- | --- |
 | **Scan Workspace** | Scan every workspace folder now. |
-| **Open Report** | Open a folder's scan report, or the audit or hooks report. |
+| **Open Report** | Open a folder's scan report, or the audit, hooks, or watch report. |
+| **Open Watch Report** | Read what `saw watch` has reported. |
 | **Fix Folder…** | Clean an infected folder with `saw fix`, after you confirm. |
 | **Show the Decision** | Open the diff for a fix that is waiting on you. |
 | **Audit This Machine** | Check whether changing credentials is safe yet. |

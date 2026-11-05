@@ -107,6 +107,8 @@ export class ChatView implements vscode.Disposable {
       ...(audit ? { auditLabel: AUDIT_LABEL[audit.verdict] } : {}),
       hooks: hooksKind(hooks),
       ...(detail ? { hooksDetail: detail } : {}),
+      readingWatch: this.model.machine.readingWatch,
+      ...(this.model.machine.watch ? { watchLine: this.model.machine.watch.line } : {}),
     };
   }
 
@@ -157,6 +159,9 @@ export class ChatView implements vscode.Disposable {
       }
       case "audit":
         void vscode.commands.executeCommand("saw.auditMachine");
+        return;
+      case "watch":
+        void vscode.commands.executeCommand("saw.openWatchReport");
         return;
       case "hooks":
         if (first === "install") {

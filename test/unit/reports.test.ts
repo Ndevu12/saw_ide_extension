@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parsePayload } from "../../src/core/scan/contract";
 import { DOCS } from "../../src/core/docs";
 import { block, inline, prose, webLink } from "../../src/core/report/markdown";
-import { auditReport, fixReport, hooksReport, scanReport, type SettledScan } from "../../src/core/report/reports";
+import { auditReport, fixReport, hooksReport, scanReport, watchReport, type SettledScan } from "../../src/core/report/reports";
 import { judge } from "../../src/core/scan/verdict";
 import { finding, report, target } from "./helpers";
 
@@ -161,11 +161,21 @@ describe("the command reports", () => {
       .toContain("Install Scan-on-Clone Hooks");
   });
 
+  it("watch: saw's status, kept as text", () => {
+    const text = watchReport({ run: { ...run, said: "Watch is in place.\nSince the last report: nothing arrived.\n<img>" }, sawVersion: undefined }, "preview");
+    expect(text).toContain("# saw watch");
+    expect(text).toContain("## What the watcher reported");
+    expect(text).toContain("Watch is in place.");
+    expect(text).toContain("<img>");
+    expect(watchReport({ run: undefined, sawVersion: undefined }, "saved")).toContain("Open Watch Report");
+  });
+
   it("each ends with a link to the saw documentation page that explains it", () => {
     const learn = (url: string) => `](${url})`;
     expect(scanReport(input(infected()), "preview")).toContain(learn(DOCS.verdicts));
     expect(fixReport({ folderName: "w", folderPath: "/w", run, outcome: undefined, sawVersion: undefined }, "saved")).toContain(learn(DOCS.fix));
     expect(auditReport({ run: undefined, verdict: undefined, sentence: undefined, sawVersion: undefined }, "saved")).toContain(learn(DOCS.audit));
     expect(hooksReport({ status: { kind: "not-installed" }, checkedAt: undefined, change: undefined, sawVersion: undefined }, "saved")).toContain(learn(DOCS.hooks));
+    expect(watchReport({ run: undefined, sawVersion: undefined }, "saved")).toContain(learn(DOCS.watch));
   });
 });

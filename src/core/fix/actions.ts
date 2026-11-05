@@ -274,6 +274,11 @@ export function readAudit(stdout: string, stderr: string, exitCode: number | nul
   };
 }
 
+/** What `saw watch` has reported: whether it is in place, and what happened since the last report. */
+export function watchStatusArgs(): string[] {
+  return ["watch", "status", "--no-stream"];
+}
+
 export function hookArgs(subcommand: "status" | "install" | "repair", capabilities: Capabilities): string[] {
   return ["hook", subcommand, ...(supports(capabilities, FEATURES.hookStatusJson, "hook-status") ? ["--json"] : []), "--no-stream"];
 }
