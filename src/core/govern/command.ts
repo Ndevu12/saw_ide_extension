@@ -136,13 +136,20 @@ export function ghBringsFiles(argv: readonly string[]): boolean {
     || (group === "run" && action === "download");
 }
 
-const QUIET_EXACT = new Set(["core.fsmonitor", "diff.external", "core.hookspath"]);
+/** Pairs that stop git from starting a program, before `core.hooksPath` and any silenced driver. */
+const QUIET_BASE = ["core.fsmonitor=false", "diff.external="] as const;
 const MAX_CONFIG_BYTES = 64 * 1024;
 const MAX_CONFIG_FILES = 8;
 
 function configKey(pair: string): string {
   const eq = pair.indexOf("=");
   return (eq === -1 ? pair : pair.slice(0, eq)).toLowerCase();
+}
+
+const QUIET_EXACT = new Set<string>([...QUIET_BASE.map(configKey), "core.hookspath"]);
+
+function quietPairs(hooksPath: string, silenced: readonly string[]): string[] {
+  return [...QUIET_BASE, `core.hooksPath=${hooksPath}`, ...silenced];
 }
 
 function dropsConfig(key: string, silenced: readonly string[]): boolean {
@@ -194,8 +201,7 @@ export function quietGit(argv: readonly string[], hooksPath: string, silenced: r
     }
     break;
   }
-  const owned = ["core.fsmonitor=false", "diff.external=", `core.hooksPath=${hooksPath}`, ...silenced];
-  const injected = owned.flatMap((item) => ["-c", item]);
+  const injected = quietPairs(hooksPath, silenced).flatMap((item) => ["-c", item]);
   return [...prefix, ...injected, ...argv.slice(index)];
 }
 
@@ -213,34 +219,52 @@ function keepsCommand(value: string): boolean {
   return token === "git-lfs";
 }
 
+interface ConfigEntry {
+  section: string;
+  subsection: string;
+  key: string;
+  value: string;
+}
+
+/** One config file as entries. Comments are skipped. Nothing here is executed. */
+function configEntries(text: string): ConfigEntry[] {
+  let section = "";
+  let subsection = "";
+  const entries: ConfigEntry[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#") || line.startsWith(";")) {
+      continue;
+    }
+    const header = /^\[([A-Za-z0-9-]+)(?:\s+"([^"]*)")?\]/.exec(line);
+    if (header) {
+      section = (header[1] ?? "").toLowerCase();
+      subsection = header[2] ?? "";
+      continue;
+    }
+    const pair = /^([A-Za-z0-9-]+)\s*=\s*(.*)$/.exec(line);
+    if (!pair) {
+      continue;
+    }
+    entries.push({ section, subsection, key: (pair[1] ?? "").toLowerCase(), value: pair[2] ?? "" });
+  }
+  return entries;
+}
+
 /**
  * `key=` overrides for filter and diff drivers in one config file whose commands are not
  * `git-lfs`. A kept driver is left to run. A silenced filter is not required, so git does not
  * stop when its command is cleared.
  */
 export function silencedRepoConfig(text: string): string[] {
-  let section = "";
-  let driver = "";
   const hostile = new Set<string>();
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (line.startsWith("#") || line.startsWith(";")) {
+  for (const { section, subsection, key, value } of configEntries(text)) {
+    if (!subsection || (section !== "filter" && section !== "diff")) {
       continue;
     }
-    const header = /^\[([A-Za-z0-9-]+)(?:\s+"([^"]*)")?\]/.exec(line);
-    if (header) {
-      section = (header[1] ?? "").toLowerCase();
-      driver = header[2] ?? "";
-      continue;
-    }
-    const pair = /^([A-Za-z0-9-]+)\s*=\s*(.*)$/.exec(line);
-    if (!pair || !driver || (section !== "filter" && section !== "diff")) {
-      continue;
-    }
-    const key = (pair[1] ?? "").toLowerCase();
     const command = section === "filter" ? key === "clean" || key === "smudge" || key === "process" : key === "command" || key === "textconv";
-    if (command && !keepsCommand(pair[2] ?? "") && !driver.includes("=") && !/\s/.test(driver)) {
-      hostile.add(`${section}.${driver}`);
+    if (command && !keepsCommand(value) && !subsection.includes("=") && !/\s/.test(subsection)) {
+      hostile.add(`${section}.${subsection}`);
     }
   }
   const out: string[] = [];
@@ -255,23 +279,12 @@ export function silencedRepoConfig(text: string): string[] {
 }
 
 function includePaths(text: string, directory: string): string[] {
-  let including = false;
   const found: string[] = [];
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    const header = /^\[([A-Za-z0-9-]+)/.exec(line);
-    if (header) {
-      including = (header[1] ?? "").toLowerCase() === "include" || (header[1] ?? "").toLowerCase() === "includeif";
+  for (const entry of configEntries(text)) {
+    if ((entry.section !== "include" && entry.section !== "includeif") || entry.key !== "path") {
       continue;
     }
-    if (!including) {
-      continue;
-    }
-    const pair = /^path\s*=\s*(.*)$/i.exec(line);
-    if (!pair) {
-      continue;
-    }
-    const target = unquote(pair[1] ?? "");
+    const target = unquote(entry.value);
     if (!target) {
       continue;
     }

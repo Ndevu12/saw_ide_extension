@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 import { FEATURES, supports } from "../../core/capabilities";
 import { configOutsideFolders } from "../../core/controls";
 import { offersGovernRestore, offersGovernVerdict, openAdmission, readGoverned, readNotice, readRestore, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig, type Governed, type GovernedReading, type GovernNotice } from "../../core/govern/contract";
-import type { Tool } from "../../core/govern/command";
+import { quietGit, type Tool } from "../../core/govern/command";
 import { folderKey, governStatusDir, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
 import { defaultIsExecutableFile } from "../../core/install/locate";
 import { runProgram } from "../../core/run";
@@ -368,7 +368,7 @@ export class Governor implements vscode.Disposable {
   private async quietHooks(realGit: string): Promise<string> {
     const empty = nodePath.join(this.root, "empty-hooks");
     mkdirSync(empty, { recursive: true });
-    const run = await runProgram(realGit, ["-c", "core.fsmonitor=false", "-c", "diff.external=", "config", "--global", "--get", "core.hooksPath"], {
+    const run = await runProgram(realGit, quietGit(["config", "--global", "--get", "core.hooksPath"], empty), {
       timeoutMs: 10_000,
       maxOutputBytes: 8 * 1024,
     });

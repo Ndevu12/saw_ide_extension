@@ -117,12 +117,20 @@ export function chatCards(folders: ChatFolderInput[], machine: ChatMachineInput,
   return cards;
 }
 
-/** What Chat says when a folder changed without a check, or was already not a commit saw let in. */
-export function unheldSentence(from: "command" | "open" | undefined): string {
+const OPEN_UNHELD = "This folder is not a commit saw let in, and it was not put back.";
+
+/** Chat names the git command saw missed. An agent hears that a change arrived without a check. */
+const MISSED_COMMAND = {
+  chat: "A git command saw did not run changed this folder. That change was not held before it landed.",
+  agent: "A change reached this folder that saw did not let in. It was not held before it landed.",
+} as const;
+
+/** What Chat or an agent says when a folder changed without a check, or was already not a commit saw let in. */
+export function unheldSentence(from: "command" | "open" | undefined, audience: keyof typeof MISSED_COMMAND = "chat"): string {
   if (from === "open") {
-    return "This folder is not a commit saw let in, and it was not put back.";
+    return OPEN_UNHELD;
   }
-  return "A git command saw did not run changed this folder. That change was not held before it landed.";
+  return MISSED_COMMAND[audience];
 }
 
 /** What Chat, the status bar, and an agent say while a check runs. An open folder is not an update. */

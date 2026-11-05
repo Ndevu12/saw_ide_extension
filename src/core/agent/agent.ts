@@ -98,10 +98,7 @@ export function agentUpdate(state: AgentUpdateInput): AgentUpdate | undefined {
     return { notice: `An update was held (${state.held.verdict}). The folder was not changed.` };
   }
   if (state.unheld) {
-    const sentence = state.unheldFrom === "open"
-      ? unheldSentence("open")
-      : "A change reached this folder that saw did not let in. It was not held before it landed.";
-    return { notice: `${sentence} The verdict below is the folder as it is now.` };
+    return { notice: `${unheldSentence(state.unheldFrom, "agent")} The verdict below is the folder as it is now.` };
   }
   return undefined;
 }
