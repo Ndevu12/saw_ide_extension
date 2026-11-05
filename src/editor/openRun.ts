@@ -46,20 +46,25 @@ export class OpenGuard implements vscode.Disposable {
   private readonly asking = new Set<string>();
   private chain: Promise<void> = Promise.resolve();
   private applying = false;
+  /** Set once `vscode.tasks` is in use. Touching it asks an untrusted folder for trust. */
+  private watchingTasks = false;
   private readonly subscriptions: vscode.Disposable[];
 
   constructor(private readonly log: vscode.LogOutputChannel) {
     this.subscriptions = [
-      vscode.tasks.onDidStartTask((event) => this.onTask(event.execution)),
-      vscode.tasks.onDidStartTaskProcess((event) => this.onTask(event.execution)),
       vscode.window.onDidOpenTerminal((terminal) => this.onTerminal(terminal)),
       vscode.workspace.onDidChangeWorkspaceFolders(() => void this.sweep()),
       vscode.workspace.onDidGrantWorkspaceTrust(() => {
         this.declined.clear();
+        this.watchTasks();
         void this.sweep();
       }),
       vscode.workspace.onDidChangeConfiguration(() => void this.sweep()),
     ];
+    // Restricted Mode already refuses a folder-open task. Listing tasks here would ask for trust.
+    if (vscode.workspace.isTrusted) {
+      this.watchTasks();
+    }
     void this.sweep();
   }
 
@@ -69,15 +74,29 @@ export class OpenGuard implements vscode.Disposable {
     }
   }
 
+  /** Listening to the task service asks an untrusted folder for trust, so it starts only once trusted. */
+  private watchTasks(): void {
+    if (this.watchingTasks) {
+      return;
+    }
+    this.watchingTasks = true;
+    this.subscriptions.push(
+      vscode.tasks.onDidStartTask((event) => this.onTask(event.execution)),
+      vscode.tasks.onDidStartTaskProcess((event) => this.onTask(event.execution)),
+    );
+  }
+
   private async sweep(): Promise<void> {
     if (this.applying) {
       return;
     }
     this.applying = true;
     try {
-      await this.holdAutomaticTasks();
       await this.holdTerminalSettings();
-      await this.askFolderTasks();
+      if (vscode.workspace.isTrusted) {
+        await this.holdAutomaticTasks();
+        await this.askFolderTasks();
+      }
     } catch (error) {
       this.log.warn(`saw could not hold a command that starts on open: ${String(error)}`);
     } finally {
