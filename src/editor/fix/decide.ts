@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-import { buttonCss } from "../../core/chat/transcript";
+import { pageDocument } from "../../core/chat/brand";
 import { answerLine, decisionLine, type AskDecision, type AskQuestion } from "../../core/fix/ask";
 import { plain } from "../../core/text";
 import { openAsk, openIntroduced, openSupply, openTakeOut, registerAskDocuments } from "./askDiff";
@@ -11,12 +11,27 @@ type Step = "ask" | "supply" | "confirm";
 const escape = (value: string, limit = 400): string =>
   plain(value, limit).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
 
+const DECIDE_SCRIPT = `
+  const vscode = acquireVsCodeApi();
+  const chosenNow = () => [...document.querySelectorAll("input[type=checkbox]:checked")].map((item) => item.value);
+  document.body.addEventListener("change", (event) => {
+    const box = event.target;
+    if (box instanceof HTMLInputElement && box.type === "checkbox") vscode.postMessage({ act: "choose", chosen: chosenNow() });
+  });
+  document.body.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest("[data-act]") : null;
+    if (!button) return;
+    vscode.postMessage({ act: button.getAttribute("data-act"), chosen: chosenNow() });
+  });
+`;
+
 /**
  * The Decide view: one question from `saw fix --ask=jsonl`, answered with the same actions the
  * diff toolbar offers. Closing the view does not answer. Stopping the fix does not answer.
  */
 export class Decide implements vscode.Disposable {
   private view: vscode.WebviewView | undefined;
+  private tab: vscode.WebviewPanel | undefined;
   private folder: vscode.WorkspaceFolder | undefined;
   private question: AskQuestion | undefined;
   private step: Step = "ask";
@@ -139,20 +154,36 @@ export class Decide implements vscode.Disposable {
 
   dispose(): void {
     this.cancel();
+    this.tab?.dispose();
     for (const subscription of this.subscriptions) {
       subscription.dispose();
     }
   }
 
+  /** The question, as an editor tab beside the diff. Chat is what opens it. */
   private reveal(): void {
-    if (this.view?.visible || !this.folder) {
+    if (this.tab) {
+      this.tab.reveal(vscode.ViewColumn.Beside);
+      this.render();
       return;
     }
-    void vscode.window.showInformationMessage(`saw is waiting on a decision in ${this.folder.name}.`, "Show").then((choice) => {
-      if (choice) {
-        void vscode.commands.executeCommand("saw.decide.focus");
+    const panel = vscode.window.createWebviewPanel("saw.decideTab", this.tabTitle(), vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true });
+    this.tab = panel;
+    const messages = panel.webview.onDidReceiveMessage((message: { act?: string; chosen?: unknown }) => {
+      void this.onAct(message.act, Array.isArray(message.chosen) ? message.chosen.filter((item): item is string => typeof item === "string") : []);
+    });
+    const gone = panel.onDidDispose(() => {
+      messages.dispose();
+      gone.dispose();
+      if (this.tab === panel) {
+        this.tab = undefined;
       }
     });
+    this.render();
+  }
+
+  private tabTitle(): string {
+    return this.folder ? `Decide · ${this.folder.name}` : "Decide";
   }
 
   private async reopen(): Promise<void> {
@@ -309,44 +340,16 @@ export class Decide implements vscode.Disposable {
   }
 
   private render(): void {
-    const webview = this.view?.webview;
-    if (!webview) {
-      return;
+    if (this.tab) {
+      this.tab.title = this.tabTitle();
     }
-    const nonce = Math.random().toString(36).slice(2);
     const body = this.question ? this.questionHtml() : this.idleHtml();
-    webview.html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style nonce="${nonce}">
-  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); font-size: var(--vscode-font-size); padding: 8px 12px; }
-  ${buttonCss()}
-  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
-  .actions button.primary, .actions button.danger { flex: 1 1 100%; }
-  .hint, .meta { color: var(--vscode-descriptionForeground); }
-  ul { padding-left: 1.2em; }
-  li { margin: 4px 0; }
-</style>
-</head>
-<body>
-${body}
-<script nonce="${nonce}">
-  const vscode = acquireVsCodeApi();
-    const chosenNow = () => [...document.querySelectorAll("input[type=checkbox]:checked")].map((item) => item.value);
-    document.body.addEventListener("change", (event) => {
-      const box = event.target;
-      if (box instanceof HTMLInputElement && box.type === "checkbox") vscode.postMessage({ act: "choose", chosen: chosenNow() });
-    });
-    document.body.addEventListener("click", (event) => {
-      const button = event.target instanceof Element ? event.target.closest("[data-act]") : null;
-      if (!button) return;
-      vscode.postMessage({ act: button.getAttribute("data-act"), chosen: chosenNow() });
-    });
-</script>
-</body>
-</html>`;
+    if (this.view) {
+      this.view.webview.html = pageDocument(Math.random().toString(36).slice(2), body, DECIDE_SCRIPT, "side");
+    }
+    if (this.tab) {
+      this.tab.webview.html = pageDocument(Math.random().toString(36).slice(2), body, DECIDE_SCRIPT, "editor");
+    }
   }
 
   private idleHtml(): string {

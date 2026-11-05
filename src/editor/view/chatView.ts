@@ -30,6 +30,7 @@ interface OpenTarget {
  */
 export class ChatView implements vscode.Disposable {
   private view: vscode.WebviewView | undefined;
+  private verdict: vscode.WebviewPanel | undefined;
   private folders: vscode.WorkspaceFolder[] = [];
   private opens: OpenTarget[][] = [];
   private readonly subscriptions: vscode.Disposable[];
@@ -57,20 +58,41 @@ export class ChatView implements vscode.Disposable {
           this.render();
         },
       }),
+      vscode.commands.registerCommand("saw.openVerdict", () => this.openVerdict()),
     ];
   }
 
-  private render(): void {
-    const webview = this.view?.webview;
-    if (!webview) {
+  /** The same session as Chat, in an editor tab. Chat keeps the buttons. */
+  openVerdict(): void {
+    if (this.verdict) {
+      this.verdict.reveal(vscode.ViewColumn.Active);
+      this.render();
       return;
     }
+    const panel = vscode.window.createWebviewPanel("saw.verdict", "saw", vscode.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true });
+    this.verdict = panel;
+    const messages = panel.webview.onDidReceiveMessage((message: { act?: unknown }) => this.onMessage(message));
+    const gone = panel.onDidDispose(() => {
+      messages.dispose();
+      gone.dispose();
+      if (this.verdict === panel) {
+        this.verdict = undefined;
+      }
+    });
+    this.render();
+  }
+
+  private render(): void {
     const states = this.model.states();
     this.folders = states.map((state) => state.folder);
     this.opens = states.map((state) => openings(state));
-    const nonce = Math.random().toString(36).slice(2);
-    const ask = this.feedback.card();
-    webview.html = renderChat(chatCards(states.map((state) => folderInput(state, this.decide, this.lastFix)), this.machineInput(), ask), nonce);
+    const cards = chatCards(states.map((state) => folderInput(state, this.decide, this.lastFix)), this.machineInput(), this.feedback.card());
+    if (this.view) {
+      this.view.webview.html = renderChat(cards, nonce(), "side");
+    }
+    if (this.verdict) {
+      this.verdict.webview.html = renderChat(cards, nonce(), "editor");
+    }
   }
 
   private machineInput(): ChatMachineInput {
@@ -117,7 +139,10 @@ export class ChatView implements vscode.Disposable {
         }
         return;
       case "decide":
-        void vscode.commands.executeCommand("saw.decide.focus");
+        void vscode.commands.executeCommand("saw.decideShow");
+        return;
+      case "verdict":
+        this.openVerdict();
         return;
       case "open": {
         const opening = this.opens[index]?.[Number(second)];
@@ -157,10 +182,15 @@ export class ChatView implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.verdict?.dispose();
     for (const subscription of this.subscriptions) {
       subscription.dispose();
     }
   }
+}
+
+function nonce(): string {
+  return Math.random().toString(36).slice(2);
 }
 
 function folderInput(state: FolderState, decide: Decide, lastFix: (folder: vscode.WorkspaceFolder) => FixOutcome | undefined): ChatFolderInput {

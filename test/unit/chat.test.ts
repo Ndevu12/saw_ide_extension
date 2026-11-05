@@ -66,7 +66,7 @@ describe("the sidebar chat", () => {
   it("says saw is checking an update, and when a git command was not held", () => {
     const checking = page([folder({ verdict: "clean", checking: true, checkStep: "reading git history (2/6)" })]);
     expect(checking).toContain("saw is checking this update: reading git history (2/6). The folder has not changed.");
-    expect(checking).toContain("checking: reading git history (2/6)");
+    expect(checking).toContain(">checking<");
     const landed = page([folder({ verdict: "clean", unheld: true })]);
     expect(landed).toContain("was not held before it landed");
     const opened = page([folder({ verdict: "clean", unheld: true, unheldFrom: "open" })]);
@@ -74,12 +74,32 @@ describe("the sidebar chat", () => {
     expect(opened).not.toContain("git command");
     const opening = page([folder({ verdict: "clean", checking: true, checkAbout: "admission" })]);
     expect(opening).toContain("saw is checking whether it let this folder in. The folder has not changed.");
-    expect(opening).toContain("checking this folder");
+    expect(opening).toContain(">checking<");
     expect(opening).not.toContain("checking this update");
   });
 
-  it("puts the primary action on its own row of the card", () => {
-    const html = page([folder({ verdict: "infected" })]);
-    expect(html).toContain(".actions button.primary, .actions button.danger { flex: 1 1 100%; }");
+  it("paints saw's own colors and draws every control as a button", () => {
+    const html = page([folder({
+      phase: "scanning",
+      progress: "Scanning ~/huge — 35359 files",
+      verdict: "suspicious",
+    })]);
+    expect(html).toContain("#070908");
+    expect(html).toContain("#7ee7b0");
+    expect(html).toContain("#4cd07d");
+    expect(html).toContain("#5fd3dd");
+    expect(html).toContain("button.primary { background: #4cd07d;");
+    expect(html).toContain("button.secondary { background: #0e1c18; border-color: #5fd3dd;");
+    expect(html).toContain('class="secondary" data-act="verdict:0"');
+    expect(html).toContain("Open verdict");
+    expect(html).toContain(">scanning<");
+    expect(html).toContain("Scanning ~/huge — 35359 files");
+    expect(html).not.toContain("scanning: Scanning");
+    expect(html).not.toContain("--vscode-button-background");
+    const wide = renderChat(chatCards([folder({ verdict: "infected", phase: "deciding" })], machine), "nonce", "editor");
+    expect(wide).toContain("stayAwakeBot");
+    expect(wide).toContain("the sentinel saw the worm");
+    expect(wide).toContain("Open the decision");
+    expect(wide).toContain('class="editor"');
   });
 });
