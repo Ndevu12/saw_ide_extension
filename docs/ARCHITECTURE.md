@@ -11,7 +11,7 @@ src/
   extension.ts          composition root: builds the parts below and registers commands
   cursorHook.ts         Cursor's beforeShellExecution hook, bundled as dist/cursor-hook.js
   core/                 no `vscode` import (lint-enforced), unit-tested
-    run · text · version · capabilities · docs
+    run · text · version · capabilities · docs · controls · openRun
     scan/               scan, contract, verdict, progress, schedule
     fix/                what `fix`, `audit` and `hook` reported; `--ask=jsonl` questions
     install/            locate saw, find Python, pipx install, diagnose a failure
@@ -109,10 +109,18 @@ verdict never comes from progress.
 
 ## Security boundaries
 
-- **Nothing from the workspace chooses what runs.** saw is resolved to an absolute path from user
-  settings, `PATH` or known install locations, and started without a shell from a neutral
-  directory. Every setting is machine-scoped, and the ones that choose what runs are listed in
-  `restrictedConfigurations`.
+- **Nothing from the workspace chooses what runs.** saw is resolved to an absolute path from the
+  machine value of `saw.path`, `PATH` or known install locations, and started without a shell from
+  a neutral directory. Every saw setting is read from that machine value only: a workspace value, a
+  folder value, and a value of the wrong type are ignored, and a `saw.configPath` inside an open
+  folder is not passed. The same pass removes those project values, and a workspace or folder
+  `git.path`. The user value is the one the window keeps. A task set to run because the folder
+  opened is held until you confirm, and `task.allowAutomaticTasks` stays off so the editor does
+  not start it first. A terminal whose shell or arguments point inside the folder is closed until
+  you allow it. While a folder is suspicious, infected, holding an update, or changed by a command
+  saw did not hold, `security.workspace.trust.untrustedFiles` is `newWindow`, and that user value
+  is put back when nothing open still needs it. Every setting is machine-scoped, and the ones
+  that choose what runs are listed in `restrictedConfigurations`.
 - **Restricted Mode is supported**, including for Fix, because an infected folder is exactly the
   one not to trust. saw, not the workspace, runs git: it uses an empty hooks folder,
   `core.fsmonitor` off, no external diff, pager or editor, and no transport protocols.

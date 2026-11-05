@@ -39,7 +39,7 @@
     "workspace"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "*"
   ],
   "capabilities": {
     "untrustedWorkspaces": {

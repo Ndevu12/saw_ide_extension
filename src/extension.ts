@@ -15,7 +15,9 @@ import { Installer, readPins } from "./editor/install/installer";
 import { SawMcpRegistration } from "./editor/agent/mcp";
 import { Model } from "./editor/model";
 import { Reports } from "./editor/view/reports";
+import { OpenGuard } from "./editor/openRun";
 import { readSettings } from "./editor/settings";
+import { StrictMode } from "./editor/strictMode";
 import { StatusBar } from "./editor/view/statusBar";
 import { ChatView } from "./editor/view/chatView";
 import { FindingsTree } from "./editor/view/tree";
@@ -58,6 +60,8 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     decide,
     govern,
     feedback,
+    new OpenGuard(log),
+    new StrictMode(context, model, log),
     cursorGuard,
     tree,
     new ChatView(
