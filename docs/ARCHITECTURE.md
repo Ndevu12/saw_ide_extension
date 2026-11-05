@@ -13,7 +13,7 @@ src/
   core/                 no `vscode` import (lint-enforced), unit-tested
     run · text · version · capabilities · docs · controls · openRun
     scan/               scan, contract, verdict, progress, schedule
-    fix/                what `fix`, `audit` and `hook` reported; `--ask=jsonl` questions
+    fix/                what `fix`, `audit`, `hook` and `watch status` reported; `--ask=jsonl` questions
     install/            locate saw, find Python, pipx install, diagnose a failure
     report/             Markdown reports, with scanned text kept literal
     agent/              what agents are told, `saw mcp`, the Cursor hook's answer
@@ -134,7 +134,7 @@ verdict never comes from progress.
   escaped text, so they cannot form a link, an image or HTML. The only links are to plain https
   pages.
 - **Reports live in the extension's own storage, never in the project.** Folder reports go in
-  workspace storage, keyed by a hash of the folder; machine reports (audit, hooks) go in global
+  workspace storage, keyed by a hash of the folder; machine reports (audit, hooks, watch) go in global
   storage. A cloned repository cannot plant or fake a report. The kept copies withhold evidence;
   the preview shows it from memory.
 - **Agents get the verdict, not the evidence.** `saw_folderVerdict` answers from the model after

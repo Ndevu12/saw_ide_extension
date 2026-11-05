@@ -6,12 +6,12 @@ import * as vscode from "vscode";
 
 import type { FixOutcome } from "../../core/fix/actions";
 import { prose } from "../../core/report/markdown";
-import { auditReport, fixReport, hooksReport, scanReport, when, type CommandRun, type Copy } from "../../core/report/reports";
+import { auditReport, fixReport, hooksReport, scanReport, watchReport, when, type CommandRun, type Copy } from "../../core/report/reports";
 import type { Model, Settled } from "../model";
 
 export const REPORT_SCHEME = "saw-report";
 
-type Kind = "scan" | "fix" | "audit" | "hooks";
+type Kind = "scan" | "fix" | "audit" | "hooks" | "watch";
 
 const FIXES_KEPT = 5;
 const REFRESH_MS = 300;
@@ -45,6 +45,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
   private readonly fixes = new Map<string, FixRecord>();
   private readonly savedScans = new Map<string, Settled>();
   private auditRun: CommandRun | undefined;
+  private watchRun: CommandRun | undefined;
   private hooksChange: { subcommand: "install" | "repair"; run: CommandRun } | undefined;
   private hooksCheckedAt: number | undefined;
   private savedHooks: unknown;
@@ -78,7 +79,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/fix/${folderKey(folder)}/saw fix - ${label(folder.name)}.md` });
   }
 
-  machineUri(kind: "audit" | "hooks"): vscode.Uri {
+  machineUri(kind: "audit" | "hooks" | "watch"): vscode.Uri {
     return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/${kind}/machine/saw ${kind}.md` });
   }
 
@@ -90,6 +91,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
       ...folders.filter((folder) => this.fixes.has(folderKey(folder))).map((folder) => ({ label: `$(wand) ${folder.name}`, description: "last fix", uri: this.fixUri(folder) })),
       { label: "$(device-desktop) This machine", description: "audit", uri: this.machineUri("audit") },
       { label: "$(git-merge) This machine", description: "scan-on-clone hooks", uri: this.machineUri("hooks") },
+      { label: "$(eye) This machine", description: "watch", uri: this.machineUri("watch") },
     ];
     return (await vscode.window.showQuickPick(items, { placeHolder: "saw report to open" }))?.uri;
   }
@@ -133,6 +135,16 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     this.changedSoon();
   }
 
+  watchStarted(run: CommandRun): void {
+    this.watchRun = run;
+    this.changedSoon();
+  }
+
+  watchFinished(): void {
+    void this.save(this.machinePath("watch"), this.render("watch", undefined, "saved"));
+    this.changedSoon();
+  }
+
   hooksChangeStarted(subcommand: "install" | "repair", run: CommandRun): void {
     this.hooksChange = { subcommand, run };
     this.changedSoon();
@@ -149,7 +161,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
 
   stat(uri: vscode.Uri): vscode.FileStat {
     const kind = uri.path.split("/")[1];
-    if (!["scan", "fix", "audit", "hooks"].includes(kind ?? "") || !uri.path.endsWith(".md")) {
+    if (!["scan", "fix", "audit", "hooks", "watch"].includes(kind ?? "") || !uri.path.endsWith(".md")) {
       throw vscode.FileSystemError.FileNotFound(uri);
     }
     const mtime = this.watched.get(uri.toString())?.mtime ?? Date.now();
@@ -217,6 +229,8 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
         return this.auditRun ? this.render(kind, undefined, "preview") : undefined;
       case "hooks":
         return this.model.machine.hooks || this.hooksChange ? this.render(kind, undefined, "preview") : undefined;
+      case "watch":
+        return this.watchRun ? this.render(kind, undefined, "preview") : undefined;
     }
   }
 
@@ -246,6 +260,8 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
           change: this.hooksChange && { ...this.hooksChange.run, subcommand: this.hooksChange.subcommand },
           sawVersion,
         }, copy);
+      case "watch":
+        return watchReport({ run: this.watchRun, sawVersion }, copy);
     }
   }
 
@@ -310,7 +326,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     return dir && path.join(dir, `${new Date(startedAt).toISOString().replace(/[:.]/g, "-")}.md`);
   }
 
-  private machinePath(kind: "audit" | "hooks"): string {
+  private machinePath(kind: "audit" | "hooks" | "watch"): string {
     return path.join(this.globalStorage, "reports", `${kind}.md`);
   }
 
@@ -335,7 +351,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
 
   private async readSaved(kind: Kind, folder: vscode.WorkspaceFolder | undefined): Promise<string | undefined> {
     let file: string | undefined;
-    if (kind === "audit" || kind === "hooks") {
+    if (kind === "audit" || kind === "hooks" || kind === "watch") {
       file = this.machinePath(kind);
     } else if (folder && kind === "scan") {
       file = this.scanPath(folder);

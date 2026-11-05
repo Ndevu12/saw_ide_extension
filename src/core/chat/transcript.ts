@@ -67,6 +67,10 @@ export interface ChatMachineInput {
   auditLabel?: string;
   hooks: "checking" | "installed" | "repair" | "missing" | "unknown";
   hooksDetail?: string;
+  /** `saw watch status` is being read. */
+  readingWatch?: boolean;
+  /** The first line of the last watch report this window read. */
+  watchLine?: string;
 }
 
 const VERDICT_BADGE: Record<FolderVerdict, string> = {
@@ -278,6 +282,14 @@ function machineCard(machine: ChatMachineInput): ChatCard {
       actions.push({ act: "hooks:check", label: "Check hooks", tone: "secondary" });
       break;
   }
+  if (machine.readingWatch) {
+    paragraphs.push("Reading what saw watch reported.");
+  } else if (machine.watchLine) {
+    paragraphs.push(machine.watchLine);
+  } else {
+    paragraphs.push("saw watch reports whether the watcher is in place, what is still open, and what happened since the last report.");
+  }
+  actions.push({ act: "watch", label: "Open the watch report", tone: "secondary" });
   actions.push({ act: "docs", label: "What each verdict means", tone: "secondary" });
   return {
     badge: machine.auditing ? "auditing" : "this machine",

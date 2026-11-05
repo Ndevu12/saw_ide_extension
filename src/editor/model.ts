@@ -54,6 +54,10 @@ export interface MachineState {
   auditProgress: string | undefined;
   audit: AuditRecord | undefined;
   hooks: HookStatus | undefined;
+  /** `saw watch status` is being read. */
+  readingWatch: boolean;
+  /** The first line of the last watch report this window read. */
+  watch: { line: string; at: number } | undefined;
 }
 
 /** What every view shows: the engine's state and each folder's latest scan. */
@@ -63,7 +67,7 @@ export class Model implements vscode.Disposable {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChange = this.changed.event;
 
-  readonly machine: MachineState = { auditing: false, auditProgress: undefined, audit: undefined, hooks: undefined };
+  readonly machine: MachineState = { auditing: false, auditProgress: undefined, audit: undefined, hooks: undefined, readingWatch: false, watch: undefined };
 
   get engine(): Engine | undefined {
     return this.engineState;

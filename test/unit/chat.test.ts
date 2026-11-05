@@ -50,6 +50,14 @@ describe("the sidebar chat", () => {
     expect(html).toContain("Scan this folder");
     expect(html).toContain('class="primary" data-act="scan:0"');
     expect(html).toContain('data-act="hooks:install"');
+    expect(html).toContain('data-act="watch"');
+    expect(html).toContain("Open the watch report");
+  });
+
+  it("quotes the last watch report as text", () => {
+    const html = page([], { watchLine: "Watch is in place. <img src=x>" });
+    expect(html).toContain("Watch is in place. &lt;img src=x&gt;");
+    expect(html).not.toContain("in place. <img");
   });
 
   it("says when the checkout fix left the payload in history", () => {

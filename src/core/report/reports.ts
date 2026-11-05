@@ -438,3 +438,37 @@ export function hooksReport(input: HooksReportInput, copy: Copy): string {
   out.push(footer(copy, "`saw hook status`", { title: "scan-on-clone hooks", url: DOCS.hooks }));
   return out.join("\n");
 }
+
+// --- watch ----------------------------------------------------------------------------------------
+
+export interface WatchReportInput {
+  run: CommandRun | undefined;
+  sawVersion: string | undefined;
+}
+
+/** What `saw watch status` says. It names no paths and no process numbers. */
+export function watchReport(input: WatchReportInput, copy: Copy): string {
+  const out = ["# saw watch", ""];
+  const { run } = input;
+  if (!run) {
+    out.push(
+      "This machine's watcher has not been read from this editor yet. Run **saw: Open Watch Report**.",
+      "",
+      "That report says whether `saw watch` is in place, what is still open, and what happened since the last report.",
+      "",
+      footer(copy, "`saw watch status`", { title: "saw watch", url: DOCS.watch }),
+    );
+    return out.join("\n");
+  }
+  const stopped = stoppedLine(run);
+  if (run.finishedAt === undefined) {
+    out.push("## Reading", "", "`saw watch status` is reading what the watcher has reported.", "");
+  } else if (stopped) {
+    out.push("## Not read", "", stopped, "");
+  } else {
+    out.push("## What the watcher reported", "", "Whether `saw watch` is in place, what is still open, and what happened since the last report.", "");
+  }
+  const finished = run.finishedAt === undefined ? "" : `, took ${seconds(run.finishedAt - run.startedAt)}`;
+  out.push(`- Read ${when(run.startedAt)}${finished}${sawVersion(input.sawVersion)}`, "", "## saw's report", "", said(run), "", footer(copy, "`saw watch status`", { title: "saw watch", url: DOCS.watch }));
+  return out.join("\n");
+}

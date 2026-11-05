@@ -7,5 +7,6 @@ export const DOCS = {
   fix: `${SAW_DOCS}reference/cli/fix/`,
   audit: `${SAW_DOCS}how-to/audit-a-machine/`,
   hooks: `${SAW_DOCS}how-to/scan-on-clone/`,
+  watch: `${SAW_DOCS}reference/cli/watch/`,
   configuration: `${SAW_DOCS}reference/configuration/`,
 } as const;

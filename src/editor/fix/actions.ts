@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import { answerLine, isAskEvent, readAsk } from "../../core/fix/ask";
-import { auditArgs, canFix, FIX_SINCE, fixArgs, gitIdentity, hookArgs, readAudit, readFix, readHookJson, type FixDetails } from "../../core/fix/actions";
+import { auditArgs, canFix, FIX_SINCE, fixArgs, gitIdentity, hookArgs, readAudit, readFix, readHookJson, watchStatusArgs, type FixDetails } from "../../core/fix/actions";
 import { FEATURES, supports } from "../../core/capabilities";
 import { describeProgress, PROGRESS_ARGS, ProgressLines } from "../../core/scan/progress";
 import type { CommandRun } from "../../core/report/reports";
@@ -21,10 +21,6 @@ const ACTION_TIMEOUT_MS = 15 * 60_000;
 /** How much of saw's own report a command's report keeps. */
 const SAID_LIMIT = 1024 * 1024;
 
-/**
- * What saw does on the operator's request: fix a folder, audit the machine, keep its git hooks in
- * place. Each runs in the background behind a progress notification, and its report opens in the editor.
- */
 /** A warning when saw could not keep the operator's uncommitted work on a branch. */
 function unsavedWork(details: FixDetails | undefined): string | undefined {
   const work = details?.uncommitted;
@@ -36,6 +32,10 @@ function unsavedWork(details: FixDetails | undefined): string | undefined {
     : ` Your uncommitted work could not be saved on a branch${work.reason ? ` (${plain(work.reason, 200)})` : ""}: it is on disk only.`;
 }
 
+/**
+ * What saw does on the operator's request: fix a folder, audit the machine, keep its git hooks in
+ * place, and read what `saw watch` has reported. Each runs in the background, and its report opens in the editor.
+ */
 export class Actions {
   constructor(
     private readonly model: Model,
@@ -230,6 +230,34 @@ export class Actions {
         void vscode.window.showErrorMessage("saw audit did not finish, so this machine was not checked.", "Show Report").then(show);
         return;
     }
+  }
+
+  /** Read `saw watch status` and open it as a report. This does not put the watcher in place. */
+  async openWatchReport(): Promise<void> {
+    const showReport = () => void this.reports.open(this.reports.machineUri("watch"));
+    if (this.model.machine.readingWatch) {
+      showReport();
+      return;
+    }
+    const engine = await this.ready();
+    if (!engine) {
+      return;
+    }
+    this.model.setMachine({ readingWatch: true });
+    const report: CommandRun = { startedAt: Date.now(), said: "" };
+    this.reports.watchStarted(report);
+    showReport();
+    const run = await this.run("saw watch status", engine.binary, watchStatusArgs(), ["stdout", "stderr"], report);
+    this.model.setMachine({ readingWatch: false });
+    if (run.cancelled) {
+      return;
+    }
+    const line = report.said.split("\n").map((part) => part.trim()).find(Boolean);
+    if (line) {
+      this.model.setMachine({ watch: { line: plain(line, 400), at: Date.now() } });
+    }
+    this.reports.watchFinished();
+    this.log.info(`saw watch status: ${plain(line ?? "", 300)}`);
   }
 
   /** Ask saw whether its scan-on-clone hooks are in place. Quiet: the saw view shows the answer. */

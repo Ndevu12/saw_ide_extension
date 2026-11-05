@@ -4,7 +4,7 @@ import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { auditArgs, auditVerdict, canFix, fixArgs, gitIdentity, hookArgs, readAudit, readFix, readHookJson, readHookStatus, rotationSentence } from "../../src/core/fix/actions";
+import { auditArgs, auditVerdict, canFix, fixArgs, gitIdentity, hookArgs, readAudit, readFix, readHookJson, readHookStatus, rotationSentence, watchStatusArgs } from "../../src/core/fix/actions";
 import { NO_CAPABILITIES, readCapabilities } from "../../src/core/capabilities";
 import { runProgram } from "../../src/core/run";
 import { lines } from "../../src/core/text";
@@ -158,6 +158,7 @@ describe("saw audit --json", () => {
   it("is asked for only from a saw that has it", () => {
     expect(auditArgs(NO_CAPABILITIES)).toEqual(["audit", "--no-stream"]);
     expect(auditArgs(sawWith("audit.json"))).toEqual(["audit", "--json", "--no-stream"]);
+    expect(watchStatusArgs()).toEqual(["watch", "status", "--no-stream"]);
   });
 
   it("reads the verdict, saw's sentence and what it found", () => {
