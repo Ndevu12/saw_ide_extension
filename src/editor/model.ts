@@ -23,10 +23,12 @@ export interface FolderState {
   deciding: boolean;
   /** What saw says it is doing, while it scans; from a saw with `--progress=jsonl`. */
   progress: string | undefined;
-  /** Set while an incoming update is being checked and has not landed. */
+  /** Set while an incoming update, or the open folder, is being checked and has not changed. */
   checking: boolean;
   /** The step saw named during that check, when it named one. */
   checkStep: string | undefined;
+  /** An update landing, or the tree already open. The words differ. */
+  checkAbout: "update" | "admission" | undefined;
   /** A git command this window did not run changed the folder. That change was not held. */
   unheld: boolean;
   /** Set while an incoming update is held. Cleared once that update is applied. */
@@ -101,7 +103,7 @@ export class Model implements vscode.Disposable {
     const key = folder.uri.toString();
     let state = this.folders.get(key);
     if (!state) {
-      state = { folder, scanning: false, fixing: false, deciding: false, progress: undefined, checking: false, checkStep: undefined, unheld: false, held: undefined, last: undefined };
+      state = { folder, scanning: false, fixing: false, deciding: false, progress: undefined, checking: false, checkStep: undefined, checkAbout: undefined, unheld: false, held: undefined, last: undefined };
       this.folders.set(key, state);
     }
     return state;
@@ -122,24 +124,26 @@ export class Model implements vscode.Disposable {
     }
   }
 
-  setChecking(folder: vscode.WorkspaceFolder, step: string | undefined): void {
+  setChecking(folder: vscode.WorkspaceFolder, step: string | undefined, about: "update" | "admission" = "update"): void {
     const state = this.get(folder);
-    if (state.checking && state.checkStep === step) {
+    if (state.checking && state.checkStep === step && state.checkAbout === about) {
       return;
     }
     state.checking = true;
     state.checkStep = step;
+    state.checkAbout = about;
     state.unheld = false;
     this.changed.fire();
   }
 
   clearChecking(folder: vscode.WorkspaceFolder): void {
     const state = this.get(folder);
-    if (!state.checking && state.checkStep === undefined) {
+    if (!state.checking && state.checkStep === undefined && state.checkAbout === undefined) {
       return;
     }
     state.checking = false;
     state.checkStep = undefined;
+    state.checkAbout = undefined;
     this.changed.fire();
   }
 

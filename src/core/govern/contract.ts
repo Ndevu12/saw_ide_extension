@@ -172,6 +172,37 @@ export function readRestore(stdout: string): RestoreReading {
 
 export type UnheldDecision = "clear" | "mark" | "leave";
 
+/** What opening a folder does with one verdict. `restore` asks saw to put the folder back. */
+export type OpenDecision = "clear" | "restore" | "mark" | "leave";
+
+/**
+ * What to do with the tree already open. `undefined` is a timeout or a saw that did not start.
+ * No answer leaves the folder alone, including a folder that has no commit yet. A terminal
+ * stand-in does not change this: nothing has checked this tree yet.
+ */
+export function openAdmission(reading: GovernedReading | undefined, restoreAvailable: boolean): OpenDecision {
+  if (!reading) {
+    return "leave";
+  }
+  const code = reading.code;
+  if (code === "could-not-answer" || (code === undefined && reading.answer === "could-not-answer")) {
+    return "leave";
+  }
+  if (code === "let-in" || (code === undefined && reading.answer === "let-in")) {
+    return "clear";
+  }
+  if (shouldRestore(code, restoreAvailable)) {
+    return "restore";
+  }
+  if (code === "unknown-commit" || code === "tree-changed" || reading.answer === "not-let-in") {
+    return "mark";
+  }
+  if (reading.answer === "let-in") {
+    return "clear";
+  }
+  return "leave";
+}
+
 /**
  * What to say after a HEAD move. `undefined` means this saw cannot answer. A covered terminal
  * stays quiet in that case, because it leaves no marker for a check it already ran.

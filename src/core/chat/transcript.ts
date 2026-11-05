@@ -48,6 +48,8 @@ export interface ChatFolderInput {
   checking?: boolean;
   /** The step saw named during that check. */
   checkStep?: string;
+  /** An update landing, or the tree already open. The words differ. */
+  checkAbout?: "update" | "admission";
   /** A git command this window did not run already changed the folder. */
   unheld?: boolean;
   /** Set while a fix is waiting, naming which act the question belongs to. */
@@ -113,12 +115,30 @@ export function chatCards(folders: ChatFolderInput[], machine: ChatMachineInput,
   return cards;
 }
 
+/** What Chat, the status bar, and an agent say while a check runs. An open folder is not an update. */
+export function checkingSentence(about: "update" | "admission" | undefined, step: string | undefined): string {
+  if (about === "admission") {
+    return "saw is checking whether it let this folder in. The folder has not changed.";
+  }
+  return step
+    ? `saw is checking this update: ${step}. The folder has not changed.`
+    : "saw is checking this update. The folder has not changed.";
+}
+
+/** The short form of that check, for a badge or a status item. */
+export function checkingBadge(about: "update" | "admission" | undefined, step: string | undefined): string {
+  if (about === "admission") {
+    return "checking this folder";
+  }
+  return step ? `checking: ${step}` : "checking this update";
+}
+
 function folderCard(folder: ChatFolderInput, index: string | number): ChatCard {
   const shown = folder.findings.slice(0, SHOWN_FINDINGS);
   const more = folder.findings.length - shown.length;
   const paragraphs = [...folder.reasons];
   if (folder.checking) {
-    paragraphs.unshift(folder.checkStep ? `saw is checking this update: ${folder.checkStep}. The folder has not changed.` : "saw is checking this update. The folder has not changed.");
+    paragraphs.unshift(checkingSentence(folder.checkAbout, folder.checkStep));
   }
   if (folder.held) {
     paragraphs.push(`An update was held (${VERDICT_BADGE[folder.held.verdict]}). The folder was not changed.`);
@@ -157,7 +177,7 @@ function folderCard(folder: ChatFolderInput, index: string | number): ChatCard {
 
 function badge(folder: ChatFolderInput): string {
   if (folder.checking) {
-    return folder.checkStep ? `checking: ${folder.checkStep}` : "checking this update";
+    return checkingBadge(folder.checkAbout, folder.checkStep);
   }
   if (folder.phase === "scanning") {
     return folder.progress ? `scanning: ${folder.progress}` : "scanning";

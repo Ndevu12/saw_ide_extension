@@ -69,6 +69,10 @@ describe("the sidebar chat", () => {
     expect(checking).toContain("checking: reading git history (2/6)");
     const landed = page([folder({ verdict: "clean", unheld: true })]);
     expect(landed).toContain("was not held before it landed");
+    const opening = page([folder({ verdict: "clean", checking: true, checkAbout: "admission" })]);
+    expect(opening).toContain("saw is checking whether it let this folder in. The folder has not changed.");
+    expect(opening).toContain("checking this folder");
+    expect(opening).not.toContain("checking this update");
   });
 
   it("puts the primary action on its own row of the card", () => {

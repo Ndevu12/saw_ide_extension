@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 
+import { checkingBadge, checkingSentence } from "../../core/chat/transcript";
 import type { FolderVerdict } from "../../core/scan/verdict";
 import type { FolderState, Model } from "../model";
 import { VERDICT_LABEL } from "../present";
@@ -55,9 +56,14 @@ export class StatusBar implements vscode.Disposable {
     this.item.command = "workbench.view.extension.saw";
     const checking = states.find((state) => state.checking);
     if (checking) {
-      this.item.text = `$(sync~spin) saw: checking this update${checking.checkStep ? `: ${checking.checkStep}` : ""}`;
+      const about = checking.checkAbout === "admission";
+      this.item.text = about
+        ? `$(sync~spin) saw: ${checkingBadge("admission", undefined)}`
+        : `$(sync~spin) saw: checking this update${checking.checkStep ? `: ${checking.checkStep}` : ""}`;
       this.item.backgroundColor = undefined;
-      this.item.tooltip = `${checking.folder.name}: saw is checking an update. The folder has not changed.`;
+      this.item.tooltip = about
+        ? `${checking.folder.name}: ${checkingSentence("admission", undefined)}`
+        : `${checking.folder.name}: saw is checking an update. The folder has not changed.`;
       return;
     }
     const held = states.find((state) => state.held && !state.held.released);

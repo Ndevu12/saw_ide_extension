@@ -104,6 +104,11 @@ not let in is put back by saw and your unsaved work stays. A change to the files
 already let in is not put back. An agent that asks saw about a folder hears the same checking,
 held, or not-held state, and is told to wait while a check is running.
 
+Opening a folder asks once whether saw let that commit in, before the window is asked to reload.
+While that runs, saw says it is checking whether it let this folder in, and the folder has not
+changed. A commit saw did not let in is put back when saw can. No answer, including a folder with
+no commit yet, leaves the folder as it is.
+
 When you have asked saw to cover your terminals, the editor's terminal uses that and does not
 check the same command again. The Git view still checks. A terminal saw does not cover keeps
 saw's scan-on-clone check. Turn the editor's check off with `saw.governUpdates`; the Git view
