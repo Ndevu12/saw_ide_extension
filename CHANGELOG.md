@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-05
+
+### Added
+
+- **Open verdict** opens the Chat session in an editor tab, and **Open the decision** opens Decide in an editor tab beside the diff. Chat keeps the buttons. The pages use the colors `saw intro` prints, and every control is a button.
+- **Open Watch Report** reads what `saw watch status` says: whether the watcher is in place, what is still open, and what happened since the last report. Chat and the saw view open the same report.
+- Opening a folder asks once whether saw let that commit in, before the window is asked to reload. While that runs, saw says it is checking, and the folder has not changed. A commit saw did not let in is put back when saw can. A folder that stays, and was not put back, is described as not a commit saw let in.
+
+### Changed
+
+- Git aimed at an open folder does not run that folder's fsmonitor, external diff, hooks, or a filter whose command is not `git-lfs`. While a folder is not in the clear, extension recommendations stay quiet and task detection stays off.
+- Installs stayawakebot 0.17.0, and moves a saw it installed earlier up to it. A scan from this release names a project it found and the lockfile to commit, so saw can audit its dependencies. A Dart, Rust, .NET or Gradle project with no lockfile was silent before.
+
 ## [0.5.0] - 2026-11-04
 
 ### Added
@@ -113,7 +126,8 @@
 - The log of a successful install no longer shows the expected "no pipx yet" check as a warning,
   or a step twice.
 
-[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.2.0...v0.3.0
