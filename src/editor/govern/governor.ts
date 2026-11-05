@@ -5,6 +5,7 @@ import * as nodePath from "node:path";
 import * as vscode from "vscode";
 
 import { FEATURES, supports } from "../../core/capabilities";
+import { configOutsideFolders } from "../../core/controls";
 import { offersGovernRestore, offersGovernVerdict, openAdmission, readGoverned, readNotice, readRestore, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig, type Governed, type GovernedReading, type GovernNotice } from "../../core/govern/contract";
 import type { Tool } from "../../core/govern/command";
 import { folderKey, governStatusDir, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
@@ -109,15 +110,19 @@ export class Governor implements vscode.Disposable {
     void this.askVerdict(folder);
   }
 
-  private applyUnheld(folder: vscode.WorkspaceFolder, answer: Governed | undefined): void {
+  private applyUnheld(folder: vscode.WorkspaceFolder, answer: Governed | undefined, from: "command" | "open" = "command"): void {
     const decision = unheldAfter(answer, this.systemBin !== undefined);
     if (decision === "clear") {
       this.model.setUnheld(folder, false);
       return;
     }
     if (decision === "mark") {
-      this.model.setUnheld(folder, true);
-      this.alerts.unheld(folder.name);
+      this.model.setUnheld(folder, true, from);
+      if (from === "open") {
+        this.alerts.notAdmitted(folder.name);
+      } else {
+        this.alerts.unheld(folder.name);
+      }
     }
   }
 
@@ -199,13 +204,14 @@ export class Governor implements vscode.Disposable {
     const help = await this.governHelp(saw);
     this.verdictReady = offersGovernVerdict(help);
     this.restoreReady = offersGovernRestore(help);
-    const signature = JSON.stringify({ saw, realGit, realGh, progress, standin, systemBin, verdict: this.verdictReady, restore: this.restoreReady, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
-    if (signature === this.signature && this.active) {
-      return;
-    }
     if (!realGit) {
       this.log.warn("saw cannot stand in front of git, because git was not found.");
       this.active = false;
+      return;
+    }
+    const quietHooks = await this.quietHooks(realGit);
+    const signature = JSON.stringify({ saw, realGit, realGh, progress, standin, systemBin, verdict: this.verdictReady, restore: this.restoreReady, quietHooks, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
+    if (signature === this.signature && this.active) {
       return;
     }
     mkdirSync(this.shimDir, { recursive: true });
@@ -229,6 +235,7 @@ export class Governor implements vscode.Disposable {
       resultDir: this.resultDir,
       progress,
       ...(standin ? { standin } : {}),
+      quietHooks,
     };
     this.writeConfig(config);
     this.coverTerminals(systemBin);
@@ -281,9 +288,9 @@ export class Governor implements vscode.Disposable {
         this.model.clearChecking(folder);
       }
       if (decision === "clear" || (decision === "restore" && restored)) {
-        this.applyUnheld(folder, "let-in");
+        this.applyUnheld(folder, "let-in", "open");
       } else if (decision === "mark" || decision === "restore") {
-        this.applyUnheld(folder, "not-let-in");
+        this.applyUnheld(folder, "not-let-in", "open");
       }
       if (decision === "restore" && restored) {
         this.controller.request(folder, { immediate: true });
@@ -352,6 +359,24 @@ export class Governor implements vscode.Disposable {
         this.askedOpen.delete(key);
       }
     }
+  }
+
+  /**
+   * Hooks git may run for an open folder. The operator's own global hooks, when they sit outside
+   * every open folder. Otherwise an empty directory, so the folder's hooks and hooksPath do not run.
+   */
+  private async quietHooks(realGit: string): Promise<string> {
+    const empty = nodePath.join(this.root, "empty-hooks");
+    mkdirSync(empty, { recursive: true });
+    const run = await runProgram(realGit, ["-c", "core.fsmonitor=false", "-c", "diff.external=", "config", "--global", "--get", "core.hooksPath"], {
+      timeoutMs: 10_000,
+      maxOutputBytes: 8 * 1024,
+    });
+    const value = run.stdout.trim();
+    if (run.exitCode !== 0 || run.timedOut || run.spawnError || !nodePath.isAbsolute(value)) {
+      return empty;
+    }
+    return configOutsideFolders(value, this.folders()) || empty;
   }
 
   /** `saw govern install` wrote this directory. Absent when that step has not been run. */

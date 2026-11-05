@@ -136,6 +136,183 @@ export function ghBringsFiles(argv: readonly string[]): boolean {
     || (group === "run" && action === "download");
 }
 
+const QUIET_EXACT = new Set(["core.fsmonitor", "diff.external", "core.hookspath"]);
+const MAX_CONFIG_BYTES = 64 * 1024;
+const MAX_CONFIG_FILES = 8;
+
+function configKey(pair: string): string {
+  const eq = pair.indexOf("=");
+  return (eq === -1 ? pair : pair.slice(0, eq)).toLowerCase();
+}
+
+function dropsConfig(key: string, silenced: readonly string[]): boolean {
+  const normal = key.toLowerCase();
+  if (QUIET_EXACT.has(normal)) {
+    return true;
+  }
+  return silenced.some((item) => configKey(item) === normal);
+}
+
+/**
+ * Git arguments that keep a repository's config from starting a program. `core.fsmonitor`,
+ * `diff.external`, and `core.hooksPath` are set after any copy of those keys on the command,
+ * so the repository's value does not win. `silenced` is `key=` pairs for filter and diff
+ * drivers read out of the repository's config.
+ */
+export function quietGit(argv: readonly string[], hooksPath: string, silenced: readonly string[] = []): string[] {
+  const prefix: string[] = [];
+  let index = 0;
+  while (index < argv.length) {
+    const arg = argv[index] ?? "";
+    const attached = attachedOption(arg);
+    if (attached) {
+      if (attached.name === "-c" && dropsConfig(configKey(attached.value), silenced)) {
+        index += 1;
+        continue;
+      }
+      prefix.push(arg);
+      index += 1;
+      continue;
+    }
+    if (GIT_VALUE.has(arg)) {
+      const value = argv[index + 1];
+      if (value === undefined) {
+        break;
+      }
+      if (arg === "-c" && dropsConfig(configKey(value), silenced)) {
+        index += 2;
+        continue;
+      }
+      prefix.push(arg, value);
+      index += 2;
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      prefix.push(arg);
+      index += 1;
+      continue;
+    }
+    break;
+  }
+  const owned = ["core.fsmonitor=false", "diff.external=", `core.hooksPath=${hooksPath}`, ...silenced];
+  const injected = owned.flatMap((item) => ["-c", item]);
+  return [...prefix, ...injected, ...argv.slice(index)];
+}
+
+function unquote(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length >= 2 && ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'")))) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+/** A filter or diff command saw can leave in place. Anything else is a program the repository named. */
+function keepsCommand(value: string): boolean {
+  const token = unquote(value).split(/\s+/)[0] ?? "";
+  return token === "git-lfs";
+}
+
+/**
+ * `key=` overrides for filter and diff drivers in one config file whose commands are not
+ * `git-lfs`. A kept driver is left to run. A silenced filter is not required, so git does not
+ * stop when its command is cleared.
+ */
+export function silencedRepoConfig(text: string): string[] {
+  let section = "";
+  let driver = "";
+  const hostile = new Set<string>();
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line.startsWith("#") || line.startsWith(";")) {
+      continue;
+    }
+    const header = /^\[([A-Za-z0-9-]+)(?:\s+"([^"]*)")?\]/.exec(line);
+    if (header) {
+      section = (header[1] ?? "").toLowerCase();
+      driver = header[2] ?? "";
+      continue;
+    }
+    const pair = /^([A-Za-z0-9-]+)\s*=\s*(.*)$/.exec(line);
+    if (!pair || !driver || (section !== "filter" && section !== "diff")) {
+      continue;
+    }
+    const key = (pair[1] ?? "").toLowerCase();
+    const command = section === "filter" ? key === "clean" || key === "smudge" || key === "process" : key === "command" || key === "textconv";
+    if (command && !keepsCommand(pair[2] ?? "") && !driver.includes("=") && !/\s/.test(driver)) {
+      hostile.add(`${section}.${driver}`);
+    }
+  }
+  const out: string[] = [];
+  for (const name of hostile) {
+    if (name.startsWith("filter.")) {
+      out.push(`${name}.clean=`, `${name}.smudge=`, `${name}.process=`, `${name}.required=false`);
+    } else {
+      out.push(`${name}.command=`, `${name}.textconv=`);
+    }
+  }
+  return out;
+}
+
+function includePaths(text: string, directory: string): string[] {
+  let including = false;
+  const found: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    const header = /^\[([A-Za-z0-9-]+)/.exec(line);
+    if (header) {
+      including = (header[1] ?? "").toLowerCase() === "include" || (header[1] ?? "").toLowerCase() === "includeif";
+      continue;
+    }
+    if (!including) {
+      continue;
+    }
+    const pair = /^path\s*=\s*(.*)$/i.exec(line);
+    if (!pair) {
+      continue;
+    }
+    const target = unquote(pair[1] ?? "");
+    if (!target) {
+      continue;
+    }
+    found.push(path.isAbsolute(target) ? target : path.resolve(directory, target));
+  }
+  return found;
+}
+
+/**
+ * The repository's config, followed as data. `.git` may be a file that names the git dir.
+ * Includes are read too, up to a few files. Nothing here is executed.
+ */
+export function repoConfigText(repo: string, read: (file: string) => string | undefined): string {
+  const dot = path.join(repo, ".git");
+  const pointer = read(dot);
+  let git = dot;
+  const named = pointer ? /^gitdir:\s*(.+)$/m.exec(pointer) : null;
+  if (named?.[1]) {
+    const target = named[1].trim();
+    git = path.isAbsolute(target) ? target : path.resolve(repo, target);
+  }
+  const seen = new Set<string>();
+  const chunks: string[] = [];
+  const queue = [path.join(git, "config"), path.join(git, "config.worktree")];
+  while (queue.length > 0 && seen.size < MAX_CONFIG_FILES) {
+    const file = path.resolve(queue.shift() ?? "");
+    if (seen.has(file)) {
+      continue;
+    }
+    seen.add(file);
+    const text = read(file);
+    if (text === undefined) {
+      continue;
+    }
+    const body = text.length > MAX_CONFIG_BYTES ? text.slice(0, MAX_CONFIG_BYTES) : text;
+    chunks.push(body);
+    queue.push(...includePaths(body, path.dirname(file)));
+  }
+  return chunks.join("\n");
+}
+
 /** The open folder that contains `target`, the innermost when several do, or undefined when none do. */
 export function enclosingFolder(folders: readonly string[], target: string): string | undefined {
   const resolved = path.resolve(target);

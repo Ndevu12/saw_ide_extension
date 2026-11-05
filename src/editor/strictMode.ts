@@ -13,8 +13,9 @@ interface Remembered {
 /**
  * Drops project overrides of saw's controls and of `git.path`, and, while a folder is suspicious,
  * infected, unheld, or holding an update, writes the strict user value for the settings that
- * would otherwise let that folder act. The user value from before that write is put back when
- * nothing open still needs it.
+ * would otherwise let that folder act: untrusted files open in a new window, extension
+ * recommendations stay quiet, and task detection stays off. The user value from before that
+ * write is put back when nothing open still needs it.
  */
 export class StrictMode implements vscode.Disposable {
   private readonly memory = new Map<string, Remembered>();
@@ -119,7 +120,7 @@ export class StrictMode implements vscode.Disposable {
     }
   }
 
-  private async tighten(key: string, value: string): Promise<void> {
+  private async tighten(key: string, value: string | boolean): Promise<void> {
     const inspected = vscode.workspace.getConfiguration().inspect(key);
     if (!this.memory.has(key)) {
       const defined = inspected?.globalValue !== undefined;
@@ -132,7 +133,7 @@ export class StrictMode implements vscode.Disposable {
     }
   }
 
-  private async release(key: string, value: string): Promise<void> {
+  private async release(key: string, value: string | boolean): Promise<void> {
     const saved = this.memory.get(key);
     if (!saved) {
       return;

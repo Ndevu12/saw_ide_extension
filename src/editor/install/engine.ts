@@ -1,10 +1,11 @@
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 
 import * as vscode from "vscode";
 
 import { probeCapabilities, type Capabilities } from "../../core/capabilities";
-import { defaultIsExecutableFile, locate, probe, type Probed } from "../../core/install/locate";
-import { atLeast, formatVersion, parseVersion } from "../../core/version";
+import { defaultIsExecutableFile, locate, movesToPin, probe, sameInstall, sawToRun, type Probed } from "../../core/install/locate";
+import { atLeast, formatVersion, type Version } from "../../core/version";
 import type { Installer } from "./installer";
 
 export type Unavailable =
@@ -56,7 +57,8 @@ export class EngineResolver {
         void vscode.window.showWarningMessage(message, "Open Setting").then(
           (choice) => choice && vscode.commands.executeCommand("workbench.action.openSettings", "saw.path"),
         );
-        return this.find();
+        const listed = await this.listReady();
+        return listed.kind === "unavailable" ? listed : this.choose(listed.candidates);
       }
       return this.installThenFind("Install or repair was asked for.");
     })();
@@ -64,24 +66,23 @@ export class EngineResolver {
   }
 
   private async findOrInstall(): Promise<Found> {
-    const found = await this.find();
-    if (found.kind === "ready") {
-      // The saw this extension installed is kept at the release it pins; one the operator installed is theirs.
-      const pinned = parseVersion(`saw (stayawakebot) ${this.installer.pinnedSaw}`);
-      const ours = found.binary === this.installer.installedBinary();
-      const behind = pinned && !atLeast(parseVersion(`saw (stayawakebot) ${found.version}`) ?? [0, 0, 0], this.installer.pinnedSaw);
-      if (ours && behind && this.settings().autoInstall && !this.settings().path.trim()) {
-        return this.installThenFind(`The saw this extension installed is ${found.version}; it now installs ${this.installer.pinnedSaw}.`);
+    const listed = await this.listReady();
+    if (listed.kind === "unavailable") {
+      if (listed.reason === "invalid-setting") {
+        return listed;
       }
-      return found;
+      if (!this.settings().autoInstall) {
+        return { ...listed, message: `${listed.message} saw.autoInstall is off: run saw: Install or Repair saw to install it.` };
+      }
+      return this.installThenFind(listed.message);
     }
-    if (found.reason === "invalid-setting") {
-      return found;
+    // The saw this extension installed is kept at the release it pins; one the operator installed is theirs.
+    const pin = this.installer.pinnedSaw;
+    const ours = listed.candidates.find((candidate) => candidate.ours);
+    if (ours && movesToPin(this.settings().path, this.settings().autoInstall, true, ours.version, pin)) {
+      return this.installThenFind(`The saw this extension installed is ${ours.versionText}; it now installs ${pin}.`);
     }
-    if (!this.settings().autoInstall) {
-      return { ...found, message: `${found.message} saw.autoInstall is off: run saw: Install or Repair saw to install it.` };
-    }
-    return this.installThenFind(found.message);
+    return this.choose(listed.candidates);
   }
 
   private async installThenFind(why: string): Promise<Found> {
@@ -94,16 +95,36 @@ export class EngineResolver {
         return { kind: "unavailable", reason: "install-cancelled", message: "Installing saw was cancelled. Run saw: Install or Repair saw to try again." };
       case "installed":
       case "installed-elsewhere": {
-        const found = await this.find();
-        if (found.kind === "unavailable" && outcome.kind === "installed-elsewhere") {
-          return { ...found, message: `Another editor window tried to install saw without success. ${found.message}` };
+        const listed = await this.listReady();
+        if (listed.kind === "unavailable") {
+          return outcome.kind === "installed-elsewhere"
+            ? { ...listed, message: `Another editor window tried to install saw without success. ${listed.message}` }
+            : listed;
         }
-        return found;
+        return this.choose(listed.candidates);
       }
     }
   }
 
-  private async find(): Promise<Found> {
+  private async choose(candidates: ReadySaw[]): Promise<Found> {
+    const pin = this.installer.pinnedSaw;
+    const chosen = sawToRun(candidates, pin);
+    if (!chosen) {
+      return { kind: "unavailable", reason: "missing", message: "saw is not installed on this machine." };
+    }
+    const first = candidates[0];
+    if (first && first.binary !== chosen.binary) {
+      this.log.info(`saw ${first.versionText} at ${first.binary} is behind ${pin}; using ${chosen.versionText} at ${chosen.binary}.`);
+    } else if (!atLeast(chosen.version, pin) && !chosen.ours) {
+      this.log.info(`saw ${chosen.versionText} at ${chosen.binary} is behind ${pin}. This extension did not install it, so it is left as it is.`);
+    }
+    const capabilities = await probeCapabilities(chosen.binary);
+    const features = [...capabilities.features].join(", ");
+    this.log.info(`Using saw ${chosen.versionText} at ${chosen.binary} (found via ${chosen.from}). Features: ${features || "none it can name"}.`);
+    return { kind: "ready", binary: chosen.binary, version: chosen.versionText, capabilities };
+  }
+
+  private async listReady(): Promise<{ kind: "ready"; candidates: ReadySaw[] } | Extract<Found, { kind: "unavailable" }>> {
     const located = locate(
       this.settings().path,
       { platform: process.platform, homedir: homedir(), pathVariable: process.env["PATH"], isExecutableFile: defaultIsExecutableFile },
@@ -117,15 +138,27 @@ export class EngineResolver {
       this.log.info(`saw is not installed. Looked in: ${located.searched.join(", ")}`);
       return { kind: "unavailable", reason: "missing", message: "saw is not installed on this machine." };
     }
-    let rejected: Found | undefined;
+    const installed = this.installer.installedBinary();
+    const canonical = (file: string): string | undefined => {
+      try {
+        return realpathSync(file);
+      } catch {
+        return undefined;
+      }
+    };
+    const candidates: ReadySaw[] = [];
+    let rejected: Extract<Found, { kind: "unavailable" }> | undefined;
     for (const candidate of located.candidates) {
       const probed: Probed = await probe(candidate.binary);
       if (probed.kind === "ready") {
-        const version = formatVersion(probed.version);
-        const capabilities = await probeCapabilities(probed.binary);
-        const features = [...capabilities.features].join(", ");
-        this.log.info(`Using saw ${version} at ${probed.binary} (found via ${candidate.from}). Features: ${features || "none it can name"}.`);
-        return { kind: "ready", binary: probed.binary, version, capabilities };
+        candidates.push({
+          binary: probed.binary,
+          version: probed.version,
+          versionText: formatVersion(probed.version),
+          ours: sameInstall(probed.binary, installed, canonical),
+          from: candidate.from,
+        });
+        continue;
       }
       const message =
         probed.kind === "too-old"
@@ -134,6 +167,17 @@ export class EngineResolver {
       this.log.warn(message);
       rejected ??= { kind: "unavailable", reason: probed.kind, message };
     }
-    return rejected ?? { kind: "unavailable", reason: "missing", message: "saw is not installed on this machine." };
+    if (candidates.length === 0) {
+      return rejected ?? { kind: "unavailable", reason: "missing", message: "saw is not installed on this machine." };
+    }
+    return { kind: "ready", candidates };
   }
+}
+
+interface ReadySaw {
+  binary: string;
+  version: Version;
+  versionText: string;
+  ours: boolean;
+  from: string;
 }

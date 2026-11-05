@@ -107,7 +107,12 @@ held, or not-held state, and is told to wait while a check is running.
 Opening a folder asks once whether saw let that commit in, before the window is asked to reload.
 While that runs, saw says it is checking whether it let this folder in, and the folder has not
 changed. A commit saw did not let in is put back when saw can. No answer, including a folder with
-no commit yet, leaves the folder as it is.
+no commit yet, leaves the folder as it is. A folder that stays, and was not put back, is described
+as not a commit saw let in.
+
+Git in an open folder does not run that folder's fsmonitor, external diff, hooks, or a filter
+whose command is not `git-lfs`. While a folder is not in the clear, extension recommendations
+stay quiet and task detection stays off.
 
 When you have asked saw to cover your terminals, the editor's terminal uses that and does not
 check the same command again. The Git view still checks. A terminal saw does not cover keeps

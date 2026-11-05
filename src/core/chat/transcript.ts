@@ -50,8 +50,10 @@ export interface ChatFolderInput {
   checkStep?: string;
   /** An update landing, or the tree already open. The words differ. */
   checkAbout?: "update" | "admission";
-  /** A git command this window did not run already changed the folder. */
+  /** A git command this window did not run already changed the folder, or the open folder was not let in. */
   unheld?: boolean;
+  /** Which of those two the line should name. */
+  unheldFrom?: "command" | "open";
   /** Set while a fix is waiting, naming which act the question belongs to. */
   decision?: string;
   cleanup?: ChatCleanup;
@@ -115,6 +117,14 @@ export function chatCards(folders: ChatFolderInput[], machine: ChatMachineInput,
   return cards;
 }
 
+/** What Chat says when a folder changed without a check, or was already not a commit saw let in. */
+export function unheldSentence(from: "command" | "open" | undefined): string {
+  if (from === "open") {
+    return "This folder is not a commit saw let in, and it was not put back.";
+  }
+  return "A git command saw did not run changed this folder. That change was not held before it landed.";
+}
+
 /** What Chat, the status bar, and an agent say while a check runs. An open folder is not an update. */
 export function checkingSentence(about: "update" | "admission" | undefined, step: string | undefined): string {
   if (about === "admission") {
@@ -145,7 +155,7 @@ function folderCard(folder: ChatFolderInput, index: string | number): ChatCard {
     paragraphs.push(...folder.held.reasons);
   }
   if (folder.unheld) {
-    paragraphs.push("A git command saw did not run changed this folder. That change was not held before it landed.");
+    paragraphs.push(unheldSentence(folder.unheldFrom));
   }
   if (folder.phase === "idle" && !folder.verdict) {
     paragraphs.unshift("This folder has not been scanned yet. A scan only reads it.");

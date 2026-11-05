@@ -95,6 +95,7 @@ export function describeFolder(state: FolderState, engine: Engine | undefined, w
     ...(state.checkAbout ? { checkAbout: state.checkAbout } : {}),
     ...(state.held && !state.held.released ? { held: { verdict: state.held.verdict } } : {}),
     unheld: state.unheld,
+    ...(state.unheldFrom ? { unheldFrom: state.unheldFrom } : {}),
   });
   if (update && "wait" in update) {
     return { ...base, verdict: undefined, problem: update.wait };
