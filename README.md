@@ -196,7 +196,13 @@ All commands are in the Command Palette under **saw:**.
 | `saw.governUpdates` | `true` | When saw can, check a pull, checkout, or similar update before it changes an open folder. |
 
 These are read from your **user** settings only. A folder's own `.vscode/settings.json` can't choose
-which program runs or switch scanning off.
+which program runs, switch scanning off, or point saw at a config inside that folder. A workspace
+or folder `git.path` is removed, so the folder cannot choose the git the window runs. A task
+the folder set to run when it opens is held until you confirm, and the command is named in that
+question. A terminal whose shell or arguments point inside the folder is closed until you allow
+it. While a folder is suspicious, infected, holding an update, or changed by a command saw did
+not check, untrusted files open in a new window. That setting returns to what you had once
+nothing open still needs it.
 
 ## Remote windows
 
