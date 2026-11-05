@@ -72,6 +72,11 @@ suite("saw extension", () => {
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder);
     assert.ok(vscode.lm.tools.some((tool) => tool.name === "saw_folderVerdict"), "the tool is registered");
+    // The scan can finish while saw is still deciding whether it let the folder in. The agent hears that check until it ends.
+    await until(() => {
+      const state = api.model.get(folder);
+      return state.last?.verdict === "infected" && !state.checking && !state.scanning ? state : undefined;
+    }, 540_000);
     const result = await vscode.lm.invokeTool("saw_folderVerdict", { input: { folder: folder.name }, toolInvocationToken: undefined });
     const text = result.content.map((part) => (part instanceof vscode.LanguageModelTextPart ? part.value : "")).join("");
     assert.match(text, /Verdict: INFECTED/, text);

