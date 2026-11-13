@@ -14,6 +14,7 @@
 
 - Git aimed at an open folder does not run that folder's fsmonitor, external diff, hooks, or a filter whose command is not `git-lfs`. While a folder is not in the clear, extension recommendations stay quiet and task detection stays off.
 - Installs stayawakebot 0.17.0, and moves a saw it installed earlier up to it. A scan from this release names a project it found and the lockfile to commit, so saw can audit its dependencies. A Dart, Rust, .NET or Gradle project with no lockfile was silent before.
+- The Marketplace and Open VSX pages carry the screenshots, the documentation and license badges, and saw's black page banner. Questions go to the repository issues.
 
 ## [0.5.0] - 2026-11-04
 

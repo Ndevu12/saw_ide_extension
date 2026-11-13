@@ -2,6 +2,7 @@
 !dist/extension.js
 !dist/cursor-hook.js
 !media/**
+!docs/images/**
 !package.json
 !README.md
 !CHANGELOG.md
