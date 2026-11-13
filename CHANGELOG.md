@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-13
+
+### Changed
+
+- The extension icon is the SAW wordmark from the site header, painted from the same letter grid as `saw`.
+
 ## [0.6.0] - 2026-11-05
 
 ### Added
@@ -127,7 +133,8 @@
 - The log of a successful install no longer shows the expected "no pipx yet" check as a warning,
   or a step twice.
 
-[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.3.0...v0.4.0
