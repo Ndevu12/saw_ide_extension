@@ -15,6 +15,35 @@
   },
   "homepage": "https://saw-docs.ndevuspace.com/",
   "icon": "media/icon.png",
+  "pricing": "Free",
+  "markdown": "github",
+  "qna": "https://github.com/Ndevu12/saw_ide_extension/issues",
+  "galleryBanner": {
+    "color": "#070908",
+    "theme": "dark"
+  },
+  "badges": [
+    {
+      "url": "https://img.shields.io/visual-studio-marketplace/v/ndevu12.stayawakebot?label=VS%20Code%20Marketplace&color=007ACC",
+      "href": "https://marketplace.visualstudio.com/items?itemName=ndevu12.stayawakebot",
+      "description": "Visual Studio Marketplace"
+    },
+    {
+      "url": "https://img.shields.io/open-vsx/v/Ndevu12/stayawakebot?label=Open%20VSX&color=a60ee5",
+      "href": "https://open-vsx.org/extension/Ndevu12/stayawakebot",
+      "description": "Open VSX"
+    },
+    {
+      "url": "https://img.shields.io/badge/docs-saw--docs.ndevuspace.com-2ea44f",
+      "href": "https://saw-docs.ndevuspace.com/",
+      "description": "saw documentation"
+    },
+    {
+      "url": "https://img.shields.io/badge/license-BSD--3--Clause-blue",
+      "href": "https://github.com/Ndevu12/saw_ide_extension/blob/main/LICENSE",
+      "description": "BSD-3-Clause"
+    }
+  ],
   "engines": {
     "vscode": "^1.96.0"
   },
