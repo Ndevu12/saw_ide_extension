@@ -1,10 +1,10 @@
-import { spawn } from "node:child_process";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 
-import { applyArgs, prepareArgs, readApply, readPrepare, type GovernConfig, type GovernPhase } from "./core/govern/contract";
-import { activationEnv, folderKey, plan } from "./core/govern/plan";
-import { checkRealProgram, diskFiles } from "./core/govern/realProgram";
+import { applyArgs, prepareArgs, readApply, readPrepare, UNCHECKED_CLONE, type GovernConfig, type GovernPhase } from "./core/govern/contract";
+import { activationEnv, folderKey, plan, type Hold } from "./core/govern/plan";
+import { checkRealProgram, diskFiles, pathWithoutStandins } from "./core/govern/realProgram";
 import { enclosingFolder, parseGit, quietGit, repoConfigText, silencedRepoConfig, type Tool } from "./core/govern/command";
 import { runProgram } from "./core/run";
 import { describeProgress, ProgressLines } from "./core/scan/progress";
@@ -72,10 +72,15 @@ function runPlaced(config: GovernConfig, tool: Tool, args: readonly string[], ho
     return;
   }
   const guarded = guardGit(config, tool, args);
+  const env: NodeJS.ProcessEnv = { ...guarded.env, ...activationEnv(config, tool, holding) };
+  if (!config.realGit) {
+    // No real git: saw's stand-in would look git up on PATH and find this stand-in. There is no git to check either.
+    env["PATH"] = pathWithoutStandins(env["PATH"], config.standinDirs ?? [], diskFiles);
+  }
   const child = spawn(standin, guarded.args, {
     stdio: ["inherit", "inherit", "pipe"],
     shell: false,
-    env: { ...guarded.env, ...activationEnv(config, tool, holding) },
+    env,
   });
   let failed = false;
   child.stderr?.on("data", (chunk: Buffer) => {
@@ -99,22 +104,34 @@ function runPlaced(config: GovernConfig, tool: Tool, args: readonly string[], ho
   });
 }
 
-function runRealOrExit(config: GovernConfig, tool: Tool, args: readonly string[]): void {
+function runRealOrExit(config: GovernConfig, tool: Tool, args: readonly string[], after?: () => void): void {
   const program = tool === "git" ? config.realGit : config.realGh;
   if (!program) {
     process.stderr.write(`saw could not find ${tool}.\n`);
     process.exit(127);
   }
   const guarded = guardGit(config, tool, args);
-  runReal(program, guarded.args, guarded.env);
+  runReal(program, guarded.args, guarded.env, after);
 }
+
+/** `alias.<name>` as the real git reads it for that repository, or undefined. */
+function aliasOf(config: GovernConfig): (name: string, directory: string) => string | undefined {
+  return (name, directory) => {
+    if (!config.realGit) {
+      return undefined;
+    }
+    const read = spawnSync(config.realGit, ["-C", directory, "config", "--get", `alias.${name}`], { encoding: "utf8", timeout: 5000, shell: false });
+    return read.status === 0 && read.stdout.trim() ? read.stdout.trim() : undefined;
+  };
+}
+
 
 /** Git aimed at an open folder does not run that folder's fsmonitor, external diff, hooks, or other filters. */
 function guardGit(config: GovernConfig, tool: Tool, args: readonly string[]): { args: readonly string[]; env: NodeJS.ProcessEnv } {
   if (tool !== "git" || !config.quietHooks) {
     return { args, env: process.env };
   }
-  const directory = parseGit(args, process.cwd())?.directory ?? process.cwd();
+  const directory = parseGit(args, process.cwd(), process.env)?.directory ?? process.cwd();
   const repo = enclosingFolder(config.folders, directory);
   if (!repo) {
     return { args, env: process.env };
@@ -137,10 +154,25 @@ function withoutConfigInjection(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return Object.fromEntries(Object.entries(source).filter(([key]) => !injectsConfig(key)));
 }
 
-function runReal(program: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): void {
+/** How many entries a folder has, or undefined when it does not exist. */
+function entriesIn(dir: string): number | undefined {
+  try {
+    return readdirSync(dir).length;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether a clone left a checkout: a new folder, or files in a folder that was empty. */
+function landed(before: number | undefined, now: number | undefined): boolean {
+  return now !== undefined && now > 0 && (before === undefined || before === 0);
+}
+
+function runReal(program: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env, after?: () => void): void {
   const child = spawn(program, args, { stdio: "inherit", shell: false, env });
   child.on("error", () => process.exit(127));
   child.on("exit", (code, signal) => {
+    after?.();
     if (signal) {
       process.kill(process.pid, signal);
       return;
@@ -164,13 +196,25 @@ async function main(): Promise<void> {
     process.stderr.write(`saw could not find ${tool}.\n`);
     process.exit(127);
   }
-  const action = plan(config, tool, args, process.cwd());
+  const action = plan(config, tool, args, process.cwd(), { env: process.env, aliasOf: aliasOf(config) });
+  const scanAfter = action.kind === "passthrough" ? action.scanAfter : undefined;
+  const landsAt = action.kind === "passthrough" ? action.landsAt : undefined;
+  // Judged by what landed, not by the exit code: a clone can fail partway and leave its checkout.
+  const before = landsAt ? entriesIn(landsAt) : undefined;
+  const after = scanAfter && landsAt
+    ? () => {
+      if (landed(before, entriesIn(landsAt))) {
+        notice(config, scanAfter, "finished", [UNCHECKED_CLONE]);
+      }
+    }
+    : undefined;
   if (config.standin && action.kind === "passthrough") {
     runPlaced(config, tool, args, config.holdingRoot, () => undefined, (code, spawnFailed) => {
       if (spawnFailed) {
-        runRealOrExit(config, tool, args);
+        runRealOrExit(config, tool, args, after);
         return;
       }
+      after?.();
       process.exit(code);
     });
     return;
@@ -193,11 +237,12 @@ async function main(): Promise<void> {
         process.exit(code);
         return;
       }
-      notice(config, action.repo, "finished", []);
       if (spawnFailed) {
-        runRealOrExit(config, tool, args);
+        // saw's stand-in did not start, so this window's own check holds the update instead.
+        void holdWithSaw(config, action);
         return;
       }
+      notice(config, action.repo, "finished", []);
       process.exit(code);
     });
     return;
@@ -208,9 +253,14 @@ async function main(): Promise<void> {
       process.exit(127);
     }
     const guarded = guardGit(config, tool, args);
-    runReal(action.program, guarded.args, guarded.env);
+    runReal(action.program, guarded.args, guarded.env, after);
     return;
   }
+  await holdWithSaw(config, action);
+}
+
+/** Ask saw to check the update into a holding folder, and let it into the open folder only when saw says so. */
+async function holdWithSaw(config: GovernConfig, action: Hold): Promise<void> {
   const steps = new ProgressLines((progress) => {
     if (progress) {
       notice(config, action.repo, "checking", [], undefined, describeProgress(progress));

@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import * as path from "node:path";
 
-import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit, type Tool } from "./command";
+import { expandAliases, type AliasContext } from "./alias";
+import { cloneTarget } from "./clone";
+import { enclosingFolder, ghBringsFiles, gitBringsFiles, type Tool } from "./command";
 import type { GovernConfig } from "./contract";
 import { STANDIN_MARK } from "./realProgram";
 
@@ -16,32 +18,44 @@ export interface Hold {
 export interface Passthrough {
   kind: "passthrough";
   program: string;
+  /** An open folder a clone lands in. saw cannot hold a clone, so the folder is scanned once it has run. */
+  scanAfter?: string;
+  /** Where that clone puts its checkout, so the stand-in can see whether anything landed. */
+  landsAt?: string;
 }
 
+/** What the stand-in knows beyond the command line. */
+export type PlanContext = AliasContext;
+
 /** What the stand-in does with one command: run the real program, or ask saw to check it first. */
-export function plan(config: GovernConfig, tool: Tool, args: readonly string[], cwd: string): Hold | Passthrough {
+export function plan(config: GovernConfig, tool: Tool, args: readonly string[], cwd: string, context: PlanContext = {}): Hold | Passthrough {
   const program = tool === "git" ? config.realGit : config.realGh;
-  const through = (): Passthrough => ({ kind: "passthrough", program });
+  const through = (scanAfter?: string, landsAt?: string): Passthrough => ({ kind: "passthrough", program, ...(scanAfter && landsAt ? { scanAfter, landsAt } : {}) });
   if (!config.enabled || !config.saw || !program) {
     return through();
   }
-  const target = tool === "git" ? gitTarget(args, cwd) : path.resolve(cwd);
-  const brings = tool === "git" ? gitTargetBrings(args, cwd) : ghBringsFiles(args);
-  const repo = target && brings ? enclosingFolder(config.folders, target) : undefined;
-  if (!repo) {
+  const hold = (repo: string, held: readonly string[]): Hold => ({ kind: "hold", tool, repo, holding: path.join(config.holdingRoot, folderKey(repo)), args: held });
+  if (tool === "gh") {
+    const repo = ghBringsFiles(args) ? enclosingFolder(config.folders, path.resolve(cwd)) : undefined;
+    return repo ? hold(repo, args) : through();
+  }
+  const expanded = expandAliases(args, cwd, context);
+  if (!expanded) {
     return through();
   }
-  return { kind: "hold", tool, repo, holding: path.join(config.holdingRoot, folderKey(repo)), args };
+  const landing = cloneTarget(expanded.command);
+  if (landing) {
+    return through(enclosingFolder(config.folders, landing), landing);
+  }
+  const { directory, gitDirFolder } = expanded.command;
+  // The work tree, or the open folder whose git directory the command changes from outside it.
+  const repo = gitBringsFiles(expanded.command)
+    ? enclosingFolder(config.folders, directory) ?? (gitDirFolder ? enclosingFolder(config.folders, gitDirFolder) : undefined)
+    : undefined;
+  return repo ? hold(repo, expanded.args) : through();
 }
 
-function gitTarget(args: readonly string[], cwd: string): string | undefined {
-  return parseGit(args, cwd)?.directory;
-}
 
-function gitTargetBrings(args: readonly string[], cwd: string): boolean {
-  const command = parseGit(args, cwd);
-  return command ? gitBringsFiles(command) : false;
-}
 
 export function folderKey(folderPath: string): string {
   return createHash("sha256").update(path.resolve(folderPath)).digest("hex").slice(0, 32);

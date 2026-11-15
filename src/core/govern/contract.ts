@@ -31,6 +31,9 @@ export interface GovernConfig {
   standinDirs?: string[];
 }
 
+/** The reason a `finished` notice carries when a command saw could not hold changed an open folder. */
+export const UNCHECKED_CLONE = "saw did not check this clone before it landed. The folder is scanned now.";
+
 /** Clean and residue may change the open folder. Anything else waits. */
 export function mayRelease(verdict: FolderVerdict): boolean {
   return verdict === "clean" || verdict === "residue";

@@ -250,9 +250,11 @@ export class Governor implements vscode.Disposable {
       await this.askOpenFolders();
     }
     await this.pointGit(nodePath.join(this.shimDir, process.platform === "win32" ? "git.cmd" : "git"));
+    // On Windows the Git view cannot be pointed at a batch file, so only the terminal waits for saw.
+    const gitView = process.platform === "win32" ? " On Windows, a pull from the Git view is not held." : "";
     this.log.info(systemBin
-      ? "Terminals already use saw's stand-in. The Git view still checks an incoming update."
-      : "Incoming git updates in open folders wait for saw.");
+      ? `Terminals already use saw's stand-in.${gitView || " The Git view still checks an incoming update."}`
+      : `Incoming git updates in open folders wait for saw.${gitView}`);
   }
 
   /**
@@ -593,6 +595,11 @@ export class Governor implements vscode.Disposable {
     }
     this.model.clearChecking(folder);
     if (notice.phase === "finished") {
+      if (notice.reasons.length) {
+        // A command saw could not hold, such as a clone, changed the folder: say so, and scan it now.
+        this.model.setUnheld(folder, true, "command");
+        this.alerts.unheld(folder.name);
+      }
       this.controller.request(folder, { immediate: true });
       return;
     }
