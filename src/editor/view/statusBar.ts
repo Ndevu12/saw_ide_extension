@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
 
 import { checkingBadge, checkingSentence } from "../../core/chat/transcript";
-import { behindNotice } from "../../core/install/upgrade";
+import { behindNotice, type Behind } from "../../core/install/upgrade";
 import type { FolderVerdict } from "../../core/scan/verdict";
-import type { FolderState, Model } from "../model";
+import { olderSawOf, type FolderState, type Model } from "../model";
 import { VERDICT_LABEL } from "../present";
 
 const ICON: Record<FolderVerdict, string> = {
@@ -37,17 +37,29 @@ export class StatusBar implements vscode.Disposable {
   }
 
   private render(): void {
-    this.renderState();
-    const engine = this.model.engine;
-    if (engine?.kind === "ready" && engine.behind) {
-      // An older saw than the pinned release: every verdict it shows says which saw gave it.
+    const older = this.olderSaw();
+    this.renderState(older?.version);
+    if (older) {
+      // An older saw than the pinned release gave a verdict shown here, or runs now.
       this.item.backgroundColor ??= new vscode.ThemeColor("statusBarItem.warningBackground");
       const shown = typeof this.item.tooltip === "string" ? this.item.tooltip : "";
-      this.item.tooltip = [behindNotice(engine.version, engine.behind), shown].filter(Boolean).join("\n\n");
+      this.item.tooltip = [behindNotice(older.version, older.behind), shown].filter(Boolean).join("\n\n");
     }
   }
 
-  private renderState(): void {
+  /** A verdict on show from an older saw wins; otherwise the engine that runs now, when it is behind. */
+  private olderSaw(): { version: string; behind: Behind } | undefined {
+    for (const state of this.model.states()) {
+      const older = olderSawOf(state);
+      if (older) {
+        return older;
+      }
+    }
+    const engine = this.model.engine;
+    return engine?.kind === "ready" && engine.behind ? { version: engine.version, behind: engine.behind } : undefined;
+  }
+
+  private renderState(olderVersion: string | undefined): void {
     const engine = this.model.engine;
     const states = this.model.states();
     if (engine?.kind === "installing") {
@@ -66,7 +78,7 @@ export class StatusBar implements vscode.Disposable {
       return;
     }
     this.item.command = "workbench.view.extension.saw";
-    const saw = engine?.kind === "ready" && engine.behind ? `saw ${engine.version}` : "saw";
+    const saw = olderVersion ? `saw ${olderVersion}` : "saw";
     const checking = states.find((state) => state.checking);
     if (checking) {
       const about = checking.checkAbout === "admission";

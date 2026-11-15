@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { behindNotice, behindPin, moveOrKeep } from "../../src/core/install/upgrade";
+import { behindNotice, behindPin, behindVersion, moveOrKeep, olderSawOf } from "../../src/core/install/upgrade";
 
 type Ready = { kind: "ready"; version: string; behind?: { pinned: string; cause: string } };
 type Unavailable = { kind: "unavailable"; reason: string; message: string };
@@ -70,6 +70,16 @@ describe("moving saw up to the pinned release", () => {
     expect(behindPin(ready("0.17.0"), "0.17.0", "x")).toEqual(ready("0.17.0"));
     expect(behindPin(ready("0.18.1"), "0.17.0", "x")).toEqual(ready("0.18.1"));
     expect(behindPin(gone, "0.17.0", "x")).toBe(gone);
+  });
+
+  it("keeps an older saw with the verdict it gave, whatever runs now", () => {
+    const behind = { pinned: "0.17.0", cause: "No package." };
+    expect(olderSawOf({ last: { verdict: "clean" }, scannedBy: { version: "0.16.0", behind } })).toEqual({ version: "0.16.0", behind });
+    // A rescan by the pinned saw replaces the record, so the mark goes with the old verdict.
+    expect(olderSawOf({ last: { verdict: "clean" }, scannedBy: { version: "0.17.0" } })).toBeUndefined();
+    expect(olderSawOf({ last: undefined, scannedBy: { version: "0.16.0", behind } })).toBeUndefined();
+    expect(behindVersion("0.16.0", behind)).toBe("0.16.0, behind the pinned 0.17.0");
+    expect(behindVersion("0.17.0", undefined)).toBe("0.17.0");
   });
 
   it("tells the status bar which saw runs, which it replaces, and what it may miss", () => {

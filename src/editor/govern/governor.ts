@@ -10,6 +10,7 @@ import { offersGovernRestore, offersGovernVerdict, openAdmission, readGoverned, 
 import { quietGit, type Tool } from "../../core/govern/command";
 import { folderKey, governStatusDir, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
 import { diskFiles, findRealProgram, isRealProgram, isStandin } from "../../core/govern/realProgram";
+import { behindVersion } from "../../core/install/upgrade";
 import { defaultIsExecutableFile } from "../../core/install/locate";
 import { runProgram } from "../../core/run";
 import type { Controller } from "../scan/controller";
@@ -598,10 +599,12 @@ export class Governor implements vscode.Disposable {
     rmSync(nodePath.join(this.markerDir, folderKey(folder.uri.fsPath)), { force: true });
     if (notice.phase === "applied") {
       this.model.setHeld(folder, undefined);
+      const engine = this.model.engine;
+      const checkedBy = engine?.kind === "ready" && engine.behind ? behindVersion(engine.version, engine.behind) : undefined;
       if (notice.verdict) {
-        this.alerts.applied(folder.name, notice.verdict);
+        this.alerts.applied(folder.name, notice.verdict, checkedBy);
       } else {
-        this.alerts.applied(folder.name);
+        this.alerts.applied(folder.name, undefined, checkedBy);
       }
     } else {
       this.model.setHeld(folder, { verdict: notice.verdict ?? "incomplete", reasons: notice.reasons, released: false, at: notice.at });

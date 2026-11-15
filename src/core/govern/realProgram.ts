@@ -36,7 +36,8 @@ export const diskFiles: ProgramFiles = {
   folderIdentity: (dir) => {
     try {
       const stats = statSync(dir, { bigint: true });
-      return stats.isDirectory() ? `${stats.dev}:${stats.ino}` : undefined;
+      // Some network and ReFS volumes report inode 0 for every folder, which identifies nothing.
+      return stats.isDirectory() && stats.ino !== 0n ? `${stats.dev}:${stats.ino}` : undefined;
     } catch {
       return undefined;
     }
@@ -44,6 +45,10 @@ export const diskFiles: ProgramFiles = {
   isMarked: (file) => {
     let fd: number | undefined;
     try {
+      // Only a regular file is opened: a FIFO or a terminal would block the read.
+      if (!statSync(file).isFile()) {
+        return false;
+      }
       fd = openSync(file, "r");
       const head = Buffer.alloc(512);
       const read = readSync(fd, head, 0, head.length, 0);

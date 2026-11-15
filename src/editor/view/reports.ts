@@ -7,6 +7,7 @@ import * as vscode from "vscode";
 import type { FixOutcome } from "../../core/fix/actions";
 import { prose } from "../../core/report/markdown";
 import { auditReport, fixReport, hooksReport, scanReport, watchReport, when, type CommandRun, type Copy } from "../../core/report/reports";
+import { behindVersion } from "../../core/install/upgrade";
 import type { Model, Settled } from "../model";
 
 export const REPORT_SCHEME = "saw-report";
@@ -241,7 +242,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
       case "scan": {
         if (!folder) return "# saw scan";
         const state = this.model.get(folder);
-        return scanReport({ folderName: folder.name, folderPath: folder.uri.fsPath, scanning: state.scanning, fixing: state.fixing, step: state.scanning ? state.progress : undefined, outcome: state.last, sawVersion }, copy);
+        return scanReport({ folderName: folder.name, folderPath: folder.uri.fsPath, scanning: state.scanning, fixing: state.fixing, step: state.scanning ? state.progress : undefined, outcome: state.last, sawVersion: state.scannedBy ? behindVersion(state.scannedBy.version, state.scannedBy.behind) : sawVersion }, copy);
       }
       case "fix": {
         const record = folder && this.fixes.get(folderKey(folder));
@@ -386,5 +387,5 @@ function shownVersion(engine: Model["engine"]): string | undefined {
   if (engine?.kind !== "ready") {
     return undefined;
   }
-  return engine.behind ? `${engine.version}, behind the pinned ${engine.behind.pinned}` : engine.version;
+  return behindVersion(engine.version, engine.behind);
 }

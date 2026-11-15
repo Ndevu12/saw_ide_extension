@@ -5,7 +5,7 @@ import type { Finding } from "../../core/scan/contract";
 import { plain } from "../../core/text";
 import { behindNotice } from "../../core/install/upgrade";
 import { findingRange, findingUri } from "../scan/diagnostics";
-import type { FolderState, Model } from "../model";
+import { olderSawOf, type FolderState, type Model } from "../model";
 import { findingMessage, VERDICT_ICON, VERDICT_LABEL } from "../present";
 
 type Node =
@@ -124,10 +124,10 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
           item.collapsibleState = vscode.TreeItemCollapsibleState.None;
         }
         item.tooltip = state.folder.uri.fsPath;
-        const engine = this.model.engine;
-        if (engine?.kind === "ready" && engine.behind && state.last) {
-          item.description = `${String(item.description ?? "")} · saw ${engine.version}`;
-          item.tooltip = `${state.folder.uri.fsPath}\n\n${behindNotice(engine.version, engine.behind)}`;
+        const older = olderSawOf(state);
+        if (older) {
+          item.description = `${String(item.description ?? "")} · saw ${older.version}`;
+          item.tooltip = `${state.folder.uri.fsPath}\n\n${behindNotice(older.version, older.behind)}`;
         }
         return item;
       }

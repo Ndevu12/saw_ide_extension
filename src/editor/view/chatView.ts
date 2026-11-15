@@ -10,7 +10,7 @@ import type { Feedback } from "../feedback/feedback";
 import type { Decide } from "../fix/decide";
 import type { Controller } from "../scan/controller";
 import { findingRange, findingUri } from "../scan/diagnostics";
-import type { FolderState, Model } from "../model";
+import { olderSawOf, type FolderState, type Model } from "../model";
 
 const AUDIT_LABEL: Record<AuditVerdict, string> = {
   "no-hazard": "no hazard found",
@@ -102,7 +102,7 @@ export class ChatView implements vscode.Disposable {
     const audit = this.model.machine.audit;
     const detail = hooksDetail(hooks);
     return {
-      engine: engineInput(engine),
+      engine: engineInput(engine, this.model.states().map(olderSawOf).find(Boolean)),
       auditing: this.model.machine.auditing,
       ...(this.model.machine.auditProgress ? { auditProgress: this.model.machine.auditProgress } : {}),
       ...(audit ? { auditLabel: AUDIT_LABEL[audit.verdict] } : {}),
@@ -258,9 +258,10 @@ function openings(state: FolderState): OpenTarget[] {
   return found.slice(0, SHOWN_FINDINGS);
 }
 
-function engineInput(engine: Model["engine"]): ChatMachineInput["engine"] {
+function engineInput(engine: Model["engine"], olderVerdict: ReturnType<typeof olderSawOf>): ChatMachineInput["engine"] {
   if (!engine || engine.kind === "ready") {
-    return engine?.behind ? { phase: "ready", canInstall: true, message: behindNotice(engine.version, engine.behind) } : { phase: "ready", canInstall: false };
+    const older = olderVerdict ?? (engine?.behind ? { version: engine.version, behind: engine.behind } : undefined);
+    return older ? { phase: "ready", canInstall: true, message: behindNotice(older.version, older.behind) } : { phase: "ready", canInstall: false };
   }
   if (engine.kind === "installing") {
     return { phase: "installing", canInstall: false };

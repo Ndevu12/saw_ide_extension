@@ -62,6 +62,26 @@ export async function moveOrKeep<R extends Ready, U extends Unavailable>(pinned:
   return behindPin(kept, pinned, cause);
 }
 
+/** The saw that gave a folder's verdict, and whether it was behind the pinned release then. */
+export interface ScannedBy {
+  version: string;
+  behind?: Behind;
+}
+
+/**
+ * The older saw behind a folder's verdict, while that verdict is shown. It belongs to the verdict,
+ * not to the saw running now, so it holds while an install runs and until a newer saw rescans.
+ */
+export function olderSawOf(state: { last: unknown; scannedBy: ScannedBy | undefined }): { version: string; behind: Behind } | undefined {
+  const by = state.scannedBy;
+  return state.last && by?.behind ? { version: by.version, behind: by.behind } : undefined;
+}
+
+/** A short form, for a version line or a notification: `0.16.0, behind the pinned 0.17.0`. */
+export function behindVersion(version: string, behind: Behind | undefined): string {
+  return behind ? `${version}, behind the pinned ${behind.pinned}` : version;
+}
+
 /** What the status bar says about a saw that is behind, ahead of the verdict it shows. */
 export function behindNotice(version: string, behind: Behind): string {
   return `saw ${version} is running instead of saw ${behind.pinned}. ${behind.cause} A folder it shows as clean may still hold what saw ${behind.pinned} finds. Run saw: Install or Repair saw to try again.`;

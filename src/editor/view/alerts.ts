@@ -69,9 +69,11 @@ export class Alerts {
     }
   }
 
-  applied(name: string, verdict?: FolderVerdict): void {
+  /** `checkedBy`: the older saw that checked it, when it is behind the pinned release. */
+  applied(name: string, verdict?: FolderVerdict, checkedBy?: string): void {
     const detail = verdict ? ` (${VERDICT_LABEL[verdict]})` : "";
-    void vscode.window.showInformationMessage(`saw checked the update to ${name}${detail}. The folder was updated.`);
+    const older = checkedBy ? ` It was checked by saw ${checkedBy}, which may miss what the newer release finds.` : "";
+    void (older ? vscode.window.showWarningMessage : vscode.window.showInformationMessage)(`saw checked the update to ${name}${detail}. The folder was updated.${older}`);
   }
 
   unheld(name: string): void {
