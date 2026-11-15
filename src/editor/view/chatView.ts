@@ -5,6 +5,7 @@ import { chatCards, renderChat, SHOWN_FINDINGS, type ChatCleanup, type ChatFolde
 import type { Finding } from "../../core/scan/contract";
 import { plain } from "../../core/text";
 import type { AuditVerdict, FixOutcome, HookStatus } from "../../core/fix/actions";
+import { behindNotice } from "../../core/install/upgrade";
 import type { Feedback } from "../feedback/feedback";
 import type { Decide } from "../fix/decide";
 import type { Controller } from "../scan/controller";
@@ -259,7 +260,7 @@ function openings(state: FolderState): OpenTarget[] {
 
 function engineInput(engine: Model["engine"]): ChatMachineInput["engine"] {
   if (!engine || engine.kind === "ready") {
-    return { phase: "ready", canInstall: false };
+    return engine?.behind ? { phase: "ready", canInstall: true, message: behindNotice(engine.version, engine.behind) } : { phase: "ready", canInstall: false };
   }
   if (engine.kind === "installing") {
     return { phase: "installing", canInstall: false };

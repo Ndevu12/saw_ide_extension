@@ -39,6 +39,13 @@ describe("what an AI agent is told about a folder", () => {
     expect(text).not.toContain("STOP");
   });
 
+  it("says when an older saw than the pinned release gave the verdict", () => {
+    const text = agentReport([folder({ behind: "saw 0.16.0 is running instead of saw 0.17.0." })]);
+    expect(text).toContain("Verdict: clean");
+    expect(text).toContain("Older saw: saw 0.16.0 is running instead of saw 0.17.0.");
+    expect(agentReport([folder()])).not.toContain("Older saw");
+  });
+
   it("tells it to stop on infected, suspicious and unfinished scans", () => {
     for (const verdict of ["infected", "suspicious", "incomplete"] as const) {
       expect(agentReport([folder({ verdict })])).toContain("STOP.");

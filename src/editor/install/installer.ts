@@ -141,11 +141,11 @@ export class Installer {
     return this.lastReport;
   }
 
-  /** `keeping` is the version of a saw that still runs if this install fails. */
-  async install(why: string, keeping?: string): Promise<InstallOutcome> {
+  /** A failed install is not shown here: the caller knows whether an older saw keeps running. */
+  async install(why: string): Promise<InstallOutcome> {
     const lock = await this.acquire();
     try {
-      return lock === "waited" ? { kind: "installed-elsewhere" } : await this.installLocked(why, keeping);
+      return lock === "waited" ? { kind: "installed-elsewhere" } : await this.installLocked(why);
     } finally {
       rmSync(this.lockPath, { recursive: true, force: true });
     }
@@ -160,7 +160,7 @@ export class Installer {
     return known.cause;
   }
 
-  private async installLocked(why: string, keeping: string | undefined): Promise<InstallOutcome> {
+  private async installLocked(why: string): Promise<InstallOutcome> {
     this.log.info(`${why} Installing stayawakebot ${this.pins.saw} with pipx.`);
     const result = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: "Setting up saw", cancellable: true },
@@ -213,13 +213,13 @@ export class Installer {
           diagnosis.unsupported ? { pin: this.pins.saw, machine: machineName(machine), at: Date.now(), cause: diagnosis.cause } satisfies Unsupported : undefined,
         );
         this.log.error(`saw ${this.pins.saw} could not be installed. ${diagnosis.cause} ${diagnosis.fix}`);
-        void this.showFailure(diagnosis, keeping);
         return { kind: "failed", diagnosis };
       }
     }
   }
 
-  private async showFailure(diagnosis: Diagnosis, keeping: string | undefined): Promise<void> {
+  /** `keeping`: the version of the saw that still runs after this failure, found after the attempt. */
+  async showFailure(diagnosis: Diagnosis, keeping: string | undefined): Promise<void> {
     const extension = `${this.context.extension.id} ${(this.context.extension.packageJSON as { version?: string }).version ?? "?"}`;
     const report = reportUrl(diagnosis, extension);
     const actions = [...(report ? ["Report It"] : []), "Retry", "Copy Diagnostics", "Show Log"];

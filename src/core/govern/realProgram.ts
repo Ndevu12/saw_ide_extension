@@ -1,4 +1,4 @@
-import { realpathSync, statSync } from "node:fs";
+import { closeSync, openSync, readSync, realpathSync, statSync } from "node:fs";
 import * as path from "node:path";
 
 import { defaultIsExecutableFile } from "../install/locate";
@@ -8,12 +8,20 @@ import { defaultIsExecutableFile } from "../install/locate";
 // A folder is matched by what it is on disk, so a symlink or a different spelling of a stand-in
 // folder is still that folder.
 
+/**
+ * A line in every wrapper this extension writes, so no editor takes one for the real program: not
+ * a copy or a hard link, and not another editor's stand-in, whose folder this window does not know.
+ */
+export const STANDIN_MARK = "saw-govern-standin";
+
 export interface ProgramFiles {
   isExecutableFile(file: string): boolean;
   /** The file a path leads to after symlinks, or undefined when it cannot be followed. */
   realpath(file: string): string | undefined;
   /** A key that is equal for two paths to the same folder, or undefined when the folder cannot be read. */
   folderIdentity(dir: string): string | undefined;
+  /** True when the file starts with a wrapper that carries STANDIN_MARK. */
+  isMarked(file: string): boolean;
 }
 
 export const diskFiles: ProgramFiles = {
@@ -31,6 +39,21 @@ export const diskFiles: ProgramFiles = {
       return stats.isDirectory() ? `${stats.dev}:${stats.ino}` : undefined;
     } catch {
       return undefined;
+    }
+  },
+  isMarked: (file) => {
+    let fd: number | undefined;
+    try {
+      fd = openSync(file, "r");
+      const head = Buffer.alloc(512);
+      const read = readSync(fd, head, 0, head.length, 0);
+      return head.subarray(0, read).toString("latin1").includes(STANDIN_MARK);
+    } catch {
+      return false;
+    } finally {
+      if (fd !== undefined) {
+        closeSync(fd);
+      }
     }
   },
 };
@@ -62,6 +85,9 @@ export function isStandinFolder(dir: string, standinDirs: readonly string[], fil
 
 /** True when `file` is, or leads through a symlink to, a program in a stand-in folder. */
 export function isStandin(file: string, standinDirs: readonly string[], files: ProgramFiles, platform: NodeJS.Platform = process.platform): boolean {
+  if (files.isMarked(file)) {
+    return true;
+  }
   const target = files.realpath(file);
   const places = [file, ...(target && target !== file ? [target] : [])];
   return places.some(
@@ -103,10 +129,13 @@ export function findRealProgram(name: string, search: SearchPath, standinDirs: r
   return undefined;
 }
 
+/** Why a recorded program is not run: it leads back to a stand-in, or it is no longer there. */
+export type NotRun = "leads-back" | "gone";
+
 export type RealProgramCheck =
   | { kind: "ok"; program: string }
-  | { kind: "replaced"; program: string; recorded: string }
-  | { kind: "missing"; recorded: string };
+  | { kind: "replaced"; program: string; recorded: string; why: NotRun }
+  | { kind: "missing"; recorded: string; why: NotRun };
 
 /**
  * What the stand-in runs for `tool`, given what the configuration recorded. A recorded program that
@@ -117,6 +146,8 @@ export function checkRealProgram(recorded: string, tool: string, standinDirs: re
   if (recorded && isRealProgram(recorded, standinDirs ?? [], files, search.platform)) {
     return { kind: "ok", program: recorded };
   }
+  const { isAbsolute } = rules(search.platform);
+  const why: NotRun = !recorded || isAbsolute(recorded) && !isStandin(recorded, standinDirs ?? [], files, search.platform) ? "gone" : "leads-back";
   const found = standinDirs?.length ? findRealProgram(tool, search, standinDirs, files) : undefined;
-  return found ? { kind: "replaced", program: found, recorded } : { kind: "missing", recorded };
+  return found ? { kind: "replaced", program: found, recorded, why } : { kind: "missing", recorded, why };
 }

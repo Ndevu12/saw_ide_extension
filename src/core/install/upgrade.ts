@@ -27,6 +27,8 @@ export interface MoveSteps<R extends Ready, U extends Unavailable> {
   install(): Promise<R | U>;
   /** Find the saw that is installed now, in case the attempt removed it. */
   keep(): Promise<R | U>;
+  /** Tell the operator the install failed, naming the saw that keeps running, when one does. */
+  failed(moved: U, keeping: string | undefined): void;
   warn(message: string): void;
 }
 
@@ -46,9 +48,11 @@ export function behindPin<F extends Ready | Unavailable>(found: F, pinned: strin
 export async function moveOrKeep<R extends Ready, U extends Unavailable>(pinned: string, steps: MoveSteps<R, U>): Promise<R | U> {
   const moved = await steps.install();
   if (moved.kind === "ready") {
-    return moved;
+    // Another window may have held the install, with or without success: what runs can still be older.
+    return behindPin(moved, pinned, `saw ${pinned} was not in place after the install.`);
   }
   const kept = await steps.keep();
+  steps.failed(moved, kept.kind === "ready" ? kept.version : undefined);
   if (kept.kind !== "ready") {
     return moved;
   }

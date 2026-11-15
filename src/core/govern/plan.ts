@@ -3,6 +3,7 @@ import * as path from "node:path";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit, type Tool } from "./command";
 import type { GovernConfig } from "./contract";
+import { STANDIN_MARK } from "./realProgram";
 
 export interface Hold {
   kind: "hold";
@@ -92,6 +93,7 @@ export function posixWrapper(node: string, shim: string, configPath: string, rea
   const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
   return [
     "#!/bin/sh",
+    `# ${STANDIN_MARK}: saw's ${tool} stand-in, never the real ${tool}.`,
     `if [ ! -f ${quote(shim)} ]; then`,
     `  echo ${quote(`saw: ${shim} is missing, so this ${tool} runs without saw's check. Reinstall the saw extension.`)} >&2`,
     `  exec ${quote(real)} "$@"`,
@@ -110,6 +112,7 @@ export function windowsWrapper(node: string, shim: string, configPath: string, r
   requireFullPath(real, tool, path.win32);
   return [
     "@echo off",
+    `rem ${STANDIN_MARK}: saw's ${tool} stand-in, never the real ${tool}.`,
     `if not exist "${shim}" (`,
     // Quoted: inside this ( ) block, a ")" or "&" in the path would end the block or start a command.
     `  echo saw: "${shim}" is missing, so this ${tool} runs without saw's check. Reinstall the saw extension. 1>&2`,

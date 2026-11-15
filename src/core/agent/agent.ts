@@ -15,6 +15,8 @@ export interface AgentFolder {
   findings: Finding[];
   /** A govern check the agent must hear about, in the same words the editor shows. */
   notice?: string;
+  /** The saw that gave this verdict is older than the release this extension installs, and why. */
+  behind?: string;
 }
 
 const MAX_FINDINGS = 10;
@@ -62,6 +64,9 @@ function folderReport(folder: AgentFolder): string {
   }
   lines.push(`Verdict: ${HEADLINE[folder.verdict]}${folder.scannedAt ? `, scanned at ${plain(folder.scannedAt, 40)}` : ""}.`);
   lines.push(GUIDANCE[folder.verdict]);
+  if (folder.behind) {
+    lines.push(`Older saw: ${folder.behind}`);
+  }
   if (folder.notice) {
     lines.push(folder.notice);
   }

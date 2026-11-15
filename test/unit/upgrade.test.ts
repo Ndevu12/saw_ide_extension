@@ -12,11 +12,14 @@ const gone: Unavailable = { kind: "unavailable", reason: "unrecognised", message
 
 function steps(installed: Ready | Unavailable, kept: Ready | Unavailable) {
   const warnings: string[] = [];
+  const failures: Array<{ reason: string; keeping: string | undefined }> = [];
   let keepCalls = 0;
   return {
     warnings,
+    failures,
     keepCalls: () => keepCalls,
     steps: {
+      failed: (moved: Unavailable, keeping: string | undefined) => failures.push({ reason: moved.reason, keeping }),
       install: () => Promise.resolve(installed),
       keep: () => {
         keepCalls += 1;
@@ -39,12 +42,21 @@ describe("moving saw up to the pinned release", () => {
     const run = steps(failed, ready("0.16.0"));
     expect(await moveOrKeep("0.17.0", run.steps)).toEqual({ ...ready("0.16.0"), behind: { pinned: "0.17.0", cause: failed.message } });
     expect(run.warnings).toEqual([`saw 0.17.0 could not be installed, so saw 0.16.0 keeps running. ${failed.message}`]);
+    expect(run.failures).toEqual([{ reason: "install-failed", keeping: "0.16.0" }]);
   });
 
   it("reports the failed install, and does not claim a saw keeps running, when none is left", async () => {
     const run = steps(failed, gone);
     expect(await moveOrKeep("0.17.0", run.steps)).toBe(failed);
     expect(run.warnings).toEqual([]);
+    // The notification is told nothing keeps running, so it cannot say an older saw keeps scanning.
+    expect(run.failures).toEqual([{ reason: "install-failed", keeping: undefined }]);
+  });
+
+  it("marks an older saw as behind when another window held the install", async () => {
+    const run = steps(ready("0.16.0"), ready("0.16.0"));
+    expect(await moveOrKeep("0.17.0", run.steps)).toEqual({ ...ready("0.16.0"), behind: { pinned: "0.17.0", cause: "saw 0.17.0 was not in place after the install." } });
+    expect(run.failures).toEqual([]);
   });
 
   it("says the install was cancelled, not that it failed", async () => {

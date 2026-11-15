@@ -4,6 +4,7 @@ import * as path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { posixWrapper } from "../../src/core/govern/plan";
 import { checkRealProgram, diskFiles, findRealProgram, isRealProgram, isStandin, type ProgramFiles } from "../../src/core/govern/realProgram";
 
 const posix = process.platform !== "win32";
@@ -14,6 +15,7 @@ describe.runIf(posix)("the real program behind saw's stand-in, on disk", () => {
   let real = "";
   let alias = "";
   let linked = "";
+  let otherEditor = "";
 
   beforeAll(() => {
     root = mkdtempSync(path.join(tmpdir(), "saw-real-"));
@@ -21,13 +23,16 @@ describe.runIf(posix)("the real program behind saw's stand-in, on disk", () => {
     real = path.join(root, "usr", "bin");
     alias = path.join(root, "alias");
     linked = path.join(root, "linked");
-    for (const dir of [standin, real, linked]) {
+    otherEditor = path.join(root, "insiders", "govern", "bin");
+    for (const dir of [standin, real, linked, otherEditor]) {
       mkdirSync(dir, { recursive: true });
     }
     writeFileSync(path.join(standin, "git"), "#!/bin/sh\n", { mode: 0o755 });
     writeFileSync(path.join(real, "git"), "#!/bin/sh\n", { mode: 0o755 });
     symlinkSync(standin, alias);
     symlinkSync(path.join(standin, "git"), path.join(linked, "git"));
+    // Another editor's stand-in: a folder this window does not know, holding a wrapper it would write.
+    writeFileSync(path.join(otherEditor, "git"), posixWrapper("/usr/bin/node", "/other/govern-shim.js", "/other/config.json", "/usr/bin/git", "git"), { mode: 0o755 });
   });
 
   afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -50,6 +55,16 @@ describe.runIf(posix)("the real program behind saw's stand-in, on disk", () => {
     expect(findRealProgram("git", search("govern/bin", "bin", real), [standin], diskFiles)).toBe(path.join(real, "git"));
   });
 
+  it("looks past another editor's stand-in, by the mark every wrapper carries", () => {
+    expect(isRealProgram(path.join(otherEditor, "git"), [standin], diskFiles)).toBe(false);
+    expect(findRealProgram("git", search(otherEditor, real), [standin], diskFiles)).toBe(path.join(real, "git"));
+  });
+
+  it("says a recorded program is gone, rather than that it leads back, when it is simply not there", () => {
+    expect(checkRealProgram(path.join(root, "removed", "git"), "git", [standin], search(standin), diskFiles)).toEqual({ kind: "missing", recorded: path.join(root, "removed", "git"), why: "gone" });
+    expect(checkRealProgram("git", "git", [standin], search(standin), diskFiles)).toEqual({ kind: "missing", recorded: "git", why: "leads-back" });
+  });
+
   it("finds nothing when only the stand-in is on PATH", () => {
     expect(findRealProgram("git", search(standin, alias), [standin], diskFiles)).toBeUndefined();
   });
@@ -63,12 +78,12 @@ describe.runIf(posix)("the real program behind saw's stand-in, on disk", () => {
   });
 
   it("replaces a recorded bare git with the real one when the stand-in folders are known", () => {
-    expect(checkRealProgram("git", "git", [standin], search(standin, real), diskFiles)).toEqual({ kind: "replaced", program: path.join(real, "git"), recorded: "git" });
+    expect(checkRealProgram("git", "git", [standin], search(standin, real), diskFiles)).toEqual({ kind: "replaced", program: path.join(real, "git"), recorded: "git", why: "leads-back" });
     expect(checkRealProgram(path.join(real, "git"), "git", [standin], search(standin, real), diskFiles)).toEqual({ kind: "ok", program: path.join(real, "git") });
   });
 
   it("runs nothing for a recorded bare git when the stand-in folders are not known", () => {
-    expect(checkRealProgram("git", "git", undefined, search(standin, real), diskFiles)).toEqual({ kind: "missing", recorded: "git" });
+    expect(checkRealProgram("git", "git", undefined, search(standin, real), diskFiles)).toEqual({ kind: "missing", recorded: "git", why: "leads-back" });
     expect(checkRealProgram(path.join(alias, "git"), "git", undefined, search(real), diskFiles).kind).toBe("ok");
   });
 });
@@ -79,8 +94,9 @@ describe("the real program behind saw's stand-in, by path rules", () => {
     isExecutableFile: () => true,
     realpath: () => undefined,
     folderIdentity: (dir) => dir.toLowerCase(),
+    isMarked: () => false,
   };
-  const unreadable: ProgramFiles = { isExecutableFile: () => true, realpath: () => undefined, folderIdentity: () => undefined };
+  const unreadable: ProgramFiles = { isExecutableFile: () => true, realpath: () => undefined, folderIdentity: () => undefined, isMarked: () => false };
 
   it("treats a differently cased spelling of the stand-in folder as that folder", () => {
     const search = { pathVariable: "/Home/me/Govern/bin:/usr/bin", platform: "darwin" as const };

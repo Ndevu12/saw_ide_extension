@@ -3,6 +3,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 
 import { agentReport, agentUpdate, type AgentFolder } from "../../core/agent/agent";
+import { behindNotice } from "../../core/install/upgrade";
 import type { Controller } from "../scan/controller";
 import type { Engine } from "../install/engine";
 import type { FolderState, Model } from "../model";
@@ -67,7 +68,7 @@ export class FolderVerdictTool implements vscode.LanguageModelTool<FolderVerdict
   }
 
   private async report(folder: vscode.WorkspaceFolder, token: vscode.CancellationToken): Promise<AgentFolder> {
-    const base = { name: folder.name, path: folder.uri.fsPath, reasons: [], findings: [] };
+    const base = { name: folder.name, path: folder.uri.fsPath, reasons: [], findings: [], ...behindOf(this.model.engine) };
     if (folder.uri.scheme !== "file") {
       return { ...base, path: folder.uri.toString(), verdict: undefined, problem: "saw only scans folders on disk." };
     }
@@ -88,7 +89,7 @@ export class FolderVerdictTool implements vscode.LanguageModelTool<FolderVerdict
 /** What an agent is told about a folder from its state now; `waited` when a wait for its scan ran out. */
 export function describeFolder(state: FolderState, engine: Engine | undefined, waited = false): AgentFolder {
   const folder = state.folder;
-  const base = { name: folder.name, path: folder.uri.fsPath, reasons: [], findings: [] };
+  const base = { name: folder.name, path: folder.uri.fsPath, reasons: [], findings: [], ...behindOf(engine) };
   const update = agentUpdate({
     checking: state.checking,
     ...(state.checkStep ? { checkStep: state.checkStep } : {}),
@@ -117,6 +118,11 @@ export function describeFolder(state: FolderState, engine: Engine | undefined, w
     reasons: last.reasons,
     findings: last.payload.results.flatMap((result) => result.findings),
   };
+}
+
+/** Which saw gave the verdict, when it is older than the pinned release, in the editor's own words. */
+function behindOf(engine: Engine | undefined): { behind?: string } {
+  return engine?.kind === "ready" && engine.behind ? { behind: behindNotice(engine.version, engine.behind) } : {};
 }
 
 function why(state: FolderState, busy: boolean, engine: Engine | undefined): string {

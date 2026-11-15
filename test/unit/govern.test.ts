@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 
@@ -229,7 +229,7 @@ describe("what the stand-in runs when it falls back", () => {
 
 // The bundled stand-in, run the way a terminal runs it: a recorded bare git must not lead back to it.
 describe.runIf(process.platform !== "win32")("the stand-in and a recorded bare git", () => {
-  async function runGit(config: (dirs: { bin: string; real: string }) => Partial<GovernConfig>) {
+  async function runGit(config: (dirs: { bin: string; real: string }) => Partial<GovernConfig>, options: { standin?: boolean; realOnPath?: boolean } = {}) {
     const root = mkdtempSync(path.join(tmpdir(), "saw-standin-"));
     const bin = path.join(root, "bin");
     const real = path.join(root, "real");
@@ -238,24 +238,36 @@ describe.runIf(process.platform !== "win32")("the stand-in and a recorded bare g
     const shim = path.join(root, "govern-shim.js");
     await build({ entryPoints: [path.resolve(__dirname, "../../src/governShim.ts")], bundle: true, platform: "node", format: "cjs", outfile: shim, logLevel: "silent" });
     writeFileSync(path.join(real, "git"), '#!/bin/sh\necho "real git $*"\n', { mode: 0o755 });
+    // saw's own stand-in, standing in for one that looks git up on PATH when it is given none.
+    const standinMark = path.join(root, "standin-ran");
+    const standinConfig = () => {
+      if (!options.standin) {
+        return {};
+      }
+      const file = path.join(root, "saw-git-standin");
+      writeFileSync(file, `#!/bin/sh\n: > '${standinMark}'\nexec git "$@"\n`, { mode: 0o755 });
+      return { standin: file };
+    };
     const configPath = path.join(root, "config.json");
-    writeFileSync(configPath, JSON.stringify({ enabled: true, saw: "", realGh: "", timeoutMs: 1000, folders: [], holdingRoot: root, markerDir: root, resultDir: root, progress: false, ...config({ bin, real }) }));
+    writeFileSync(configPath, JSON.stringify({ enabled: true, saw: "", realGh: "", timeoutMs: 1000, folders: [], holdingRoot: root, markerDir: root, resultDir: root, progress: false, ...standinConfig(), ...config({ bin, real }) }));
     // Each entry to the wrapper is counted, and a fifth stops it, so a loop fails the test instead of the machine.
     const count = path.join(root, "count");
     const lines = posixWrapper(process.execPath, shim, configPath, path.join(real, "git"), "git").split("\n");
-    lines.splice(1, 0, `n=$(( $(cat '${count}' 2>/dev/null || echo 0) + 1 )); echo $n > '${count}'`, 'if [ "$n" -ge 5 ]; then echo "LOOP" >&2; exit 99; fi');
+    // Shell builtins only, so the guard holds even when PATH has nothing but the stand-in.
+    lines.splice(1, 0, `n=0; if [ -f '${count}' ]; then read n < '${count}'; fi; n=$((n + 1)); echo "$n" > '${count}'`, 'if [ "$n" -ge 5 ]; then echo "LOOP" >&2; exit 99; fi');
     writeFileSync(path.join(bin, "git"), lines.join("\n"), { mode: 0o755 });
-    const run = spawnSync("git", ["--version"], { cwd: root, encoding: "utf8", env: { ...process.env, PATH: [bin, real, process.env["PATH"]].join(path.delimiter) } });
+    const run = spawnSync("git", ["--version"], { cwd: root, encoding: "utf8", timeout: 15_000, env: { ...process.env, PATH: options.realOnPath === false ? bin : [bin, real, process.env["PATH"]].join(path.delimiter) } });
+    const standinRan = existsSync(standinMark);
     const entries = Number(readFileSync(count, "utf8").trim());
     rmSync(root, { recursive: true, force: true });
-    return { run, entries };
+    return { run, entries, standinRan };
   }
 
   it("runs the real git on PATH, and says so, when it knows its own folders", async () => {
     const { run, entries } = await runGit(({ bin }) => ({ realGit: "git", standinDirs: [bin] }));
     expect(entries).toBe(1);
     expect(run.stdout.trim()).toBe("real git --version");
-    expect(run.stderr).toContain("is not a program saw's stand-in can run");
+    expect(run.stderr).toContain("would run saw's stand-in again, so it runs");
   }, 20_000);
 
   it("runs nothing, and says why, when an older configuration does not name its folders", async () => {
@@ -263,7 +275,15 @@ describe.runIf(process.platform !== "win32")("the stand-in and a recorded bare g
     expect(entries).toBe(1);
     expect(run.status).toBe(127);
     expect(run.stdout).toBe("");
-    expect(run.stderr).toContain("would run saw's stand-in again");
+    expect(run.stderr).toContain("would run saw's stand-in again, and no other was found");
+  }, 20_000);
+
+  it("does not start saw's own stand-in without a real git, since it would find this one on PATH", async () => {
+    const { run, entries, standinRan } = await runGit(({ real }) => ({ realGit: path.join(real, "removed-git"), standinDirs: [] }), { standin: true, realOnPath: false });
+    expect(entries).toBe(1);
+    expect(run.status).toBe(127);
+    expect(standinRan).toBe(false);
+    expect(run.stderr).toContain("is no longer there, and no other was found");
   }, 20_000);
 
   it("runs a recorded full path as before", async () => {

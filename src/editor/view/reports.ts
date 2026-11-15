@@ -236,7 +236,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
 
   private render(kind: Kind, folder: vscode.WorkspaceFolder | undefined, copy: Copy): string {
     const engine = this.model.engine;
-    const sawVersion = engine?.kind === "ready" ? engine.version : undefined;
+    const sawVersion = shownVersion(engine);
     switch (kind) {
       case "scan": {
         if (!folder) return "# saw scan";
@@ -267,7 +267,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
 
   private fixInput(folder: vscode.WorkspaceFolder, record: FixRecord) {
     const engine = this.model.engine;
-    return { folderName: folder.name, folderPath: folder.uri.fsPath, run: record.run, outcome: record.outcome, decisions: record.decisions, sawVersion: engine?.kind === "ready" ? engine.version : undefined };
+    return { folderName: folder.name, folderPath: folder.uri.fsPath, run: record.run, outcome: record.outcome, decisions: record.decisions, sawVersion: shownVersion(engine) };
   }
 
   private modelChanged(): void {
@@ -379,4 +379,12 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     this.subscriptions.forEach((s) => s.dispose());
     this.changed.dispose();
   }
+}
+
+/** The saw that ran, and the release it stands in for when it is older than the pin. */
+function shownVersion(engine: Model["engine"]): string | undefined {
+  if (engine?.kind !== "ready") {
+    return undefined;
+  }
+  return engine.behind ? `${engine.version}, behind the pinned ${engine.behind.pinned}` : engine.version;
 }

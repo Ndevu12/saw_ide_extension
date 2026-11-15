@@ -41,10 +41,10 @@ function withRealPrograms(config: GovernConfig, tool: Tool): GovernConfig {
   const search = { pathVariable: process.env["PATH"], platform: process.platform };
   const real = (recorded: string, name: Tool): string => {
     const check = checkRealProgram(recorded, name, config.standinDirs, search, diskFiles);
-    if (name === tool && check.kind === "replaced" && check.recorded) {
-      process.stderr.write(`saw: the recorded ${name}, ${check.recorded}, is not a program saw's stand-in can run, so it runs ${check.program}. Reload the window so saw records ${name} again.\n`);
-    } else if (name === tool && check.kind === "missing" && check.recorded) {
-      process.stderr.write(`saw: the recorded ${name}, ${check.recorded}, would run saw's stand-in again, so it is not run. Reload the window so saw records ${name} again.\n`);
+    if (name === tool && check.kind !== "ok" && check.recorded) {
+      const problem = check.why === "gone" ? "is no longer there" : "would run saw's stand-in again";
+      const instead = check.kind === "replaced" ? `so it runs ${check.program}` : "and no other was found";
+      process.stderr.write(`saw: the recorded ${name}, ${check.recorded}, ${problem}, ${instead}. Reload the window so saw records ${name} again.\n`);
     }
     return check.kind === "missing" ? "" : check.program;
   };
@@ -159,6 +159,11 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const config = withRealPrograms(recorded, tool);
+  if (!(tool === "git" ? config.realGit : config.realGh)) {
+    // Nothing runs without the real program, not even saw's stand-in, which would look it up on PATH and find this one.
+    process.stderr.write(`saw could not find ${tool}.\n`);
+    process.exit(127);
+  }
   const action = plan(config, tool, args, process.cwd());
   if (config.standin && action.kind === "passthrough") {
     runPlaced(config, tool, args, config.holdingRoot, () => undefined, (code, spawnFailed) => {
