@@ -7,7 +7,7 @@ before you trust it.
 [![Visual Studio Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-install-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=ndevu12.stayawakebot)
 [![Open VSX](https://img.shields.io/open-vsx/v/Ndevu12/stayawakebot?label=Open%20VSX&color=a60ee5)](https://open-vsx.org/extension/Ndevu12/stayawakebot)
 [![saw documentation](https://img.shields.io/badge/docs-saw--docs.ndevuspace.com-2ea44f)](https://saw-docs.ndevuspace.com/)
-[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 ![saw finds a worm in a folder that has not been trusted yet, and offers to fix it](docs/images/infected-alert.png)
 
@@ -271,4 +271,4 @@ and why it [fails closed](https://saw-docs.ndevuspace.com/latest/explanation/fai
 
 ## License
 
-[BSD-3-Clause](LICENSE)
+[Apache-2.0](LICENSE)

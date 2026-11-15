@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The extension is licensed under Apache-2.0, as saw is. It was BSD-3-Clause. The package carries the license and a NOTICE file.
+
 ## [0.6.2] - 2026-11-15
 
 ### Added
