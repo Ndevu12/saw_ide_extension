@@ -276,10 +276,11 @@ function folderNotice(folder: ChatFolderInput): { text: string; tone: Tone } | u
   if (folder.held) {
     notices.push({ text: `An update was held (${VERDICT_BADGE[folder.held.verdict]}). The folder is unchanged.`, tone: folder.held.verdict === "infected" ? "bad" : "warn" });
   }
-  if (folder.unheld) {
-    notices.push(folder.unheldFrom === "open"
-      ? { text: "No record of letting this commit in.", tone: "warn" }
-      : { text: "A git command changed this folder without a check.", tone: "bad" });
+  const settled = folder.verdict === "clean" || folder.verdict === "infected";
+  if (folder.unheld && folder.unheldFrom !== "open") {
+    notices.push({ text: "A git command changed this folder without a check.", tone: "bad" });
+  } else if (folder.unheld && !settled) {
+    notices.push({ text: "No record of letting this commit in.", tone: "warn" });
   }
   const cleanup = folder.cleanup;
   if (cleanup?.historyHoldsPayload) {

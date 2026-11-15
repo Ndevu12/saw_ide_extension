@@ -111,6 +111,10 @@ describe("the sidebar chat", () => {
     const held = chat([folder({ verdict: "clean", held: { verdict: "infected", reasons: ["a workflow arrived"] } })]);
     expect(held).toContain('<p class="notice bad">An update was held (infected). The folder is unchanged.</p>');
     expect(held).not.toContain("a workflow arrived");
+    for (const verdict of ["clean", "infected"] as const) {
+      expect(chat([folder({ verdict, unheld: true, unheldFrom: "open" })])).not.toContain('class="notice');
+    }
+    expect(chat([folder({ verdict: "clean", unheld: true })])).toContain('<p class="notice bad">A git command changed this folder without a check.</p>');
   });
 
   it("shows a running scan on one line, keeps the last verdict, and offers no second scan", () => {

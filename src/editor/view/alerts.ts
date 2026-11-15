@@ -27,8 +27,8 @@ export class Alerts {
       await this.infected(folder, outcome);
     } else if (outcome.verdict === "incomplete") {
       const reason = plain(outcome.reasons[0] ?? "saw did not finish", 300);
-      void vscode.window.showWarningMessage(`saw could not scan ${folder.name} fully, so it is not shown as clean: ${reason}`, "Open Report", "Show Log")
-        .then((choice) => choice && vscode.commands.executeCommand(choice === "Open Report" ? "saw.openReport" : "saw.showOutput", ...(choice === "Open Report" ? [{ uri: folder.uri }] : [])));
+      void vscode.window.showWarningMessage(`saw could not scan ${folder.name} fully, so it is not shown as clean: ${reason}`, "View Verdict", "Show Log")
+        .then((choice) => choice && vscode.commands.executeCommand(choice === "View Verdict" ? "saw.openVerdict" : "saw.showOutput", ...(choice === "View Verdict" ? [{ uri: folder.uri }] : [])));
     }
   }
 
@@ -37,17 +37,17 @@ export class Alerts {
     const what = `saw: ${folder.name} is INFECTED — ${count} confirmed finding${count === 1 ? "" : "s"}.`;
     const act = "saw can remove what it confirms; nothing from the folder runs while it does.";
     const choice = vscode.workspace.isTrusted
-      ? await vscode.window.showErrorMessage(`${what} ${act}`, "Fix…", "Open Report")
+      ? await vscode.window.showErrorMessage(`${what} ${act}`, "Fix…", "View Verdict")
       : await vscode.window.showWarningMessage(
           `${what} Do not trust this folder: Restricted Mode keeps its tasks and debug configurations from running. ${act}`,
           { modal: true },
           "Fix…",
-          "Open Report",
+          "View Verdict",
         );
     if (choice === "Fix…") {
       await vscode.commands.executeCommand("saw.fixFolder", folder);
-    } else if (choice === "Open Report") {
-      await vscode.commands.executeCommand("saw.openReport", { uri: folder.uri });
+    } else if (choice === "View Verdict") {
+      await vscode.commands.executeCommand("saw.openVerdict", { uri: folder.uri });
     }
   }
 
