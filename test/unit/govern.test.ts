@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 
@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit, quietGit, repoConfigText, silencedRepoConfig } from "../../src/core/govern/command";
 import { mayRelease, offersGovernRestore, offersGovernVerdict, openAdmission, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
-import { activationEnv, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../src/core/govern/plan";
+import { activationEnv, folderKey, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
 const config = (overrides: Partial<GovernConfig> = {}): GovernConfig => ({
@@ -284,6 +284,92 @@ describe.runIf(process.platform !== "win32")("the stand-in and a recorded bare g
     expect(run.status).toBe(127);
     expect(standinRan).toBe(false);
     expect(run.stderr).toContain("is no longer there, and no other was found");
+  }, 20_000);
+
+  it("runs gh through saw's stand-in without a real git, and the stand-in's git lookup cannot reach this one", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "saw-standin-"));
+    try {
+      const bin = path.join(root, "bin");
+      mkdirSync(bin);
+      const shim = path.join(root, "govern-shim.js");
+      await build({ entryPoints: [path.resolve(__dirname, "../../src/governShim.ts")], bundle: true, platform: "node", format: "cjs", outfile: shim, logLevel: "silent" });
+      const realGh = path.join(root, "gh");
+      writeFileSync(realGh, '#!/bin/sh\necho "real gh $*"\n', { mode: 0o755 });
+      // saw's stand-in runs gh, then git as gh would, looking git up on PATH as saw's does when given none.
+      const standin = path.join(root, "saw-git-standin");
+      writeFileSync(standin, `#!/bin/sh\nexec git status\n`, { mode: 0o755 });
+      const configPath = path.join(root, "config.json");
+      writeFileSync(configPath, JSON.stringify({ enabled: true, saw: "", realGit: path.join(root, "gone-git"), realGh, timeoutMs: 1000, folders: [], holdingRoot: root, markerDir: root, resultDir: root, progress: false, standin, standinDirs: [bin] }));
+      const counted = (tool: "git" | "gh") => {
+        const lines = posixWrapper(process.execPath, shim, configPath, tool === "gh" ? realGh : path.join(root, "gone-git"), tool).split("\n");
+        const count = path.join(root, `count-${tool}`);
+        lines.splice(1, 0, `n=0; if [ -f '${count}' ]; then read n < '${count}'; fi; n=$((n + 1)); echo "$n" > '${count}'`, 'if [ "$n" -ge 5 ]; then echo "LOOP" >&2; exit 99; fi');
+        writeFileSync(path.join(bin, tool), lines.join("\n"), { mode: 0o755 });
+      };
+      counted("gh");
+      counted("git");
+      const run = spawnSync("gh", ["--version"], { cwd: root, encoding: "utf8", timeout: 15_000, env: { ...process.env, PATH: bin } });
+      // The git wrapper is never entered: the stand-in's lookup finds no git, and says so itself.
+      expect(existsSync(path.join(root, "count-git"))).toBe(false);
+      expect(run.status).not.toBe(0);
+      expect(run.stderr).not.toContain("LOOP");
+      expect(run.stderr).not.toContain(path.join(bin, "git"));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  it("holds the update with its own saw check when saw's stand-in will not start, instead of running git unchecked", async () => {
+    // The real path, as the shim's working directory reports it (macOS puts the temp folder behind a symlink).
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), "saw-standin-")));
+    try {
+      const repo = path.join(root, "app");
+      mkdirSync(repo);
+      const shim = path.join(root, "govern-shim.js");
+      await build({ entryPoints: [path.resolve(__dirname, "../../src/governShim.ts")], bundle: true, platform: "node", format: "cjs", outfile: shim, logLevel: "silent" });
+      const ran = path.join(root, "real-git-ran");
+      const realGit = path.join(root, "git");
+      writeFileSync(realGit, `#!/bin/sh\n: > '${ran}'\n`, { mode: 0o755 });
+      // A saw whose check of the update does not let it in.
+      const saw = path.join(root, "saw");
+      writeFileSync(saw, `#!/bin/sh\necho '{"schema_version":1,"reason":"the update could not be prepared"}'\nexit 2\n`, { mode: 0o755 });
+      const configPath = path.join(root, "config.json");
+      writeFileSync(configPath, JSON.stringify({ enabled: true, saw, realGit, realGh: "", timeoutMs: 5000, folders: [repo], holdingRoot: path.join(root, "hold"), markerDir: path.join(root, "mark"), resultDir: path.join(root, "res"), progress: false, standin: path.join(root, "saw-git-standin-removed"), standinDirs: [] }));
+      const run = spawnSync(process.execPath, [shim, "--config", configPath, "--tool", "git", "--", "pull"], { cwd: repo, encoding: "utf8", timeout: 15_000 });
+      expect(run.status).toBe(1);
+      expect(existsSync(ran)).toBe(false);
+      expect(run.stderr).toContain("saw held this update");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  it("warns about an unchecked clone whenever files landed, whatever git's exit code", async () => {
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), "saw-standin-")));
+    try {
+      const open = path.join(root, "app");
+      mkdirSync(open);
+      const shim = path.join(root, "govern-shim.js");
+      await build({ entryPoints: [path.resolve(__dirname, "../../src/governShim.ts")], bundle: true, platform: "node", format: "cjs", outfile: shim, logLevel: "silent" });
+      const results = path.join(root, "res");
+      const configPath = path.join(root, "config.json");
+      // A fake git that leaves a checkout or not, and exits as told.
+      const cloneWith = (exitCode: number, leaves: boolean) => {
+        rmSync(path.join(open, "lib"), { recursive: true, force: true });
+        const realGit = path.join(root, `git-${exitCode}-${leaves}`);
+        writeFileSync(realGit, `#!/bin/sh\n${leaves ? `mkdir -p '${path.join(open, "lib")}' && : > '${path.join(open, "lib", "run.sh")}'\n` : ""}exit ${exitCode}\n`, { mode: 0o755 });
+        writeFileSync(configPath, JSON.stringify({ enabled: true, saw: "/usr/bin/true", realGit, realGh: "", timeoutMs: 5000, folders: [open], holdingRoot: path.join(root, "hold"), markerDir: path.join(root, "mark"), resultDir: results, progress: false, standinDirs: [] }));
+        rmSync(results, { recursive: true, force: true });
+        const run = spawnSync(process.execPath, [shim, "--config", configPath, "--tool", "git", "--", "clone", "https://example.invalid/o/lib.git"], { cwd: open, encoding: "utf8", timeout: 15_000 });
+        return { status: run.status, noticed: existsSync(path.join(results, `${folderKey(open)}.json`)) };
+      };
+      expect(cloneWith(128, false)).toEqual({ status: 128, noticed: false });
+      expect(cloneWith(0, true)).toEqual({ status: 0, noticed: true });
+      // Failed partway, as when a submodule or LFS checkout fails: the files are there, so the warning is too.
+      expect(cloneWith(1, true)).toEqual({ status: 1, noticed: true });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   }, 20_000);
 
   it("runs a recorded full path as before", async () => {

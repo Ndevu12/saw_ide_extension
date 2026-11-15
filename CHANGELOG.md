@@ -4,6 +4,7 @@
 
 ### Changed
 
+- The extension is licensed under Apache-2.0, as saw is. It was BSD-3-Clause. The package carries the license and a NOTICE file.
 - The screens use plain words instead of saw's own terms. **See results** opens a folder's **Scan results** tab, and **Full details** is the longer document with the evidence. **Choose what to keep** opens the **Your choice** tab. A residue result reads **traces left**. This machine's rows are **Before you change passwords**, **Check repos on clone and pull**, and **Background checks**. "saw didn't check this version before it arrived" replaces "not a commit saw let in". The commands carry the same names.
 - The two fixes are separate commands, named for what they fix. **Fix infection in files** runs `saw fix`: it removes what saw confirmed from the files, puts the fix on a local branch, and pushes nothing. **Fix infection in git history** runs `saw fix amend`, which the editor can now start: it rewrites the past commits that hold the infection and force-pushes their branches, after a confirmation that lists what it changes and needs, and after you type the folder's name. Each has its own button, its own details, and its own line while it runs. The Scan results tab shows both under **Fix the infection**, with each command and where it stands. Once the files fix leaves the infection in past commits, the card says so and its main button becomes the git history fix. The Your choice tab names the fix that asked.
 - Chat only steers. Each folder is one card: its status, one line of counts, the one notice that matters most, a single main button for the next step, and up to three links. The main button is Fix infection in files for an infected folder, Fix infection in git history once past commits still hold it, Choose what to keep while a fix waits, See what was found for a suspicious or could-not-scan folder, and Scan this folder before the first scan. A running scan or check is one line, without the folder's path.
@@ -13,6 +14,17 @@
 - The infected and could-not-scan alerts offer **See What Was Found**, which opens the Scan results tab.
 - Every details document opens in a tab of its own, named for what it is, such as **Full details · payments-api** or **Git history fix details · payments-api**, in the same colors as Scan results. It no longer opens as a Markdown preview, so the tab does not say Preview or end in .md. It updates live while saw works, and a link opens in the browser.
 - The saw sidebar is Chat alone. The Verdict list and the Decide pane are gone from it: the Scan results tab and the Your choice tab beside the change hold what they showed. When an older saw than the pinned release is scanning, Chat shows it as a card with **Install or Repair saw**, and each folder's Scan results tab says so.
+
+### Fixed
+
+- When `gh` runs through saw's own stand-in and no real git is left, saw's stand-in no longer finds this extension's `git` on PATH and runs it once more.
+- The notification for a failed install of saw is no longer lost when a scan starts while the installed saw is being listed again.
+- A `git pull`, `fetch`, `merge`, `rebase`, `checkout` or `switch` aimed at an open folder with `--git-dir`, `--work-tree`, `GIT_DIR` or `GIT_WORK_TREE` from outside it now waits for saw, as one run inside the folder does.
+- A git alias for one of those commands, given with `-c alias.<name>=…` or set in git's configuration, is checked as the command it runs. A shell alias (`!…`) is left as it is, since the git it starts comes back through the stand-in.
+- A clone into an open folder runs, since saw cannot hold a folder that does not exist yet. Whenever files land, even from a clone that fails partway, the folder is scanned at once and the editor says saw did not check the clone before it landed.
+- `git checkout -m <branch>` and `git switch -m <branch>` now wait for saw. `-m` takes no value, and it was taken to swallow the branch name.
+- When saw's own stand-in cannot start, an update into an open folder waits for this extension's saw check. Before, git ran it without a check.
+- On Windows, the log no longer says a pull from the Git view waits for saw. Only the editor's terminal does there.
 
 ## [0.6.2] - 2026-11-15
 

@@ -4,7 +4,7 @@
   "description": "Supply-chain worm hunting in your editor: the saw verdict for every folder you open, before you trust it.",
   "version": "0.6.2",
   "publisher": "ndevu12",
-  "license": "BSD-3-Clause",
+  "license": "Apache-2.0",
   "private": true,
   "repository": {
     "type": "git",
@@ -39,9 +39,9 @@
       "description": "saw documentation"
     },
     {
-      "url": "https://img.shields.io/badge/license-BSD--3--Clause-blue",
+      "url": "https://img.shields.io/badge/license-Apache--2.0-blue",
       "href": "https://github.com/Ndevu12/saw_ide_extension/blob/main/LICENSE",
-      "description": "BSD-3-Clause"
+      "description": "Apache-2.0"
     }
   ],
   "engines": {

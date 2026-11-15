@@ -6,27 +6,54 @@ import * as path from "node:path";
 export type Tool = "git" | "gh";
 
 const GIT_VALUE = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env", "--exec-path"]);
-const OPTION_VALUE = new Set(["-b", "-B", "-c", "-C", "-m", "--orphan", "--recurse-submodules", "--conflict"]);
+/** checkout and switch options that take the next word. `-m` (merge) and `--recurse-submodules` take none. */
+const OPTION_VALUE = new Set(["-b", "-B", "-c", "-C", "--orphan", "--conflict"]);
 const UNDO = new Set(["--abort", "--quit"]);
 
 export interface GitInvocation {
-  /** Absolute directory the command acts on. `-C` wins over the working directory. */
+  /**
+   * The work tree the command changes: `--work-tree`, else `-C`, else the working directory. With a
+   * `--git-dir` and no work tree, git uses the working directory too. `GIT_WORK_TREE` counts when no flag does.
+   */
   directory: string;
+  /** The folder holding `--git-dir` (or `GIT_DIR`), when one is given: its objects and refs change too. */
+  gitDirFolder?: string;
   subcommand: string;
   args: readonly string[];
+  /** The options before the subcommand, as given, so an alias can be expanded in their place. */
+  globals: readonly string[];
+  /** `-c alias.<name>=<value>` pairs on this command line. */
+  aliases: ReadonlyMap<string, string>;
 }
 
+
+
 /** The git subcommand and the directory it acts on, or undefined when the command line has none. */
-export function parseGit(argv: readonly string[], cwd: string): GitInvocation | undefined {
-  let directory = path.resolve(cwd);
+export function parseGit(argv: readonly string[], cwd: string, env: NodeJS.ProcessEnv = {}): GitInvocation | undefined {
+  let base = path.resolve(cwd);
+  let gitDir = env["GIT_DIR"] || undefined;
+  let workTree = env["GIT_WORK_TREE"] || undefined;
+  const aliases = new Map<string, string>();
+  const take = (name: string, value: string) => {
+    if (name === "-C") {
+      base = path.resolve(base, value);
+    } else if (name === "--git-dir") {
+      gitDir = value;
+    } else if (name === "--work-tree") {
+      workTree = value;
+    } else if (name === "-c") {
+      const alias = /^alias\.([^=]+)=(.*)$/s.exec(value);
+      if (alias?.[1] !== undefined && alias[2] !== undefined) {
+        aliases.set(alias[1].toLowerCase(), alias[2]);
+      }
+    }
+  };
   let index = 0;
   while (index < argv.length) {
     const arg = argv[index] ?? "";
     const attached = attachedOption(arg);
     if (attached) {
-      if (attached.name === "-C") {
-        directory = path.resolve(cwd, attached.value);
-      }
+      take(attached.name, attached.value);
       index += 1;
       continue;
     }
@@ -35,9 +62,7 @@ export function parseGit(argv: readonly string[], cwd: string): GitInvocation | 
       if (value === undefined) {
         return undefined;
       }
-      if (arg === "-C") {
-        directory = path.resolve(cwd, value);
-      }
+      take(arg, value);
       index += 2;
       continue;
     }
@@ -45,10 +70,25 @@ export function parseGit(argv: readonly string[], cwd: string): GitInvocation | 
       index += 1;
       continue;
     }
-    return { directory, subcommand: arg, args: argv.slice(index + 1) };
+    const directory = workTree ? path.resolve(base, workTree) : base;
+    return {
+      directory,
+      ...(gitDir ? { gitDirFolder: gitDirFolder(path.resolve(base, gitDir)) } : {}),
+      subcommand: arg,
+      args: argv.slice(index + 1),
+      globals: argv.slice(0, index),
+      aliases,
+    };
   }
   return undefined;
 }
+
+/** The folder a `--git-dir` belongs to: the parent of a `.git` folder, otherwise the folder itself. */
+function gitDirFolder(gitDir: string): string {
+  return path.basename(gitDir) === ".git" ? path.dirname(gitDir) : gitDir;
+}
+
+
 
 function attachedOption(arg: string): { name: string; value: string } | undefined {
   if (arg.startsWith("-C") && arg.length > 2) {
@@ -107,7 +147,8 @@ function firstWord(args: readonly string[]): string | undefined {
   return positionals(args)[0];
 }
 
-function positionals(args: readonly string[]): string[] {
+/** The words of `args` that are not options, skipping the value of each option in `takesValue`. */
+export function positionals(args: readonly string[], takesValue: ReadonlySet<string> = OPTION_VALUE): string[] {
   const words: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";
@@ -115,7 +156,9 @@ function positionals(args: readonly string[]): string[] {
       break;
     }
     if (arg.startsWith("-")) {
-      if (OPTION_VALUE.has(arg) && !arg.includes("=")) {
+      // `-qb main`: in a cluster of short options, the last one may take the next word.
+      const last = /^-[A-Za-z]{2,}$/.test(arg) ? `-${arg.slice(-1)}` : arg;
+      if (takesValue.has(last) && !arg.includes("=")) {
         index += 1;
       }
       continue;
