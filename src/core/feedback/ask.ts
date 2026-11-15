@@ -156,7 +156,6 @@ export function feedbackCard(kind: "held" | "quiet" | "ready", choosing: boolean
       title: "Report a problem",
       tone: "neutral",
       paragraphs: [WHICH],
-      rows: [],
       actions: [
         { act: "feedback:editor", label: "The editor", tone: "primary" },
         { act: "feedback:found", label: "What saw found", tone: "secondary" },
@@ -170,7 +169,6 @@ export function feedbackCard(kind: "held" | "quiet" | "ready", choosing: boolean
     title: "saw",
     tone: "neutral",
     paragraphs: [sentence],
-    rows: [],
     actions: [RATE, STAR, REPORT, REQUEST, NOT_NOW],
   };
 }

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Chat leads with the verdict. A suspicious or could-not-scan folder is amber, an infected one is red, and a clean one is green. The verdict stays on the badge while the next scan runs, and the progress line leaves out the folder's path.
+- Findings are a list. Each kind of finding is one line, with its severity, how many times saw found it, and the places it was found. The most severe come first. A place opens the file, and the places past the first four are in the report. Before, each finding was a button, and six findings of one kind were six buttons.
+- Only the next step is a full-width button: Fix the checkout, Open the decision, Scan this folder, or Open the scan report for a suspicious folder. The other actions sit in one row of small buttons. A held update, a change saw did not hold, and a waiting fix are marked in the card.
+- The machine card is three lines, for credentials, scan-on-clone hooks, and saw watch. Each line has a colored state and its own button. The badge says how many need you.
+
 ## [0.6.1] - 2026-11-13
 
 ### Changed

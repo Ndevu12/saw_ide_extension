@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import { DOCS } from "../../core/docs";
-import { chatCards, renderChat, SHOWN_FINDINGS, type ChatCleanup, type ChatFolderInput, type ChatMachineInput } from "../../core/chat/transcript";
+import { chatCards, renderChat, type ChatCleanup, type ChatFolderInput, type ChatMachineInput, type Tone } from "../../core/chat/transcript";
 import type { Finding } from "../../core/scan/contract";
 import { plain } from "../../core/text";
 import type { AuditVerdict, FixOutcome, HookStatus } from "../../core/fix/actions";
@@ -17,6 +17,14 @@ const AUDIT_LABEL: Record<AuditVerdict, string> = {
   "rotation-unsafe": "do not change them yet",
   incomplete: "not known to be safe",
   failed: "audit did not finish",
+};
+
+const AUDIT_TONE: Record<AuditVerdict, Tone> = {
+  "no-hazard": "ok",
+  "to-confirm": "warn",
+  "rotation-unsafe": "bad",
+  incomplete: "warn",
+  failed: "warn",
 };
 
 interface OpenTarget {
@@ -104,7 +112,7 @@ export class ChatView implements vscode.Disposable {
       engine: engineInput(engine),
       auditing: this.model.machine.auditing,
       ...(this.model.machine.auditProgress ? { auditProgress: this.model.machine.auditProgress } : {}),
-      ...(audit ? { auditLabel: AUDIT_LABEL[audit.verdict] } : {}),
+      ...(audit ? { auditLabel: AUDIT_LABEL[audit.verdict], auditTone: AUDIT_TONE[audit.verdict] } : {}),
       hooks: hooksKind(hooks),
       ...(detail ? { hooksDetail: detail } : {}),
       readingWatch: this.model.machine.readingWatch,
@@ -200,11 +208,12 @@ function nonce(): string {
 
 function folderInput(state: FolderState, decide: Decide, lastFix: (folder: vscode.WorkspaceFolder) => FixOutcome | undefined): ChatFolderInput {
   const last = state.last;
-  const findings = last?.kind === "scanned"
-    ? last.payload.results.flatMap((result) => [...result.findings, ...result.informational].map((finding) => ({
-        label: plain(finding.line ? `${finding.path}:${finding.line} — ${finding.description}` : `${finding.path} — ${finding.description}`, 180),
-      })))
-    : [];
+  const findings = openings(state).map(({ finding }, open) => ({
+    what: plain(finding.description, 300),
+    where: plain(finding.line ? `${finding.path}:${finding.line}` : finding.path, 200),
+    severity: finding.severity,
+    open,
+  }));
   const held = state.held && !state.held.released ? { verdict: state.held.verdict, reasons: state.held.reasons } : undefined;
   return {
     name: state.folder.name,
@@ -254,7 +263,7 @@ function openings(state: FolderState): OpenTarget[] {
       found.push({ target: result.target, finding });
     }
   }
-  return found.slice(0, SHOWN_FINDINGS);
+  return found;
 }
 
 function engineInput(engine: Model["engine"]): ChatMachineInput["engine"] {

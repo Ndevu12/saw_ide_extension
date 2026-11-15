@@ -78,7 +78,7 @@ describe("what an AI agent is told about a folder", () => {
     const opening = agentUpdate({ checking: true, checkAbout: "admission", unheld: false });
     expect(opening).toEqual({ wait: "saw is checking whether it let this folder in. The folder has not changed. Wait for that check before you bring files in or run anything here." });
     const admitted = agentUpdate({ checking: false, unheld: true, unheldFrom: "open" });
-    expect(admitted && "notice" in admitted ? admitted.notice : "").toContain("not a commit saw let in, and it was not put back.");
+    expect(admitted && "notice" in admitted ? admitted.notice : "").toContain("saw has no record of letting this commit in. The folder was left as it is.");
   });
 
   it("never passes on evidence, and flattens names from the folder to one plain line", () => {

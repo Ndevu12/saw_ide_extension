@@ -19,6 +19,10 @@ export const BLACK = "#070908";
 export const CARD = "#0c1210";
 /** A quiet edge. */
 export const EDGE = "#1a3d2c";
+/** Something to check: suspicious, could not scan, needs repair. */
+export const AMBER = "#e3b341";
+/** Infected, or a change that was not held. */
+export const RED = "#ff6b6b";
 
 /** A control with a fill and a border. A label alone is not a button. */
 export function buttonCss(): string {
@@ -56,7 +60,7 @@ export function buttonCss(): string {
 /** The page around those buttons: black ground, mint wordmark, green edges. */
 export function pageCss(): string {
   return `
-    body { margin: 0; padding: 14px; background: ${BLACK}; color: ${INK}; font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); }
+    body { margin: 0; padding: 14px; background: ${BLACK}; color: ${INK}; font-family: var(--vscode-font-family, system-ui, sans-serif); font-size: var(--vscode-font-size, 13px); }
     .mark { margin: 0 0 16px; }
     .word { margin: 0; color: ${MINT}; font-weight: 750; letter-spacing: 0.04em; }
     .tag { margin: 2px 0 0; color: ${DIM}; font-style: italic; }
@@ -82,6 +86,66 @@ export function pageCss(): string {
     body.editor .actions { flex-direction: row; flex-wrap: wrap; }
     body.editor .actions button { width: auto; min-width: 11rem; }
     ${buttonCss()}
+    ${chatCss()}
+  `;
+}
+
+/** Chat: a verdict reads first, findings read as a list, and only the next step is a full button. */
+function chatCss(): string {
+  return `
+    .thread .card { border-left-width: 3px; padding: 12px 12px 12px 13px; }
+    body.editor .thread, body.editor .mark { max-width: 760px; margin-left: auto; margin-right: auto; }
+    .card.neutral { border-left-color: ${EDGE}; }
+    .card.ok { border-color: ${EDGE}; border-left-color: ${GREEN}; }
+    .card.warn { border-color: ${EDGE}; border-left-color: ${AMBER}; }
+    .card.bad { border-color: #4a1e22; border-left-color: ${RED}; }
+    .thread .head { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+    .card.neutral .badge { color: ${DIM}; border-color: #2a3340; background: #0f1418; }
+    .card.ok .badge { color: ${MINT}; border-color: ${GREEN}; background: #10281c; }
+    .card.warn .badge { color: ${AMBER}; border-color: ${AMBER}; background: #2a2210; }
+    .card.bad .badge { color: #ffd6d6; border-color: ${RED}; background: #3a1518; }
+    .live { display: flex; align-items: center; gap: 8px; color: ${CYAN}; font-size: 12px; margin: 0 0 8px; }
+    .spin { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #1d4a4e; border-top-color: ${CYAN}; animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+    .summary { color: ${WHITE}; font-weight: 600; margin: 4px 0 8px; }
+    .notice { margin: 0 0 8px; padding: 7px 10px; border-radius: 4px; border-left: 2px solid ${DIM}; background: #0f1513; line-height: 1.4; }
+    .notice.warn { border-left-color: ${AMBER}; background: #1d1a0e; }
+    .notice.bad { border-left-color: ${RED}; background: #241012; }
+    .notice.ok { border-left-color: ${GREEN}; }
+    .hint { font-size: 12px; line-height: 1.45; }
+    .findings { list-style: none; margin: 4px 0 8px; padding: 0; display: flex; flex-direction: column; }
+    .findings li { margin: 0; padding: 8px 0; border-top: 1px solid #16251f; }
+    .findings li:first-child { border-top: none; padding-top: 2px; }
+    .what { display: flex; gap: 8px; align-items: baseline; line-height: 1.4; }
+    .sev { flex: none; font-size: 10px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 5px; border-radius: 3px; border: 1px solid ${DIM}; color: ${DIM}; }
+    .sev.critical { background: ${RED}; border-color: ${RED}; color: #1a0506; }
+    .sev.high { border-color: ${RED}; color: ${RED}; }
+    .sev.medium { border-color: ${AMBER}; color: ${AMBER}; }
+    .count { color: ${DIM}; font-size: 12px; white-space: nowrap; }
+    .places { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 0; padding-left: 0; }
+    .places button { width: auto; min-height: 0; padding: 2px 7px; border-radius: 4px; font-family: var(--vscode-editor-font-family, monospace); font-size: 11.5px; font-weight: 500; background: #0f1916; border: 1px solid #1f3a2e; color: ${INK}; box-shadow: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+    .places button:hover { border-color: ${MINT}; color: ${WHITE}; background: #133024; }
+    .places button.more { font-family: inherit; color: ${DIM}; }
+    .items { margin: 2px 0 8px; }
+    .item { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid #16251f; }
+    .item:first-child { border-top: none; padding-top: 2px; }
+    .item .name, .item .state { grid-column: 1; }
+    .item .name { font-size: 10.5px; font-weight: 750; letter-spacing: 0.1em; text-transform: uppercase; color: ${DIM}; }
+    .item .state { display: flex; gap: 7px; align-items: baseline; line-height: 1.4; color: ${INK}; }
+    .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: ${DIM}; transform: translateY(-1px); }
+    .dot.ok { background: ${GREEN}; }
+    .dot.warn { background: ${AMBER}; }
+    .dot.bad { background: ${RED}; }
+    .item button { grid-column: 2; grid-row: 1 / span 2; width: auto; min-height: 26px; padding: 3px 10px; font-size: 12px; }
+    .item button.secondary { background: transparent; border-color: #23463a; color: ${INK}; box-shadow: none; }
+    .item button.secondary:hover { background: #12241d; border-color: ${MINT}; color: ${WHITE}; }
+    .main { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .main button.danger { background: #c93c44; border-color: ${RED}; color: #fff5f5; }
+    .main button.danger:hover { background: #dc4a52; }
+    .links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .links button { width: auto; min-height: 26px; padding: 3px 10px; font-size: 12px; font-weight: 600; background: transparent; border-color: #23463a; color: ${INK}; box-shadow: none; }
+    .links button:hover { background: #12241d; border-color: ${MINT}; color: ${WHITE}; }
   `;
 }
 
