@@ -9,7 +9,7 @@ import { positionals, type GitInvocation } from "./command";
 const CLONE_OPTION_VALUE: ReadonlySet<string> = new Set([
   "-b", "--branch", "-o", "--origin", "-c", "--config", "-u", "--upload-pack", "-j", "--jobs", "--depth", "--reference",
   "--reference-if-able", "--separate-git-dir", "--template", "--filter", "--shallow-since", "--shallow-exclude", "--server-option",
-  "--bundle-uri", "--ref-format",
+  "--bundle-uri", "--ref-format", "--revision",
 ]);
 
 /** Where `git clone` puts the new checkout: the folder named after the URL, or the one given. */

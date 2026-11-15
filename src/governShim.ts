@@ -158,7 +158,9 @@ function runReal(program: string, args: readonly string[], env: NodeJS.ProcessEn
   const child = spawn(program, args, { stdio: "inherit", shell: false, env });
   child.on("error", () => process.exit(127));
   child.on("exit", (code, signal) => {
-    after?.();
+    if (code === 0 && !signal) {
+      after?.();
+    }
     if (signal) {
       process.kill(process.pid, signal);
       return;
@@ -184,6 +186,7 @@ async function main(): Promise<void> {
   }
   const action = plan(config, tool, args, process.cwd(), { env: process.env, aliasOf: aliasOf(config) });
   const scanAfter = action.kind === "passthrough" ? action.scanAfter : undefined;
+  // Only after a clone that worked: a failed one landed nothing to scan or to warn about.
   const after = scanAfter ? () => notice(config, scanAfter, "finished", [UNCHECKED_CLONE]) : undefined;
   if (config.standin && action.kind === "passthrough") {
     runPlaced(config, tool, args, config.holdingRoot, () => undefined, (code, spawnFailed) => {
@@ -191,7 +194,9 @@ async function main(): Promise<void> {
         runRealOrExit(config, tool, args, after);
         return;
       }
-      after?.();
+      if (code === 0) {
+        after?.();
+      }
       process.exit(code);
     });
     return;

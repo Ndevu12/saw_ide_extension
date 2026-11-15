@@ -20,15 +20,25 @@ const config: GovernConfig = {
 };
 
 describe("the folder a git command acts on", () => {
-  it("is the work tree, or the folder holding the git directory, when those are given", () => {
+  it("is the work tree when one is given, and otherwise the working directory, as git uses it", () => {
     expect(parseGit(["--git-dir=/work/app/.git", "--work-tree=/work/app", "pull"], "/elsewhere")?.directory).toBe("/work/app");
-    expect(parseGit(["--git-dir", "/work/app/.git", "pull"], "/elsewhere")?.directory).toBe("/work/app");
     expect(parseGit(["--work-tree", "../app", "pull"], "/work/other")?.directory).toBe("/work/app");
-    expect(parseGit(["-C", "/work", "--git-dir=app/.git", "pull"], "/elsewhere")?.directory).toBe("/work/app");
+    // A git directory alone leaves the working directory as the work tree.
+    expect(parseGit(["--git-dir", "/elsewhere/.git", "pull"], "/work/app")).toMatchObject({ directory: "/work/app", gitDirFolder: "/elsewhere" });
+    expect(parseGit(["-C", "/work", "--git-dir=app/.git", "pull"], "/elsewhere")).toMatchObject({ directory: "/work", gitDirFolder: "/work/app" });
+  });
+
+  it("holds a pull into an open folder through another repository's git directory", () => {
+    expect(plan(config, "git", ["--git-dir=/elsewhere/.git", "pull"], "/work/app")).toMatchObject({ kind: "hold", repo: "/work/app" });
+    expect(plan(config, "git", ["pull"], "/work/app", { env: { GIT_DIR: "/elsewhere/.git" } })).toMatchObject({ kind: "hold", repo: "/work/app" });
+  });
+
+  it("holds a fetch into an open folder's git directory from outside it", () => {
+    expect(plan(config, "git", ["--git-dir=/work/app/.git", "fetch"], "/elsewhere")).toMatchObject({ kind: "hold", repo: "/work/app" });
   });
 
   it("follows GIT_WORK_TREE and GIT_DIR, and a flag wins over them", () => {
-    expect(parseGit(["pull"], "/elsewhere", { GIT_DIR: "/work/app/.git" })?.directory).toBe("/work/app");
+    expect(parseGit(["pull"], "/elsewhere", { GIT_DIR: "/work/app/.git" })).toMatchObject({ directory: "/elsewhere", gitDirFolder: "/work/app" });
     expect(parseGit(["pull"], "/elsewhere", { GIT_WORK_TREE: "/work/app", GIT_DIR: "/x/.git" })?.directory).toBe("/work/app");
     expect(parseGit(["--work-tree=/work/other", "pull"], "/elsewhere", { GIT_WORK_TREE: "/work/app" })?.directory).toBe("/work/other");
   });
@@ -93,6 +103,8 @@ describe("a clone into an open folder", () => {
     expect(clone(["git@example.com:o/lib.git", "vendor/lib"], "/work/app")).toBe("/work/app/vendor/lib");
     expect(clone(["/srv/repos/lib/.git"], "/work/app")).toBe("/work/app/lib");
     expect(clone(["--depth", "1", "-b", "main", "https://example.com/o/lib", "out"], "/work/app")).toBe("/work/app/out");
+    expect(clone(["--revision", "main", "https://example.com/o/lib.git", "/work/app/y"], "/tmp")).toBe("/work/app/y");
+    expect(clone(["-qb", "main", "https://example.com/o/lib.git"], "/work/app")).toBe("/work/app/lib");
   });
 
   it("runs, and has the folder scanned once it has, since saw cannot hold a clone", () => {

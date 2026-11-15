@@ -11,10 +11,12 @@ const UNDO = new Set(["--abort", "--quit"]);
 
 export interface GitInvocation {
   /**
-   * Absolute directory the command acts on: `--work-tree`, else the folder holding `--git-dir`,
-   * else `-C`, else the working directory. `GIT_WORK_TREE` and `GIT_DIR` count when no flag is given.
+   * The work tree the command changes: `--work-tree`, else `-C`, else the working directory. With a
+   * `--git-dir` and no work tree, git uses the working directory too. `GIT_WORK_TREE` counts when no flag does.
    */
   directory: string;
+  /** The folder holding `--git-dir` (or `GIT_DIR`), when one is given: its objects and refs change too. */
+  gitDirFolder?: string;
   subcommand: string;
   args: readonly string[];
   /** The options before the subcommand, as given, so an alias can be expanded in their place. */
@@ -67,8 +69,15 @@ export function parseGit(argv: readonly string[], cwd: string, env: NodeJS.Proce
       index += 1;
       continue;
     }
-    const directory = workTree ? path.resolve(base, workTree) : gitDir ? gitDirFolder(path.resolve(base, gitDir)) : base;
-    return { directory, subcommand: arg, args: argv.slice(index + 1), globals: argv.slice(0, index), aliases };
+    const directory = workTree ? path.resolve(base, workTree) : base;
+    return {
+      directory,
+      ...(gitDir ? { gitDirFolder: gitDirFolder(path.resolve(base, gitDir)) } : {}),
+      subcommand: arg,
+      args: argv.slice(index + 1),
+      globals: argv.slice(0, index),
+      aliases,
+    };
   }
   return undefined;
 }
@@ -146,7 +155,9 @@ export function positionals(args: readonly string[], takesValue: ReadonlySet<str
       break;
     }
     if (arg.startsWith("-")) {
-      if (takesValue.has(arg) && !arg.includes("=")) {
+      // `-qb main`: in a cluster of short options, the last one may take the next word.
+      const last = /^-[A-Za-z]{2,}$/.test(arg) ? `-${arg.slice(-1)}` : arg;
+      if (takesValue.has(last) && !arg.includes("=")) {
         index += 1;
       }
       continue;

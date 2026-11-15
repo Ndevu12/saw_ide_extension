@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit, quietGit, repoConfigText, silencedRepoConfig } from "../../src/core/govern/command";
 import { mayRelease, offersGovernRestore, offersGovernVerdict, openAdmission, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
-import { activationEnv, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../src/core/govern/plan";
+import { activationEnv, folderKey, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
 const config = (overrides: Partial<GovernConfig> = {}): GovernConfig => ({
@@ -339,6 +339,30 @@ describe.runIf(process.platform !== "win32")("the stand-in and a recorded bare g
       expect(run.status).toBe(1);
       expect(existsSync(ran)).toBe(false);
       expect(run.stderr).toContain("saw held this update");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  it("warns about an unchecked clone only when the clone landed", async () => {
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), "saw-standin-")));
+    try {
+      const open = path.join(root, "app");
+      mkdirSync(open);
+      const shim = path.join(root, "govern-shim.js");
+      await build({ entryPoints: [path.resolve(__dirname, "../../src/governShim.ts")], bundle: true, platform: "node", format: "cjs", outfile: shim, logLevel: "silent" });
+      const results = path.join(root, "res");
+      const configPath = path.join(root, "config.json");
+      const cloneWith = (exitCode: number) => {
+        const realGit = path.join(root, `git-${exitCode}`);
+        writeFileSync(realGit, `#!/bin/sh\nexit ${exitCode}\n`, { mode: 0o755 });
+        writeFileSync(configPath, JSON.stringify({ enabled: true, saw: "/usr/bin/true", realGit, realGh: "", timeoutMs: 5000, folders: [open], holdingRoot: path.join(root, "hold"), markerDir: path.join(root, "mark"), resultDir: results, progress: false, standinDirs: [] }));
+        rmSync(results, { recursive: true, force: true });
+        const run = spawnSync(process.execPath, [shim, "--config", configPath, "--tool", "git", "--", "clone", "https://example.invalid/o/lib.git"], { cwd: open, encoding: "utf8", timeout: 15_000 });
+        return { status: run.status, noticed: existsSync(path.join(results, `${folderKey(open)}.json`)) };
+      };
+      expect(cloneWith(128)).toEqual({ status: 128, noticed: false });
+      expect(cloneWith(0)).toEqual({ status: 0, noticed: true });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
