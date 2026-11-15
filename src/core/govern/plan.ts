@@ -84,6 +84,10 @@ export function posixWrapper(node: string, shim: string, configPath: string, rea
   const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
   return [
     "#!/bin/sh",
+    `if [ ! -f ${quote(shim)} ]; then`,
+    `  echo ${quote(`saw: ${shim} is missing, so this ${tool} runs without saw's check. Reinstall the saw extension.`)} >&2`,
+    `  exec ${quote(real)} "$@"`,
+    "fi",
     `if [ ! -f ${quote(configPath)} ]; then`,
     `  exec ${quote(real)} "$@"`,
     "fi",
@@ -97,6 +101,11 @@ export function posixWrapper(node: string, shim: string, configPath: string, rea
 export function windowsWrapper(node: string, shim: string, configPath: string, real: string, tool: Tool): string {
   return [
     "@echo off",
+    `if not exist "${shim}" (`,
+    `  echo saw: ${shim} is missing, so this ${tool} runs without saw's check. Reinstall the saw extension. 1>&2`,
+    `  "${real}" %*`,
+    "  exit /b %ERRORLEVEL%",
+    ")",
     `if not exist "${configPath}" (`,
     `  "${real}" %*`,
     "  exit /b %ERRORLEVEL%",

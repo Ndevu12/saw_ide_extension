@@ -60,7 +60,16 @@ export class EngineResolver {
         const listed = await this.listReady();
         return listed.kind === "unavailable" ? listed : this.choose(listed.candidates);
       }
-      return this.installThenFind("Install or repair was asked for.");
+      const installed = await this.installThenFind("Install or repair was asked for.");
+      if (installed.kind === "ready") {
+        return installed;
+      }
+      const kept = await this.keepRunning();
+      if (kept.kind === "ready") {
+        this.log.warn(`saw ${this.installer.pinnedSaw} could not be installed, so saw ${kept.version} keeps running. ${installed.message}`);
+        return kept;
+      }
+      return installed;
     })();
     return this.pending;
   }
@@ -80,9 +89,20 @@ export class EngineResolver {
     const pin = this.installer.pinnedSaw;
     const ours = listed.candidates.find((candidate) => candidate.ours);
     if (ours && movesToPin(this.settings().path, this.settings().autoInstall, true, ours.version, pin)) {
-      return this.installThenFind(`The saw this extension installed is ${ours.versionText}; it now installs ${pin}.`);
+      const moved = await this.installThenFind(`The saw this extension installed is ${ours.versionText}; it now installs ${pin}.`);
+      if (moved.kind === "ready") {
+        return moved;
+      }
+      this.log.warn(`saw ${pin} could not be installed, so saw ${ours.versionText} keeps running. ${moved.message}`);
+      return this.keepRunning();
     }
     return this.choose(listed.candidates);
+  }
+
+  /** After a failed upgrade, the saw that was already installed is listed again, in case the attempt removed it. */
+  private async keepRunning(): Promise<Found> {
+    const listed = await this.listReady();
+    return listed.kind === "unavailable" ? listed : this.choose(listed.candidates);
   }
 
   private async installThenFind(why: string): Promise<Found> {

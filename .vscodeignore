@@ -1,6 +1,5 @@
 **
-!dist/extension.js
-!dist/cursor-hook.js
+!dist/*.js
 !media/**
 !docs/images/**
 !package.json

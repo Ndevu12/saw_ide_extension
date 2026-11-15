@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-15
+
+### Fixed
+
+- `git` and `gh` run again in the editor's terminal. The package now carries saw's git stand-in, which every release since 0.4.0 left out, so each command stopped with `Cannot find module …/dist/govern-shim.js`. If the stand-in's script is ever missing, the command runs the real program and says saw did not check it.
+- The stand-in runs git from its full path. A bare `git` led back to the stand-in.
+- When saw cannot be moved up to the release this extension installs, the saw already installed keeps running, and the log names the release that could not be installed. Before, saw stopped until the install worked.
+
 ## [0.6.1] - 2026-11-13
 
 ### Changed
@@ -133,7 +141,8 @@
 - The log of a successful install no longer shows the expected "no pipx yet" check as a warning,
   or a step twice.
 
-[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.4.0...v0.5.0

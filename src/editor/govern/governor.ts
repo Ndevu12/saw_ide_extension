@@ -434,17 +434,19 @@ export class Governor implements vscode.Disposable {
   }
 
   private async realBinary(name: "git" | "gh"): Promise<string> {
+    const skip = [this.shimDir, this.systemBin ?? ""];
     const saved = this.savedReal(name);
-    if (saved && defaultIsExecutableFile(saved) && this.realProgram(saved)) {
+    if (this.realProgram(saved)) {
       return saved;
     }
     if (name === "git") {
       const resolved = await gitBinary();
-      if (resolved && this.realProgram(resolved)) {
-        return resolved;
+      const found = resolved && !nodePath.isAbsolute(resolved) ? lookUp(resolved, skip) : resolved;
+      if (found && this.realProgram(found)) {
+        return found;
       }
     }
-    return lookUp(name, [this.shimDir, this.systemBin ?? ""]) ?? "";
+    return lookUp(name, skip) ?? "";
   }
 
   private savedReal(name: "git" | "gh"): string {
@@ -461,9 +463,9 @@ export class Governor implements vscode.Disposable {
     return this.inDir(file, this.shimDir);
   }
 
-  /** A path this window may call. A stand-in directory is not the real program. */
+  /** A path this window may call. A bare name resolves through PATH, where the stand-in comes first. */
   private realProgram(file: string): boolean {
-    return !this.isShim(file) && !this.inDir(file, this.systemBin);
+    return nodePath.isAbsolute(file) && defaultIsExecutableFile(file) && !this.isShim(file) && !this.inDir(file, this.systemBin);
   }
 
   private inDir(file: string, dir: string | undefined): boolean {

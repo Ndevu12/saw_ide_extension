@@ -1,3 +1,6 @@
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -177,6 +180,34 @@ describe("what the stand-in does", () => {
     const wrapper = posixWrapper("/usr/bin/node", "/ext/govern-shim.js", "/ext/config.json", "/usr/bin/git", "git");
     expect(wrapper).toContain("exec '/usr/bin/git' \"$@\"");
     expect(wrapper).toContain("--tool git");
+  });
+
+  it("runs the real program, and says so, when the stand-in's script is missing", () => {
+    const wrapper = posixWrapper("/usr/bin/node", "/ext/govern-shim.js", "/ext/config.json", "/usr/bin/git", "git");
+    const missing = wrapper.indexOf("if [ ! -f '/ext/govern-shim.js' ]; then");
+    expect(missing).toBeGreaterThan(-1);
+    expect(missing).toBeLessThan(wrapper.indexOf("export ELECTRON_RUN_AS_NODE=1"));
+    const branch = wrapper.slice(missing, wrapper.indexOf("fi", missing));
+    expect(branch).toContain("is missing, so this git runs without saw");
+    expect(branch).toContain(">&2");
+    expect(branch).toContain("exec '/usr/bin/git' \"$@\"");
+  });
+
+  it("runs the real program from a shell when the stand-in's script is missing", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const dir = mkdtempSync(path.join(tmpdir(), "saw-wrapper-"));
+    try {
+      const wrapper = path.join(dir, "git");
+      writeFileSync(wrapper, posixWrapper("/no/node", path.join(dir, "gone.js"), path.join(dir, "config.json"), "/bin/echo", "git"), { mode: 0o755 });
+      const run = spawnSync(wrapper, ["still", "ran"], { encoding: "utf8" });
+      expect(run.status).toBe(0);
+      expect(run.stdout.trim()).toBe("still ran");
+      expect(run.stderr).toContain("gone.js is missing");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
