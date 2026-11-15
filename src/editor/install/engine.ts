@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 
 import { probeCapabilities, type Capabilities } from "../../core/capabilities";
 import { defaultIsExecutableFile, locate, movesToPin, probe, sameInstall, sawToRun, type Probed } from "../../core/install/locate";
+import { behindPin, moveOrKeep, type Behind } from "../../core/install/upgrade";
 import { atLeast, formatVersion, type Version } from "../../core/version";
 import type { Installer } from "./installer";
 
@@ -18,7 +19,8 @@ export type Unavailable =
   | "install-cancelled";
 
 export type Engine =
-  | { kind: "ready"; binary: string; version: string; capabilities: Capabilities }
+  /** `behind`: the extension could not move this saw up to the release it pins. */
+  | { kind: "ready"; binary: string; version: string; capabilities: Capabilities; behind?: Behind }
   | { kind: "installing" }
   | { kind: "unavailable"; reason: Unavailable; message: string };
 
@@ -62,16 +64,7 @@ export class EngineResolver {
       }
       const before = await this.listReady();
       const running = before.kind === "ready" ? sawToRun(before.candidates, this.installer.pinnedSaw)?.versionText : undefined;
-      const installed = await this.installThenFind("Install or repair was asked for.", running);
-      if (installed.kind === "ready") {
-        return installed;
-      }
-      const kept = await this.keepRunning();
-      if (kept.kind === "ready") {
-        this.log.warn(`saw ${this.installer.pinnedSaw} could not be installed, so saw ${kept.version} keeps running. ${installed.message}`);
-        return kept;
-      }
-      return installed;
+      return this.moveOrKeep("Install or repair was asked for.", running);
     })();
     return this.pending;
   }
@@ -100,22 +93,24 @@ export class EngineResolver {
       const known = this.installer.knownUnsupported();
       if (known) {
         this.log.info(`saw ${ours.versionText} keeps running: ${known} saw ${pin} is tried again after a day, or now with saw: Install or Repair saw.`);
-        return this.choose(listed.candidates);
+        return behindPin(await this.choose(listed.candidates), pin, known);
       }
-      const moved = await this.installThenFind(`The saw this extension installed is ${ours.versionText}; it now installs ${pin}.`, ours.versionText);
-      if (moved.kind === "ready") {
-        return moved;
-      }
-      this.log.warn(`saw ${pin} could not be installed, so saw ${ours.versionText} keeps running. ${moved.message}`);
-      return this.keepRunning();
+      return this.moveOrKeep(`The saw this extension installed is ${ours.versionText}; it now installs ${pin}.`, ours.versionText);
     }
     return this.choose(listed.candidates);
   }
 
-  /** After a failed upgrade, the saw that was already installed is listed again, in case the attempt removed it. */
-  private async keepRunning(): Promise<Found> {
-    const listed = await this.listReady();
-    return listed.kind === "unavailable" ? listed : this.choose(listed.candidates);
+  /** Install the pinned release; when that fails, the saw already installed keeps running, marked as behind. */
+  private moveOrKeep(why: string, keeping: string | undefined): Promise<Found> {
+    return moveOrKeep<Extract<Found, { kind: "ready" }>, Extract<Found, { kind: "unavailable" }>>(this.installer.pinnedSaw, {
+      install: () => this.installThenFind(why, keeping),
+      // Listed again, in case the attempt removed it.
+      keep: async () => {
+        const listed = await this.listReady();
+        return listed.kind === "unavailable" ? listed : this.choose(listed.candidates);
+      },
+      warn: (message) => this.log.warn(message),
+    });
   }
 
   private async installThenFind(why: string, keeping?: string): Promise<Found> {

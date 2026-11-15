@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import { checkingBadge, checkingSentence } from "../../core/chat/transcript";
+import { behindNotice } from "../../core/install/upgrade";
 import type { FolderVerdict } from "../../core/scan/verdict";
 import type { FolderState, Model } from "../model";
 import { VERDICT_LABEL } from "../present";
@@ -36,6 +37,17 @@ export class StatusBar implements vscode.Disposable {
   }
 
   private render(): void {
+    this.renderState();
+    const engine = this.model.engine;
+    if (engine?.kind === "ready" && engine.behind) {
+      // An older saw than the pinned release: every verdict it shows says which saw gave it.
+      this.item.backgroundColor ??= new vscode.ThemeColor("statusBarItem.warningBackground");
+      const shown = typeof this.item.tooltip === "string" ? this.item.tooltip : "";
+      this.item.tooltip = [behindNotice(engine.version, engine.behind), shown].filter(Boolean).join("\n\n");
+    }
+  }
+
+  private renderState(): void {
     const engine = this.model.engine;
     const states = this.model.states();
     if (engine?.kind === "installing") {
@@ -54,12 +66,13 @@ export class StatusBar implements vscode.Disposable {
       return;
     }
     this.item.command = "workbench.view.extension.saw";
+    const saw = engine?.kind === "ready" && engine.behind ? `saw ${engine.version}` : "saw";
     const checking = states.find((state) => state.checking);
     if (checking) {
       const about = checking.checkAbout === "admission";
       this.item.text = about
-        ? `$(sync~spin) saw: ${checkingBadge("admission", undefined)}`
-        : `$(sync~spin) saw: checking this update${checking.checkStep ? `: ${checking.checkStep}` : ""}`;
+        ? `$(sync~spin) ${saw}: ${checkingBadge("admission", undefined)}`
+        : `$(sync~spin) ${saw}: checking this update${checking.checkStep ? `: ${checking.checkStep}` : ""}`;
       this.item.backgroundColor = undefined;
       this.item.tooltip = about
         ? `${checking.folder.name}: ${checkingSentence("admission", undefined)}`
@@ -71,18 +84,18 @@ export class StatusBar implements vscode.Disposable {
     const progress = states.find((state) => state.scanning && state.progress)?.progress;
     const overall = this.model.overall();
     if (held?.held && !scanning) {
-      this.item.text = `${ICON[held.held.verdict]} saw: update held`;
+      this.item.text = `${ICON[held.held.verdict]} ${saw}: update held`;
       this.item.backgroundColor = BACKGROUND[held.held.verdict];
       this.item.tooltip = `${held.folder.name}: an update was held (${VERDICT_LABEL[held.held.verdict]}). The folder was not changed.`;
       return;
     }
     if (!overall) {
-      this.item.text = scanning ? `$(sync~spin) saw: scanning${progress ? `: ${progress}` : ""}` : "$(shield) saw";
+      this.item.text = scanning ? `$(sync~spin) ${saw}: scanning${progress ? `: ${progress}` : ""}` : `$(shield) ${saw}`;
       this.item.tooltip = scanning ? scanningTooltip(states) : "No scan has run yet.";
       this.item.backgroundColor = undefined;
       return;
     }
-    this.item.text = `${scanning ? "$(sync~spin)" : ICON[overall]} saw: ${VERDICT_LABEL[overall]}`;
+    this.item.text = `${scanning ? "$(sync~spin)" : ICON[overall]} ${saw}: ${VERDICT_LABEL[overall]}`;
     this.item.backgroundColor = BACKGROUND[overall];
     this.item.tooltip = states
       .flatMap((state) => {

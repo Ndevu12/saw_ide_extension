@@ -4,6 +4,7 @@ import * as path from "node:path";
 
 import { applyArgs, prepareArgs, readApply, readPrepare, type GovernConfig, type GovernPhase } from "./core/govern/contract";
 import { activationEnv, folderKey, plan } from "./core/govern/plan";
+import { checkRealProgram, diskFiles } from "./core/govern/realProgram";
 import { enclosingFolder, parseGit, quietGit, repoConfigText, silencedRepoConfig, type Tool } from "./core/govern/command";
 import { runProgram } from "./core/run";
 import { describeProgress, ProgressLines } from "./core/scan/progress";
@@ -29,6 +30,25 @@ function readConfig(file: string): GovernConfig | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The configuration with git and gh checked, so nothing below runs a stand-in. A recorded program
+ * that would lead back here is replaced by the real one on PATH, or left empty so it is not run.
+ * Only the tool being run is reported, so a git command does not talk about gh.
+ */
+function withRealPrograms(config: GovernConfig, tool: Tool): GovernConfig {
+  const search = { pathVariable: process.env["PATH"], platform: process.platform };
+  const real = (recorded: string, name: Tool): string => {
+    const check = checkRealProgram(recorded, name, config.standinDirs, search, diskFiles);
+    if (name === tool && check.kind === "replaced" && check.recorded) {
+      process.stderr.write(`saw: the recorded ${name}, ${check.recorded}, is not a program saw's stand-in can run, so it runs ${check.program}. Reload the window so saw records ${name} again.\n`);
+    } else if (name === tool && check.kind === "missing" && check.recorded) {
+      process.stderr.write(`saw: the recorded ${name}, ${check.recorded}, would run saw's stand-in again, so it is not run. Reload the window so saw records ${name} again.\n`);
+    }
+    return check.kind === "missing" ? "" : check.program;
+  };
+  return { ...config, realGit: real(config.realGit, "git"), realGh: real(config.realGh, "gh") };
 }
 
 function notice(config: GovernConfig, repo: string, phase: GovernPhase, reasons: string[], verdict?: FolderVerdict, step?: string): void {
@@ -133,11 +153,12 @@ async function main(): Promise<void> {
   const configPath = flag("--config");
   const tool = flag("--tool");
   const args = commandArgs();
-  const config = configPath ? readConfig(configPath) : undefined;
-  if (!config || (tool !== "git" && tool !== "gh")) {
+  const recorded = configPath ? readConfig(configPath) : undefined;
+  if (!recorded || (tool !== "git" && tool !== "gh")) {
     process.stderr.write("saw could not read its git stand-in configuration.\n");
     process.exit(1);
   }
+  const config = withRealPrograms(recorded, tool);
   const action = plan(config, tool, args, process.cwd());
   if (config.standin && action.kind === "passthrough") {
     runPlaced(config, tool, args, config.holdingRoot, () => undefined, (code, spawnFailed) => {

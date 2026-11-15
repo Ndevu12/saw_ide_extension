@@ -1,13 +1,14 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 
+import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit, quietGit, repoConfigText, silencedRepoConfig } from "../../src/core/govern/command";
 import { mayRelease, offersGovernRestore, offersGovernVerdict, openAdmission, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
-import { activationEnv, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin } from "../../src/core/govern/plan";
+import { activationEnv, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
 const config = (overrides: Partial<GovernConfig> = {}): GovernConfig => ({
@@ -209,6 +210,68 @@ describe("what the stand-in does", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+});
+
+describe("what the stand-in runs when it falls back", () => {
+  it("refuses to write a wrapper whose fallback is a bare name, which PATH resolves to the wrapper", () => {
+    expect(() => posixWrapper("/usr/bin/node", "/ext/govern-shim.js", "/ext/config.json", "git", "git")).toThrow(/full path/);
+    expect(() => windowsWrapper("C:\\node.exe", "C:\\ext\\govern-shim.js", "C:\\ext\\config.json", "git", "git")).toThrow(/full path/);
+    expect(() => windowsWrapper("C:\\node.exe", "C:\\ext\\govern-shim.js", "C:\\ext\\config.json", "C:\\Program Files\\Git\\cmd\\git.exe", "git")).not.toThrow();
+  });
+
+  it("quotes the missing script's path on Windows, so a ) in it does not end the block", () => {
+    const shim = "C:\\Apps (portable)\\data\\extensions\\saw\\dist\\govern-shim.js";
+    const wrapper = windowsWrapper("C:\\node.exe", shim, "C:\\cfg.json", "C:\\Git\\cmd\\git.exe", "git");
+    const echo = wrapper.split("\r\n").find((line) => line.includes("echo saw:"));
+    expect(echo).toBe(`  echo saw: "${shim}" is missing, so this git runs without saw's check. Reinstall the saw extension. 1>&2`);
+  });
+});
+
+// The bundled stand-in, run the way a terminal runs it: a recorded bare git must not lead back to it.
+describe.runIf(process.platform !== "win32")("the stand-in and a recorded bare git", () => {
+  async function runGit(config: (dirs: { bin: string; real: string }) => Partial<GovernConfig>) {
+    const root = mkdtempSync(path.join(tmpdir(), "saw-standin-"));
+    const bin = path.join(root, "bin");
+    const real = path.join(root, "real");
+    mkdirSync(bin);
+    mkdirSync(real);
+    const shim = path.join(root, "govern-shim.js");
+    await build({ entryPoints: [path.resolve(__dirname, "../../src/governShim.ts")], bundle: true, platform: "node", format: "cjs", outfile: shim, logLevel: "silent" });
+    writeFileSync(path.join(real, "git"), '#!/bin/sh\necho "real git $*"\n', { mode: 0o755 });
+    const configPath = path.join(root, "config.json");
+    writeFileSync(configPath, JSON.stringify({ enabled: true, saw: "", realGh: "", timeoutMs: 1000, folders: [], holdingRoot: root, markerDir: root, resultDir: root, progress: false, ...config({ bin, real }) }));
+    // Each entry to the wrapper is counted, and a fifth stops it, so a loop fails the test instead of the machine.
+    const count = path.join(root, "count");
+    const lines = posixWrapper(process.execPath, shim, configPath, path.join(real, "git"), "git").split("\n");
+    lines.splice(1, 0, `n=$(( $(cat '${count}' 2>/dev/null || echo 0) + 1 )); echo $n > '${count}'`, 'if [ "$n" -ge 5 ]; then echo "LOOP" >&2; exit 99; fi');
+    writeFileSync(path.join(bin, "git"), lines.join("\n"), { mode: 0o755 });
+    const run = spawnSync("git", ["--version"], { cwd: root, encoding: "utf8", env: { ...process.env, PATH: [bin, real, process.env["PATH"]].join(path.delimiter) } });
+    const entries = Number(readFileSync(count, "utf8").trim());
+    rmSync(root, { recursive: true, force: true });
+    return { run, entries };
+  }
+
+  it("runs the real git on PATH, and says so, when it knows its own folders", async () => {
+    const { run, entries } = await runGit(({ bin }) => ({ realGit: "git", standinDirs: [bin] }));
+    expect(entries).toBe(1);
+    expect(run.stdout.trim()).toBe("real git --version");
+    expect(run.stderr).toContain("is not a program saw's stand-in can run");
+  }, 20_000);
+
+  it("runs nothing, and says why, when an older configuration does not name its folders", async () => {
+    const { run, entries } = await runGit(() => ({ realGit: "git" }));
+    expect(entries).toBe(1);
+    expect(run.status).toBe(127);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toContain("would run saw's stand-in again");
+  }, 20_000);
+
+  it("runs a recorded full path as before", async () => {
+    const { run, entries } = await runGit(({ real }) => ({ realGit: path.join(real, "git") }));
+    expect(entries).toBe(1);
+    expect(run.stdout.trim()).toBe("real git --version");
+    expect(run.stderr).toBe("");
+  }, 20_000);
 });
 
 describe("saw govern's report", () => {

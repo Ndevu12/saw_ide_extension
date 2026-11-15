@@ -79,8 +79,16 @@ export function activationEnv(config: GovernConfig, tool: Tool, holding: string)
   };
 }
 
+/** A wrapper's fallback runs `real` directly. A bare name would find the wrapper itself first on PATH. */
+function requireFullPath(real: string, tool: Tool, flavour: typeof path.posix): void {
+  if (!flavour.isAbsolute(real)) {
+    throw new Error(`saw's ${tool} stand-in needs the real ${tool} as a full path, not "${real}".`);
+  }
+}
+
 /** A POSIX stand-in. Missing config runs the real program, so a removed extension does not keep git. */
 export function posixWrapper(node: string, shim: string, configPath: string, real: string, tool: Tool): string {
+  requireFullPath(real, tool, path.posix);
   const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
   return [
     "#!/bin/sh",
@@ -99,10 +107,12 @@ export function posixWrapper(node: string, shim: string, configPath: string, rea
 
 /** A Windows stand-in for the integrated terminal. The Git view is not pointed at a batch file. */
 export function windowsWrapper(node: string, shim: string, configPath: string, real: string, tool: Tool): string {
+  requireFullPath(real, tool, path.win32);
   return [
     "@echo off",
     `if not exist "${shim}" (`,
-    `  echo saw: ${shim} is missing, so this ${tool} runs without saw's check. Reinstall the saw extension. 1>&2`,
+    // Quoted: inside this ( ) block, a ")" or "&" in the path would end the block or start a command.
+    `  echo saw: "${shim}" is missing, so this ${tool} runs without saw's check. Reinstall the saw extension. 1>&2`,
     `  "${real}" %*`,
     "  exit /b %ERRORLEVEL%",
     ")",
