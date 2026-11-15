@@ -139,7 +139,7 @@ function chatCss(): string {
   `;
 }
 
-/** The verdict tab: the result and its next step on top, then why, then every finding. */
+/** The scan results tab: the result on top, then the two fixes, then why, then every finding. */
 function verdictCss(): string {
   return `
     .verdict { max-width: 820px; margin: 0 auto; }
@@ -171,6 +171,22 @@ function verdictCss(): string {
     .places button { display: inline-block; width: auto; max-width: 100%; min-height: 0; padding: 2px 7px; border-radius: 4px; font-family: var(--vscode-editor-font-family, monospace); font-size: 11.5px; font-weight: 500; background: #0f1916; border: 1px solid #1f3a2e; color: ${INK}; box-shadow: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .places button:hover { border-color: ${MINT}; color: ${WHITE}; background: #133024; }
     .more { color: ${DIM}; font-size: 12px; margin-left: 4px; }
+    .fixes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+    .fix { background: ${CARD}; border: 1px solid ${EDGE}; border-radius: 6px; padding: 14px 16px; display: flex; flex-direction: column; }
+    .fix header { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+    .fix .num { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 1px solid ${DIM}; color: ${DIM}; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+    .fix h3 { margin: 0; font-size: 14px; font-weight: 650; color: ${WHITE}; }
+    .fix code { font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; color: ${CYAN}; background: #0e1c18; border: 1px solid #1d3b3e; border-radius: 4px; padding: 1px 6px; }
+    .fix .status { display: flex; align-items: center; gap: 7px; margin: 10px 0 0; font-size: 12.5px; }
+    .fix .status.bad { color: #ffd6d6; }
+    .fix .status.warn { color: ${AMBER}; }
+    .fix .status.ok { color: ${MINT}; }
+    .fix .notice { margin-top: 10px; }
+    .fix ul { margin: 10px 0 0; padding-left: 1.1em; font-size: 12.5px; }
+    .fix li { margin: 4px 0; }
+    .step-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 12px; }
+    .step-actions button { width: auto; min-width: 10rem; }
+    .fix .note { margin: 6px 0 0; font-size: 11.5px; color: ${DIM}; }
   `;
 }
 

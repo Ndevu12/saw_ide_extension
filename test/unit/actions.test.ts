@@ -4,7 +4,7 @@ import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { auditArgs, auditVerdict, canFix, fixArgs, gitIdentity, hookArgs, readAudit, readFix, readHookJson, readHookStatus, rotationSentence, watchStatusArgs } from "../../src/core/fix/actions";
+import { amendArgs, auditArgs, auditVerdict, canFix, fixArgs, gitIdentity, hookArgs, readAmend, readAudit, readFix, readHookJson, readHookStatus, rotationSentence, watchStatusArgs } from "../../src/core/fix/actions";
 import { NO_CAPABILITIES, readCapabilities } from "../../src/core/capabilities";
 import { runProgram } from "../../src/core/run";
 import { lines } from "../../src/core/text";
@@ -14,6 +14,24 @@ const fixReport = (remediation: string, cause = "", more: Record<string, unknown
   JSON.stringify({ results: [{ repository: "/work/repo", remediation, cause, pull_request: null, url: "", ...more }] });
 
 const sawWith = (...features: string[]) => readCapabilities(JSON.stringify({ features }), 0);
+
+describe("saw fix amend", () => {
+  it("is its own command: no --json, --progress or --pr, and asks only a saw that can", () => {
+    expect(amendArgs("/work/repo", "")).toEqual(["fix", "amend", "/work/repo", "--no-stream"]);
+    expect(amendArgs("/work/repo", "/home/me/saw.yml")).toEqual(["fix", "amend", "/work/repo", "--no-stream", "--config", "/home/me/saw.yml"]);
+    expect(amendArgs("/work/repo", "", sawWith("fix.ask.json"))).toContain("--ask=jsonl");
+    for (const flag of ["--json", "--pr", "--progress=jsonl"]) {
+      expect(amendArgs("/work/repo", "", sawWith("fix.ask.json", "progress.jsonl"))).not.toContain(flag);
+    }
+  });
+
+  it("reads its outcome from the exit code", () => {
+    expect(readAmend(0)).toEqual({ kind: "done" });
+    expect(readAmend(1)).toEqual({ kind: "review" });
+    expect(readAmend(2)).toEqual({ kind: "failed" });
+    expect(readAmend(null)).toEqual({ kind: "failed" });
+  });
+});
 
 describe("saw fix", () => {
   it("is run only by a saw that reports what it did", () => {

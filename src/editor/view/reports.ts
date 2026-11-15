@@ -4,14 +4,17 @@ import * as path from "node:path";
 
 import * as vscode from "vscode";
 
-import type { FixOutcome } from "../../core/fix/actions";
+import type { AmendOutcome, FixOutcome } from "../../core/fix/actions";
 import { prose } from "../../core/report/markdown";
-import { auditReport, fixReport, hooksReport, scanReport, watchReport, when, type CommandRun, type Copy } from "../../core/report/reports";
+import { amendReport, auditReport, fixReport, hooksReport, scanReport, watchReport, when, type CommandRun, type Copy } from "../../core/report/reports";
 import type { Model, Settled } from "../model";
 
 export const REPORT_SCHEME = "saw-report";
 
-type Kind = "scan" | "fix" | "audit" | "hooks" | "watch";
+type Kind = "scan" | "fix" | "amend" | "audit" | "hooks" | "watch";
+
+/** The two ways saw fixes an infection: `saw fix` for the files, `saw fix amend` for git history. */
+export type Treatment = "files" | "history";
 
 const FIXES_KEPT = 5;
 
@@ -21,6 +24,12 @@ const REFRESH_MS = 300;
 interface FixRecord {
   run: CommandRun;
   outcome: FixOutcome | undefined;
+  decisions: string[];
+}
+
+interface AmendRecord {
+  run: CommandRun;
+  outcome: AmendOutcome | undefined;
   decisions: string[];
 }
 
@@ -45,6 +54,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
   /** Reports something has read, with the time each last changed, so they can be told to re-read. */
   private readonly watched = new Map<string, { uri: vscode.Uri; mtime: number }>();
   private readonly fixes = new Map<string, FixRecord>();
+  private readonly amends = new Map<string, AmendRecord>();
   private readonly savedScans = new Map<string, Settled>();
   private auditRun: CommandRun | undefined;
   private watchRun: CommandRun | undefined;
@@ -71,14 +81,24 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/scan/${folderKey(folder)}/Full details - ${label(folder.name)}.md` });
   }
 
-  /** The fix this window finished for the folder, when it prepared a clean-up. */
+  /** The files fix this window finished for the folder, when it prepared one. */
   lastFix(folder: vscode.WorkspaceFolder): FixOutcome | undefined {
     const outcome = this.fixes.get(folderKey(folder))?.outcome;
     return outcome?.kind === "prepared" ? outcome : undefined;
   }
 
   fixUri(folder: vscode.WorkspaceFolder): vscode.Uri {
-    return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/fix/${folderKey(folder)}/Cleaning details - ${label(folder.name)}.md` });
+    return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/fix/${folderKey(folder)}/Files fix details - ${label(folder.name)}.md` });
+  }
+
+  /** The git history fix this window ran for the folder: running, or how it ended. */
+  lastAmend(folder: vscode.WorkspaceFolder): AmendOutcome | "running" | undefined {
+    const record = this.amends.get(folderKey(folder));
+    return record && (record.run.finishedAt === undefined ? "running" : (record.outcome ?? { kind: "failed" }));
+  }
+
+  amendUri(folder: vscode.WorkspaceFolder): vscode.Uri {
+    return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/amend/${folderKey(folder)}/Git history fix details - ${label(folder.name)}.md` });
   }
 
   machineUri(kind: "audit" | "hooks" | "watch"): vscode.Uri {
@@ -90,7 +110,8 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     const folders = vscode.workspace.workspaceFolders ?? [];
     const items: Array<vscode.QuickPickItem & { uri: vscode.Uri }> = [
       ...folders.map((folder) => ({ label: `$(shield) ${folder.name}`, description: "scan results", uri: this.scanUri(folder) })),
-      ...folders.filter((folder) => this.fixes.has(folderKey(folder))).map((folder) => ({ label: `$(wand) ${folder.name}`, description: "last cleaning", uri: this.fixUri(folder) })),
+      ...folders.filter((folder) => this.fixes.has(folderKey(folder))).map((folder) => ({ label: `$(wand) ${folder.name}`, description: "files fix", uri: this.fixUri(folder) })),
+      ...folders.filter((folder) => this.amends.has(folderKey(folder))).map((folder) => ({ label: `$(history) ${folder.name}`, description: "git history fix", uri: this.amendUri(folder) })),
       { label: "$(device-desktop) Before you change passwords", description: "this machine", uri: this.machineUri("audit") },
       { label: "$(git-merge) Checks on clone and pull", description: "this machine", uri: this.machineUri("hooks") },
       { label: "$(eye) Background checks", description: "this machine", uri: this.machineUri("watch") },
@@ -110,8 +131,8 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
   }
 
   /** Choices made so far in the fix that is running. */
-  fixDecisions(folder: vscode.WorkspaceFolder, decisions: readonly string[]): void {
-    const record = this.fixes.get(folderKey(folder));
+  fixDecisions(folder: vscode.WorkspaceFolder, decisions: readonly string[], treatment: Treatment = "files"): void {
+    const record = (treatment === "history" ? this.amends : this.fixes).get(folderKey(folder));
     if (record) {
       record.decisions = [...decisions];
       this.changedSoon();
@@ -123,6 +144,20 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     if (record) {
       record.outcome = outcome;
       void this.save(this.fixPath(folder, record.run.startedAt), fixReport(this.fixInput(folder, record), "saved"), this.fixDir(folder));
+    }
+    this.changedSoon();
+  }
+
+  amendStarted(folder: vscode.WorkspaceFolder, run: CommandRun): void {
+    this.amends.set(folderKey(folder), { run, outcome: undefined, decisions: [] });
+    this.changedSoon();
+  }
+
+  amendFinished(folder: vscode.WorkspaceFolder, outcome: AmendOutcome | undefined): void {
+    const record = this.amends.get(folderKey(folder));
+    if (record) {
+      record.outcome = outcome;
+      void this.save(this.amendPath(folder, record.run.startedAt), amendReport(this.fixInput(folder, record), "saved"), this.amendDir(folder));
     }
     this.changedSoon();
   }
@@ -163,7 +198,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
 
   stat(uri: vscode.Uri): vscode.FileStat {
     const kind = uri.path.split("/")[1];
-    if (!["scan", "fix", "audit", "hooks", "watch"].includes(kind ?? "") || !uri.path.endsWith(".md")) {
+    if (!["scan", "fix", "amend", "audit", "hooks", "watch"].includes(kind ?? "") || !uri.path.endsWith(".md")) {
       throw vscode.FileSystemError.FileNotFound(uri);
     }
     const mtime = this.watched.get(uri.toString())?.mtime ?? Date.now();
@@ -227,6 +262,9 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
       case "fix":
         if (!folder) return "# saw fix\n\nThis folder is no longer open in this window.";
         return this.fixes.has(folderKey(folder)) ? this.render(kind, folder, "preview") : undefined;
+      case "amend":
+        if (!folder) return "# saw fix amend\n\nThis folder is no longer open in this window.";
+        return this.amends.has(folderKey(folder)) ? this.render(kind, folder, "preview") : undefined;
       case "audit":
         return this.auditRun ? this.render(kind, undefined, "preview") : undefined;
       case "hooks":
@@ -247,8 +285,13 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
       }
       case "fix": {
         const record = folder && this.fixes.get(folderKey(folder));
-        if (!folder || !record) return "# saw fix\n\nsaw has not fixed this folder from this window. Use **Clean this folder** on an infected folder in Chat.";
+        if (!folder || !record) return "# saw fix\n\nsaw has not fixed the files of this folder from this window. Use **Fix infection in files** on an infected folder in Chat.";
         return fixReport(this.fixInput(folder, record), copy);
+      }
+      case "amend": {
+        const record = folder && this.amends.get(folderKey(folder));
+        if (!folder || !record) return "# saw fix amend\n\nsaw has not fixed the git history of this folder from this window. Use **Fix infection in git history** in the folder's scan results.";
+        return amendReport(this.fixInput(folder, record), copy);
       }
       case "audit": {
         const audit = this.model.machine.audit;
@@ -267,9 +310,9 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     }
   }
 
-  private fixInput(folder: vscode.WorkspaceFolder, record: FixRecord) {
+  private fixInput<R extends FixRecord | AmendRecord>(folder: vscode.WorkspaceFolder, record: R): R & { folderName: string; folderPath: string; sawVersion: string | undefined } {
     const engine = this.model.engine;
-    return { folderName: folder.name, folderPath: folder.uri.fsPath, run: record.run, outcome: record.outcome, decisions: record.decisions, sawVersion: engine?.kind === "ready" ? engine.version : undefined };
+    return { ...record, folderName: folder.name, folderPath: folder.uri.fsPath, sawVersion: engine?.kind === "ready" ? engine.version : undefined };
   }
 
   private modelChanged(): void {
@@ -328,6 +371,16 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     return dir && path.join(dir, `${new Date(startedAt).toISOString().replace(/[:.]/g, "-")}.md`);
   }
 
+  private amendDir(folder: vscode.WorkspaceFolder): string | undefined {
+    const dir = this.folderDir(folder);
+    return dir && path.join(dir, "amends");
+  }
+
+  private amendPath(folder: vscode.WorkspaceFolder, startedAt: number): string | undefined {
+    const dir = this.amendDir(folder);
+    return dir && path.join(dir, `${new Date(startedAt).toISOString().replace(/[:.]/g, "-")}.md`);
+  }
+
   private machinePath(kind: "audit" | "hooks" | "watch"): string {
     return path.join(this.globalStorage, "reports", `${kind}.md`);
   }
@@ -358,7 +411,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     } else if (folder && kind === "scan") {
       file = this.scanPath(folder);
     } else if (folder) {
-      const dir = this.fixDir(folder);
+      const dir = kind === "amend" ? this.amendDir(folder) : this.fixDir(folder);
       const newest = dir && (await readdir(dir).catch(() => [] as string[])).filter((n) => n.endsWith(".md")).sort().at(-1);
       file = dir && newest ? path.join(dir, newest) : undefined;
     }

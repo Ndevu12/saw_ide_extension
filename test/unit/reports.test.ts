@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parsePayload } from "../../src/core/scan/contract";
 import { DOCS } from "../../src/core/docs";
 import { block, inline, prose, webLink } from "../../src/core/report/markdown";
-import { auditReport, fixReport, hooksReport, scanReport, watchReport, type SettledScan } from "../../src/core/report/reports";
+import { amendReport, auditReport, fixReport, hooksReport, scanReport, watchReport, type SettledScan } from "../../src/core/report/reports";
 import { judge } from "../../src/core/scan/verdict";
 import { finding, report, target } from "./helpers";
 
@@ -51,10 +51,11 @@ describe("the scan report", () => {
     expect(text).toContain("## Infected\n\nMalicious code is in this folder.");
     expect(text).toContain("- Scanned at `2026-10-19T00:00:00Z` in 1.2 s with saw `0.13.0`");
     expect(text).toContain("- 2 findings: 1 confirmed, 1 to review, 0 traces left; 0 dependency advisories");
-    expect(text).toContain("Use **Clean this folder** on the folder's card in Chat");
+    expect(text).toContain("**Fix infection in files** (`saw fix`)");
+    expect(text).toContain("**Fix infection in git history** (`saw fix amend`)");
     expect(text.indexOf("### Confirmed (1)")).toBeLessThan(text.indexOf("### To review by hand (1)"));
     expect(text).toContain("**critical** · `.vscode/tasks.json` · `vscode-task-runs-font`");
-    expect(text).toContain("**Clean this folder** removes this.");
+    expect(text).toContain("**Fix infection in files** removes this.");
     expect(text).toContain("saw does not remove this itself: deal with it by hand.");
   });
 
@@ -98,11 +99,23 @@ describe("the command reports", () => {
 
   it("fix: says what saw did, then saw's own report", () => {
     const text = fixReport({ folderName: "web", folderPath: "/work/web", run, outcome: { kind: "prepared", needsReview: true }, sawVersion: "0.13.0" }, "preview");
-    expect(text).toContain("## Clean-up prepared");
+    expect(text).toContain("## Files fixed");
     expect(text).toContain("Part of it needs you");
     expect(text).toContain("- Started 2026-10-20 13:00:00 UTC, took 4.0 s with saw `0.13.0`");
     expect(text).toContain("## saw's report\n\n```text\nSecurity fix\n  → prepared 1 change(s) on 'security/auto-clean-main'\n```");
     expect(text).toContain("Audit This Machine");
+  });
+
+  it("amend: its own document, naming saw fix amend and what it changed", () => {
+    const run = { startedAt: Date.UTC(2026, 9, 20, 13), finishedAt: Date.UTC(2026, 9, 20, 13, 0, 9), said: "History rewritten" };
+    const done = amendReport({ folderName: "w", folderPath: "/w", run, outcome: { kind: "done" }, sawVersion: "0.17.0" }, "preview");
+    expect(done).toContain("# Git history fix details: w");
+    expect(done).toContain("## Git history fixed");
+    expect(done).toContain("force-pushed each branch that held them");
+    expect(done).toContain(DOCS.amend);
+    expect(amendReport({ folderName: "w", folderPath: "/w", run, outcome: { kind: "review" }, sawVersion: undefined }, "preview")).toContain("## Needs you");
+    expect(amendReport({ folderName: "w", folderPath: "/w", run, outcome: { kind: "failed" }, sawVersion: undefined }, "preview")).toContain("## Not fixed");
+    expect(amendReport({ folderName: "w", folderPath: "/w", run: { startedAt: run.startedAt, said: "" }, outcome: undefined, sawVersion: undefined }, "preview")).toContain("## Fixing now");
   });
 
   it("fix: while running, and when stopped or failed", () => {
@@ -111,7 +124,7 @@ describe("the command reports", () => {
     expect(fixReport({ folderName: "w", folderPath: "/w", run: { ...run, stopped: "cancelled" }, outcome: undefined, sawVersion: undefined }, "preview"))
       .toContain("## Stopped\n\n- It was stopped before it finished.");
     expect(fixReport({ folderName: "w", folderPath: "/w", run, outcome: { kind: "failed", cause: "git has no identity" }, sawVersion: undefined }, "preview"))
-      .toContain("saw could not fix this folder: git has no identity");
+      .toContain("saw could not fix the files: git has no identity");
   });
 
   it("audit: repeats saw's rotation sentence under the verdict", () => {
@@ -121,11 +134,11 @@ describe("the command reports", () => {
     expect(auditReport({ run: undefined, verdict: undefined, sentence: undefined, sawVersion: undefined }, "preview")).toContain("has not been checked");
   });
 
-  it("fix: where the clean-up is, what it removed, and work it could not save", () => {
+  it("fix: where the fixed files are, what it removed, and work it could not save", () => {
     const details = { partial: false, branch: "security/auto-clean-main", base: "main", removed: [".vscode/tasks.json"], uncommitted: { branch: "", files: 0, withheld: 0, unsaved: 0, unread: 0, reason: "no git identity" }, historyHoldsPayload: true, needsReview: ["postinstall in package.json"] };
     const text = fixReport({ folderName: "w", folderPath: "/w", run, outcome: { kind: "prepared", needsReview: true, details }, sawVersion: undefined }, "preview");
     expect(text).toContain("The local branch `security/auto-clean-main` from `main`. To review it: `git diff main...security/auto-clean-main`");
-    expect(text).toContain("**git history still holds the malicious code.**");
+    expect(text).toContain("## Git history still holds the infection");
     expect(text).toContain("**It could not be saved on a branch, and is on disk only.** no git identity");
     expect(text).toContain("## Left for you to decide\n\n- postinstall in package\\.json");
     expect(text).toContain("## Removed\n\n- `.vscode/tasks.json`");
@@ -134,7 +147,7 @@ describe("the command reports", () => {
   it("fix: says in its title when saw cleaned only part of the folder", () => {
     const details = { partial: true, branch: "", base: "", removed: [], uncommitted: undefined, historyHoldsPayload: false, needsReview: [] };
     expect(fixReport({ folderName: "w", folderPath: "/w", run, outcome: { kind: "prepared", needsReview: true, details }, sawVersion: undefined }, "preview"))
-      .toContain("## Clean-up prepared, in part");
+      .toContain("## Files fixed, in part");
   });
 
   it("audit: the items to confirm first, then the rest, what was not read and what it covers", () => {

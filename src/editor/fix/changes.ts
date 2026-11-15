@@ -66,7 +66,7 @@ export async function uriAt(folder: vscode.WorkspaceFolder, relativePath: string
 }
 
 /**
- * Open saw's clean-up as one multi-file diff, `base` against `branch`, through the editor's Git
+ * Open saw's files fix as one multi-file diff, `base` against `branch`, through the editor's Git
  * extension. False when that is not possible: no Git extension, Git turned off (as in Restricted
  * Mode), or no repository at the folder.
  */
@@ -82,10 +82,10 @@ export async function openFixChanges(folder: vscode.WorkspaceFolder, base: strin
       return false;
     }
     const resources = changes.map((change) => [change.uri, git.toGitUri(change.originalUri, base), git.toGitUri(change.uri, branch)]);
-    await vscode.commands.executeCommand("vscode.changes", `saw's clean-up: ${base} ↔ ${branch}`, resources);
+    await vscode.commands.executeCommand("vscode.changes", `Files fix: ${base} ↔ ${branch}`, resources);
     return true;
   } catch (error) {
-    log.warn(`Could not open saw's clean-up of ${folder.name} as a diff: ${String(error)}`);
+    log.warn(`Could not open saw's files fix of ${folder.name} as a diff: ${String(error)}`);
     return false;
   }
 }

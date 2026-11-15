@@ -26,12 +26,13 @@ const DECIDE_SCRIPT = `
 `;
 
 /**
- * The Decide tab: one question from `saw fix --ask=jsonl`, answered with the same actions the
+ * The Decide tab: one question from `saw fix --ask=jsonl` or `saw fix amend --ask=jsonl`, answered with the same actions the
  * diff toolbar offers. Closing the tab does not answer. Stopping the fix does not answer.
  */
 export class Decide implements vscode.Disposable {
   private tab: vscode.WebviewPanel | undefined;
   private folder: vscode.WorkspaceFolder | undefined;
+  private treatment: "files" | "history" = "files";
   private question: AskQuestion | undefined;
   private step: Step = "ask";
   private chosen: string[] = [];
@@ -88,24 +89,28 @@ export class Decide implements vscode.Disposable {
   }
 
   /**
-   * Which act the open question belongs to. A file question is amending history. A delivery or a
-   * package question is fixing the checkout. Undefined when nothing is waiting.
+   * Which fix the open question belongs to: the files (`saw fix`) or git history (`saw fix amend`).
+   * Undefined when nothing is waiting.
    */
   waitingOn(): { folder: vscode.WorkspaceFolder; specialty: string } | undefined {
     if (!this.folder || !this.question) {
       return undefined;
     }
-    const specialty = this.question.kind === "file"
-      ? "This choice is part of cleaning past commits. Your answer can rewrite the commits that carried this file."
+    const about = this.question.kind === "file"
+      ? "It decides what becomes of this file."
       : this.question.kind === "package"
-        ? "This choice is part of cleaning this folder. It decides whether a known-malicious package stays listed. Past commits are not changed."
-        : "This choice is part of cleaning this folder. It decides which files added alongside the malicious code stay. Past commits are not changed.";
+        ? "It decides whether a known-malicious package stays listed."
+        : "It decides which files added alongside the malicious code stay.";
+    const specialty = this.treatment === "history"
+      ? `This choice is part of Fix infection in git history (saw fix amend). ${about} Your answer changes the rewritten past commits.`
+      : `This choice is part of Fix infection in files (saw fix). ${about} Past commits are not changed.`;
     return { folder: this.folder, specialty };
   }
 
   /** Wait until the operator answers `question`, or the fix is stopped. */
-  async ask(folder: vscode.WorkspaceFolder, question: AskQuestion): Promise<AskDecision | "stop"> {
+  async ask(folder: vscode.WorkspaceFolder, question: AskQuestion, treatment: "files" | "history"): Promise<AskDecision | "stop"> {
     this.folder = folder;
+    this.treatment = treatment;
     this.question = question;
     this.step = "ask";
     this.chosen = [];
@@ -334,7 +339,7 @@ export class Decide implements vscode.Disposable {
 
   private idleHtml(): string {
     const done = this.log.map((line) => `<li>${escape(line)}</li>`).join("");
-    return `<p>No choice is waiting. When cleaning needs one, it opens here with the change beside it.</p>${done ? `<p class="meta">Last cleaning</p><ul>${done}</ul>` : ""}`;
+    return `<p>No choice is waiting. When a fix needs one, it opens here with the change beside it.</p>${done ? `<p class="meta">Last fix</p><ul>${done}</ul>` : ""}`;
   }
 
   private questionHtml(): string {
@@ -387,7 +392,7 @@ export class Decide implements vscode.Disposable {
         <p class="actions"><button type="button" class="primary" data-act="keep" autofocus>Leave it declared</button>
         <button type="button" class="danger" data-act="confirm-take-out">Take it out</button></p>`;
     }
-    const title = question.confirmed ? "saw confirmed this file and could not clean it" : "saw is unsure about this file";
+    const title = question.confirmed ? "saw confirmed this file and could not fix it" : "saw is unsure about this file";
     const origin = question.originUnread
       ? "git could not read what this file arrived with"
       : question.introducedBy

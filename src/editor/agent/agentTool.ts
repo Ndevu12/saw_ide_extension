@@ -121,7 +121,9 @@ export function describeFolder(state: FolderState, engine: Engine | undefined, w
 
 function why(state: FolderState, busy: boolean, engine: Engine | undefined): string {
   if (state.fixing) {
-    return "saw is fixing this folder right now.";
+    return state.treating === "history"
+      ? "saw is fixing the infection in this folder's git history right now (saw fix amend)."
+      : "saw is fixing the infection in this folder's files right now (saw fix).";
   }
   if (busy) {
     return "saw has not finished scanning the latest changes yet.";

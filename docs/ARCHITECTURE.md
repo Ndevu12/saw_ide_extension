@@ -21,7 +21,7 @@ src/
   editor/               VS Code adapters, grouped the same way
     model · settings · present
     scan/               controller, triggers, diagnostics
-    fix/                Clean this folder, the Your choice tab, diffs
+    fix/                The files fix and the git history fix, the Your choice tab, diffs
     install/            find saw, install it, the install lock
     view/               the Chat sidebar, the Scan results tab, status bar, alerts, reports
     feedback/           opens the rating, star, and issue pages; stores the dismissal

@@ -35,16 +35,16 @@ export class Alerts {
   private async infected(folder: vscode.WorkspaceFolder, outcome: Settled): Promise<void> {
     const count = confirmedCount(outcome);
     const what = `saw: ${folder.name} is INFECTED — ${count} confirmed finding${count === 1 ? "" : "s"}.`;
-    const act = "saw can clean it: it removes what it confirmed, and nothing from the folder runs while it does.";
+    const act = "Fix Infection in Files runs saw fix: it removes what saw confirmed from the files, pushes nothing, and runs nothing from the folder. Fixing git history is a separate step: See What Was Found explains both.";
     const choice = vscode.workspace.isTrusted
-      ? await vscode.window.showErrorMessage(`${what} ${act}`, "Clean This Folder…", "See What Was Found")
+      ? await vscode.window.showErrorMessage(`${what} ${act}`, "Fix Infection in Files…", "See What Was Found")
       : await vscode.window.showWarningMessage(
           `${what} Do not trust this folder: Restricted Mode keeps its tasks and debug configurations from running. ${act}`,
           { modal: true },
-          "Clean This Folder…",
+          "Fix Infection in Files…",
           "See What Was Found",
         );
-    if (choice === "Clean This Folder…") {
+    if (choice === "Fix Infection in Files…") {
       await vscode.commands.executeCommand("saw.fixFolder", folder);
     } else if (choice === "See What Was Found") {
       await vscode.commands.executeCommand("saw.openVerdict", { uri: folder.uri });

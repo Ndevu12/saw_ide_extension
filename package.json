@@ -117,9 +117,15 @@
       },
       {
         "command": "saw.fixFolder",
-        "title": "Clean This Folder…",
+        "title": "Fix Infection in Files…",
         "category": "saw",
         "icon": "$(wand)"
+      },
+      {
+        "command": "saw.amendHistory",
+        "title": "Fix Infection in Git History…",
+        "category": "saw",
+        "icon": "$(history)"
       },
       {
         "command": "saw.auditMachine",

@@ -5,7 +5,7 @@ import { chatPage, renderChat, VERDICT_BADGE, type ChatCleanup, type ChatFolderI
 import { renderVerdict, verdictPage } from "../../core/chat/verdictPage";
 import type { Finding } from "../../core/scan/contract";
 import { plain } from "../../core/text";
-import type { AuditVerdict, FixOutcome, HookStatus } from "../../core/fix/actions";
+import type { AmendOutcome, AuditVerdict, FixOutcome, HookStatus } from "../../core/fix/actions";
 import type { Feedback } from "../feedback/feedback";
 import type { Decide } from "../fix/decide";
 import type { Controller } from "../scan/controller";
@@ -27,6 +27,13 @@ const AUDIT_TONE: Record<AuditVerdict, Tone> = {
   incomplete: "warn",
   failed: "warn",
 };
+
+/** What the two fixes, `saw fix` on the files and `saw fix amend` on git history, last did here. */
+export interface FixRuns {
+  files(folder: vscode.WorkspaceFolder): FixOutcome | undefined;
+  history(folder: vscode.WorkspaceFolder): AmendOutcome | "running" | undefined;
+  open(folder: vscode.WorkspaceFolder, treatment: "files" | "history"): void;
+}
 
 interface OpenTarget {
   target: string;
@@ -55,8 +62,7 @@ export class ChatView implements vscode.Disposable {
     private readonly model: Model,
     private readonly controller: Controller,
     private readonly checkHooks: () => void,
-    private readonly lastFix: (folder: vscode.WorkspaceFolder) => FixOutcome | undefined,
-    private readonly openFixReport: (folder: vscode.WorkspaceFolder) => void,
+    private readonly fixes: FixRuns,
     private readonly decide: Decide,
     private readonly feedback: Feedback,
     private readonly icon: { light: vscode.Uri; dark: vscode.Uri },
@@ -120,7 +126,7 @@ export class ChatView implements vscode.Disposable {
     const states = this.model.states();
     this.folders = states.map((state) => state.folder);
     this.opens = states.map((state) => openings(state));
-    const inputs = states.map((state) => folderInput(state, this.decide, this.lastFix));
+    const inputs = states.map((state) => folderInput(state, this.decide, this.fixes));
     if (this.view) {
       draw(this.view, renderChat(chatPage(inputs, this.machineInput(), this.feedback.card()), this.view.nonce));
     }
@@ -175,9 +181,19 @@ export class ChatView implements vscode.Disposable {
           void vscode.commands.executeCommand("saw.openReport", { state: { folder } });
         }
         return;
+      case "amend":
+        if (folder) {
+          void vscode.commands.executeCommand("saw.amendHistory", { state: { folder } });
+        }
+        return;
       case "fix-report":
         if (folder) {
-          this.openFixReport(folder);
+          this.fixes.open(folder, "files");
+        }
+        return;
+      case "amend-report":
+        if (folder) {
+          this.fixes.open(folder, "history");
         }
         return;
       case "decide":
@@ -261,7 +277,7 @@ function folderArg(arg: unknown): vscode.WorkspaceFolder | undefined {
   return node?.state?.folder ?? (node?.uri ? vscode.workspace.getWorkspaceFolder(node.uri) : undefined);
 }
 
-function folderInput(state: FolderState, decide: Decide, lastFix: (folder: vscode.WorkspaceFolder) => FixOutcome | undefined): ChatFolderInput {
+function folderInput(state: FolderState, decide: Decide, fixes: FixRuns): ChatFolderInput {
   const last = state.last;
   const findings = openings(state).map(({ finding }, open) => ({
     what: plain(finding.description, 300),
@@ -276,6 +292,7 @@ function folderInput(state: FolderState, decide: Decide, lastFix: (folder: vscod
     path: state.folder.uri.fsPath,
     advisories,
     phase: state.deciding ? "deciding" : state.fixing ? "fixing" : state.scanning ? "scanning" : "idle",
+    ...(state.fixing && state.treating ? { treating: state.treating } : {}),
     ...(state.progress ? { progress: state.progress } : {}),
     ...(last ? { verdict: last.verdict } : {}),
     reasons: last?.reasons ?? [],
@@ -284,7 +301,8 @@ function folderInput(state: FolderState, decide: Decide, lastFix: (folder: vscod
     ...(state.checking ? { checking: true, ...(state.checkStep ? { checkStep: state.checkStep } : {}), ...(state.checkAbout ? { checkAbout: state.checkAbout } : {}) } : {}),
     ...(state.unheld ? { unheld: true, ...(state.unheldFrom ? { unheldFrom: state.unheldFrom } : {}) } : {}),
     ...decisionOf(state, decide),
-    ...cleanupOf(lastFix(state.folder)),
+    ...cleanupOf(fixes.files(state.folder)),
+    ...historyOf(fixes.history(state.folder)),
   };
 }
 
@@ -309,6 +327,13 @@ function cleanupOf(outcome: FixOutcome | undefined): { cleanup: ChatCleanup } | 
       needsYou: outcome.needsReview,
     },
   };
+}
+
+function historyOf(outcome: AmendOutcome | "running" | undefined): { history: NonNullable<ChatFolderInput["history"]> } | Record<string, never> {
+  if (!outcome) {
+    return {};
+  }
+  return { history: outcome === "running" ? "running" : outcome.kind };
 }
 
 function openings(state: FolderState): OpenTarget[] {

@@ -3,11 +3,11 @@
 A fix still starts from an infected folder, after the confirmation that names what saw will change.
 When saw reaches something only the operator can decide, the decision is made in the editor. The
 **Your choice** tab says what is being asked and offers the actions. The editor shows the evidence as a
-diff, the same way **Open Changes** shows a finished clean-up.
+diff, the same way **Open Changes** shows a finished files fix.
 
 saw asks these questions only while fixing one local folder. A delivery and a known-malicious
-package are asked by `saw fix`, which is what **Clean this folder** runs. A file saw will not decide is
-asked by `saw fix amend`, because those answers rewrite history (cleaning past commits), and **Clean this folder** does not. The
+package are asked by `saw fix`, which is what **Fix infection in files** runs. A file saw will not decide is
+asked by `saw fix amend`, which is what **Fix infection in git history** runs, because those answers rewrite past commits. The Your choice tab names the fix that asked, from the command the extension started. The
 extension asks them when `saw capabilities --json` announces `fix.ask.json` at schema `fix-ask`
 version 1, and then passes `--ask=jsonl`. A saw without that feature is not given the flag: the
 fix finishes, and anything saw would have asked is left in the report. What saw has to provide is
@@ -15,8 +15,8 @@ fix finishes, and anything saw would have asked is left in the report. What saw 
 
 ## While a fix is waiting
 
-The folder's card in Chat changes from "Cleaning this folder" to "Cleaning is waiting for your
-choice", with **Choose what to keep** as its button. The Your choice tab and the diff open on their
+The folder's card in Chat changes from "Fixing infection in files" (or "in git history") to the
+same line followed by "waiting for your choice", with **Choose what to keep** as its button. The Your choice tab and the diff open on their
 own, side by side. The same actions are in the Your choice tab and in the toolbar of that diff.
 
 Keep, and Leave it declared, are the focused actions. Remove, Take out, and Restore are chosen

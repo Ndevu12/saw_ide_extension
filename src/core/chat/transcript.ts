@@ -71,10 +71,10 @@ export interface ChatFindingInput {
   open: number;
 }
 
-/** What the last checkout fix left behind, when this window has finished one. */
+/** What the last files fix (`saw fix`) left behind, when this window has finished one. */
 export interface ChatCleanup {
   branch?: string;
-  /** Past commits still carry what the checkout fix removed. */
+  /** Past commits still carry what the files fix removed. */
   historyHoldsPayload: boolean;
   partial: boolean;
   needsYou: boolean;
@@ -85,6 +85,8 @@ export interface ChatFolderInput {
   /** Shown on the verdict tab, under the name. */
   path?: string;
   phase: "idle" | "scanning" | "fixing" | "deciding";
+  /** Which fix is running or waiting: `saw fix` on the files, or `saw fix amend` on git history. */
+  treating?: "files" | "history";
   progress?: string;
   verdict?: FolderVerdict;
   reasons: string[];
@@ -105,6 +107,8 @@ export interface ChatFolderInput {
   /** Set while a fix is waiting, naming which act the question belongs to. */
   decision?: string;
   cleanup?: ChatCleanup;
+  /** The last git history fix (`saw fix amend`) this window ran. */
+  history?: "running" | "done" | "review" | "failed";
 }
 
 export interface ChatMachineInput {
@@ -264,12 +268,21 @@ export function liveLine(folder: ChatFolderInput): string | undefined {
     case "scanning":
       return folder.progress ? progressLine(folder.progress) : "Scanning";
     case "fixing":
-      return "Cleaning this folder";
+      return `Fixing infection in ${treatmentName(folder)}`;
     case "deciding":
-      return "Cleaning is waiting for your choice";
+      return `Fixing infection in ${treatmentName(folder)}: waiting for your choice`;
     case "idle":
       return undefined;
   }
+}
+
+function treatmentName(folder: ChatFolderInput): string {
+  return folder.treating === "history" ? "git history" : "files";
+}
+
+/** The files fix left the infection in past commits, and no git history fix has removed it. */
+export function historyStillInfected(folder: ChatFolderInput): boolean {
+  return folder.cleanup?.historyHoldsPayload === true && folder.history !== "done";
 }
 
 /** The short form of each thing the verdict tab explains, the most serious first. */
@@ -285,14 +298,21 @@ function folderNotice(folder: ChatFolderInput): { text: string; tone: Tone } | u
     notices.push({ text: "This version arrived without a check.", tone: "warn" });
   }
   const cleanup = folder.cleanup;
-  if (cleanup?.historyHoldsPayload) {
-    notices.push({ text: "Past commits still contain the malicious code.", tone: "bad" });
+  if (historyStillInfected(folder)) {
+    notices.push({ text: "Git history still holds the infection.", tone: "bad" });
   }
   if (cleanup && (cleanup.partial || cleanup.needsYou)) {
-    notices.push({ text: "Part of the cleaning still needs you.", tone: "warn" });
+    notices.push({ text: "Part of the files fix still needs you.", tone: "warn" });
   }
   if (cleanup?.branch) {
-    notices.push({ text: `The cleaned files are on ${cleanup.branch}.`, tone: "ok" });
+    notices.push({ text: `The fixed files are on ${cleanup.branch}.`, tone: "ok" });
+  }
+  if (folder.history === "review") {
+    notices.push({ text: "The git history fix needs you.", tone: "warn" });
+  } else if (folder.history === "failed") {
+    notices.push({ text: "The git history fix did not finish.", tone: "warn" });
+  } else if (folder.history === "done") {
+    notices.push({ text: "Git history fixed. Everyone with a clone must reset to the new branches.", tone: "ok" });
   }
   return notices.sort((a, b) => TONE_RANK[a.tone] - TONE_RANK[b.tone])[0];
 }
@@ -311,6 +331,11 @@ function folderSummary(folder: ChatFolderInput): string | undefined {
   return "Nothing harmful found.";
 }
 
+export const FIX_FILES = (index: string | number): ChatButton => ({ act: `fix:${index}`, label: "Fix infection in files", tone: "danger" });
+export const FIX_HISTORY = (index: string | number): ChatButton => ({ act: `amend:${index}`, label: "Fix infection in git history…", tone: "danger" });
+export const FIX_FILES_NOTE = "Runs saw fix. Nothing is pushed, and past commits are not changed.";
+export const FIX_HISTORY_NOTE = "Runs saw fix amend. Rewrites past commits and force-pushes their branches.";
+
 const VIEW = (index: string | number): ChatButton => ({ act: `verdict:${index}`, label: "See results", tone: "secondary" });
 const RESCAN = (index: string | number): ChatButton => ({ act: `scan:${index}`, label: "Scan again", tone: "secondary" });
 
@@ -326,8 +351,11 @@ function folderSteps(folder: ChatFolderInput, index: string | number): Pick<Chat
     if (!busy) {
       primary = { act: `scan:${index}`, label: "Scan this folder", tone: "primary" };
     }
+  } else if (historyStillInfected(folder) && !busy) {
+    primary = FIX_HISTORY(index);
+    links.push(VIEW(index), RESCAN(index));
   } else if (folder.verdict === "infected" && !busy) {
-    primary = { act: `fix:${index}`, label: "Clean this folder", tone: "danger" };
+    primary = FIX_FILES(index);
     links.push(VIEW(index), RESCAN(index));
   } else if ((folder.verdict === "suspicious" || folder.verdict === "incomplete") && !busy) {
     primary = { act: `verdict:${index}`, label: "See what was found", tone: "primary" };
@@ -339,9 +367,12 @@ function folderSteps(folder: ChatFolderInput, index: string | number): Pick<Chat
     }
   }
   if (folder.cleanup) {
-    links.push({ act: `fix-report:${index}`, label: "Cleaning details", tone: "secondary" });
+    links.push({ act: `fix-report:${index}`, label: "Files fix details", tone: "secondary" });
   }
-  const note = primary?.tone === "danger" ? "Past commits are not changed. Nothing is pushed." : undefined;
+  if (folder.history) {
+    links.push({ act: `amend-report:${index}`, label: "Git history fix details", tone: "secondary" });
+  }
+  const note = primary?.act.startsWith("amend:") ? FIX_HISTORY_NOTE : primary?.act.startsWith("fix:") ? FIX_FILES_NOTE : undefined;
   return { ...(primary ? { primary } : {}), ...(note ? { note } : {}), links };
 }
 

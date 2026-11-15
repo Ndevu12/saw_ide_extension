@@ -65,8 +65,11 @@ export function activate(context: vscode.ExtensionContext): SawApi {
       model,
       controller,
       () => void actions.refreshHooks(),
-      (folder) => reports.lastFix(folder),
-      (folder) => void reports.open(reports.fixUri(folder)),
+      {
+        files: (folder) => reports.lastFix(folder),
+        history: (folder) => reports.lastAmend(folder),
+        open: (folder, treatment) => void reports.open(treatment === "history" ? reports.amendUri(folder) : reports.fixUri(folder)),
+      },
       decide,
       feedback,
       { light: vscode.Uri.joinPath(context.extensionUri, "media", "verdict-light.svg"), dark: vscode.Uri.joinPath(context.extensionUri, "media", "verdict-dark.svg") },
@@ -96,6 +99,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
       }
     }),
     vscode.commands.registerCommand("saw.fixFolder", (arg?: unknown) => actions.fixFolder(folderOf(arg))),
+    vscode.commands.registerCommand("saw.amendHistory", (arg?: unknown) => actions.amendHistory(folderOf(arg))),
     vscode.commands.registerCommand("saw.auditMachine", () => actions.auditMachine()),
     vscode.commands.registerCommand("saw.openWatchReport", () => actions.openWatchReport()),
     vscode.commands.registerCommand("saw.installHooks", () => actions.hooks("install")),

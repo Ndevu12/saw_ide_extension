@@ -83,13 +83,14 @@ describe("the sidebar chat", () => {
     expect(html).not.toContain("stayAwakeBot");
   });
 
-  it("makes the fix the next step for an infected folder, with the verdict a link away", () => {
+  it("makes the files fix the next step for an infected folder, naming its command", () => {
     const html = chat([folder({ verdict: "infected", findings: [finding("a task <img src=x onerror=alert(1)>", "tasks.json", "critical", 0)] })]);
-    expect(html).toContain('<div class="cta"><button type="button" class="danger" data-act="fix:0">Clean this folder</button><p class="note">Past commits are not changed. Nothing is pushed.</p></div>');
+    expect(html).toContain('<div class="cta"><button type="button" class="danger" data-act="fix:0">Fix infection in files</button><p class="note">Runs saw fix. Nothing is pushed, and past commits are not changed.</p></div>');
     expect(html).toContain('data-act="verdict:0">See results</button>');
     expect(html).toContain('<article class="card bad">');
     expect(html).not.toContain("<img");
-    expect(html).not.toContain("Cleaning past commits");
+    expect(html).not.toContain("amend:0");
+    expect(html).not.toContain("Clean");
   });
 
   it("asks to scan a folder that has not been scanned", () => {
@@ -104,9 +105,9 @@ describe("the sidebar chat", () => {
       verdict: "clean",
       cleanup: { branch: "security/auto-clean-main", historyHoldsPayload: true, partial: false, needsYou: true },
     })]);
-    expect(html).toContain('<p class="notice bad">Past commits still contain the malicious code.</p>');
+    expect(html).toContain('<p class="notice bad">Git history still holds the infection.</p>');
     expect(html).not.toContain("security/auto-clean-main");
-    expect(html).toContain('data-act="fix-report:0">Cleaning details<');
+    expect(html).toContain('data-act="fix-report:0">Files fix details<');
     expect(html).not.toContain("fix:0");
     const held = chat([folder({ verdict: "clean", held: { verdict: "infected", reasons: ["a workflow arrived"] } })]);
     expect(held).toContain('<p class="notice bad">An update was stopped (infected). The folder is unchanged.</p>');
@@ -129,10 +130,23 @@ describe("the sidebar chat", () => {
     expect(checking).toContain('class="live"');
   });
 
+  it("makes the git history fix the next step once the files fix leaves the infection in past commits", () => {
+    const cleanup = { branch: "security/auto-clean-main", historyHoldsPayload: true, partial: false, needsYou: false };
+    const html = chat([folder({ verdict: "clean", cleanup })]);
+    expect(html).toContain('<div class="cta"><button type="button" class="danger" data-act="amend:0">Fix infection in git history…</button><p class="note">Runs saw fix amend. Rewrites past commits and force-pushes their branches.</p></div>');
+    const running = chat([folder({ verdict: "clean", cleanup, phase: "fixing", treating: "history", history: "running" })]);
+    expect(running).toContain("Fixing infection in git history");
+    expect(running).not.toContain("amend:0");
+    const done = chat([folder({ verdict: "clean", cleanup, history: "done" })]);
+    expect(done).not.toContain("amend:0");
+    expect(done).not.toContain("Git history still holds the infection.");
+    expect(done).toContain('data-act="amend-report:0">Git history fix details<');
+  });
+
   it("opens a waiting decision from the card", () => {
     const html = chat([folder({ verdict: "infected", phase: "deciding", decision: "This question is part of fixing the checkout." })]);
     expect(html).toContain('class="primary" data-act="decide:0">Choose what to keep<');
-    expect(html).toContain("Cleaning is waiting for your choice");
+    expect(html).toContain("Fixing infection in files: waiting for your choice");
     expect(html).not.toContain("fix:0");
   });
 
@@ -179,11 +193,16 @@ describe("the verdict tab", () => {
     expect(html).toContain('class="editor"');
   });
 
-  it("explains the checkout fix beside its button, and what it does not do", () => {
+  it("offers the two fixes as separate steps, each with its command, what it does, and its own button", () => {
     const html = tab(folder({ verdict: "infected", findings: [finding("a payload loader <img src=x>", "a1b2c3", "critical", 0)] }));
-    expect(html).toContain('<div class="bar"><button type="button" class="danger" data-act="fix:0">Clean this folder</button>');
-    expect(html).toContain("Past commits are not changed, and nothing is pushed.");
-    expect(html).toContain("Cleaning past commits is a separate step.");
+    expect(html).toContain("<h2>Fix the infection</h2>");
+    expect(html).toContain("<h3>Fix infection in files</h3><code>saw fix</code>");
+    expect(html).toContain("<h3>Fix infection in git history</h3><code>saw fix amend</code>");
+    expect(html).toContain('class="danger" data-act="fix:0">Fix infection in files</button>');
+    expect(html).toContain('class="danger" data-act="amend:0">Fix infection in git history…</button>');
+    expect(html).toContain("Pushes nothing. Past commits still hold the infection.");
+    expect(html).toContain("Force-pushes each branch that held one.");
+    expect(html).not.toContain('<div class="bar"><button type="button" class="danger"');
     expect(html).toContain('<span class="sev critical">critical</span>');
     expect(html).toContain("&lt;img src=x&gt;");
     expect(html).not.toContain("<img");
@@ -197,9 +216,11 @@ describe("the verdict tab", () => {
       cleanup: { branch: "security/auto-clean-main", historyHoldsPayload: true, partial: false, needsYou: true },
     }));
     expect(html).toContain("check this version of the folder before it arrived. Nothing was changed.");
-    expect(html).toContain("The cleaned files are on the local branch security/auto-clean-main.");
-    expect(html).toContain("Past commits still contain the malicious code.");
+    expect(html).toContain("Done in part. Files fix details says what is left for you.");
+    expect(html).toContain("Needed: git history still holds the infection.");
     expect(html).toContain('data-act="fix-report:0"');
+    expect(html).toContain('data-act="amend:0">Fix infection in git history…');
+    expect(html).not.toContain('data-act="fix:0"');
     expect(html).toContain("saw found nothing harmful that it knows of.");
     const checking = tab(folder({ verdict: "clean", checking: true, checkAbout: "admission" }));
     expect(checking).toContain("saw is checking this version of the folder. Nothing has changed.");
