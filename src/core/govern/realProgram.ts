@@ -137,6 +137,15 @@ export function findRealProgram(name: string, search: SearchPath, standinDirs: r
 /** Why a recorded program is not run: it leads back to a stand-in, or it is no longer there. */
 export type NotRun = "leads-back" | "gone";
 
+/** PATH without the stand-in folders, for a program that would otherwise look git up and find the stand-in. */
+export function pathWithoutStandins(pathVariable: string | undefined, standinDirs: readonly string[], files: ProgramFiles, platform: NodeJS.Platform = process.platform): string {
+  const { delimiter } = rules(platform);
+  return (pathVariable ?? "")
+    .split(delimiter)
+    .filter((dir) => dir && !isStandinFolder(dir, standinDirs, files, platform))
+    .join(delimiter);
+}
+
 export type RealProgramCheck =
   | { kind: "ok"; program: string }
   | { kind: "replaced"; program: string; recorded: string; why: NotRun }
