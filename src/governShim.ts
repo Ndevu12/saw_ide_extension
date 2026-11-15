@@ -4,7 +4,7 @@ import * as path from "node:path";
 
 import { applyArgs, prepareArgs, readApply, readPrepare, type GovernConfig, type GovernPhase } from "./core/govern/contract";
 import { activationEnv, folderKey, plan } from "./core/govern/plan";
-import { checkRealProgram, diskFiles } from "./core/govern/realProgram";
+import { checkRealProgram, diskFiles, pathWithoutStandins } from "./core/govern/realProgram";
 import { enclosingFolder, parseGit, quietGit, repoConfigText, silencedRepoConfig, type Tool } from "./core/govern/command";
 import { runProgram } from "./core/run";
 import { describeProgress, ProgressLines } from "./core/scan/progress";
@@ -72,10 +72,15 @@ function runPlaced(config: GovernConfig, tool: Tool, args: readonly string[], ho
     return;
   }
   const guarded = guardGit(config, tool, args);
+  const env: NodeJS.ProcessEnv = { ...guarded.env, ...activationEnv(config, tool, holding) };
+  if (!config.realGit) {
+    // No real git: saw's stand-in would look git up on PATH and find this stand-in. There is no git to check either.
+    env["PATH"] = pathWithoutStandins(env["PATH"], config.standinDirs ?? [], diskFiles);
+  }
   const child = spawn(standin, guarded.args, {
     stdio: ["inherit", "inherit", "pipe"],
     shell: false,
-    env: { ...guarded.env, ...activationEnv(config, tool, holding) },
+    env,
   });
   let failed = false;
   child.stderr?.on("data", (chunk: Buffer) => {

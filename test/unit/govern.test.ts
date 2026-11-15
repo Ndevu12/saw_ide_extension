@@ -286,6 +286,39 @@ describe.runIf(process.platform !== "win32")("the stand-in and a recorded bare g
     expect(run.stderr).toContain("is no longer there, and no other was found");
   }, 20_000);
 
+  it("runs gh through saw's stand-in without a real git, and the stand-in's git lookup cannot reach this one", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "saw-standin-"));
+    try {
+      const bin = path.join(root, "bin");
+      mkdirSync(bin);
+      const shim = path.join(root, "govern-shim.js");
+      await build({ entryPoints: [path.resolve(__dirname, "../../src/governShim.ts")], bundle: true, platform: "node", format: "cjs", outfile: shim, logLevel: "silent" });
+      const realGh = path.join(root, "gh");
+      writeFileSync(realGh, '#!/bin/sh\necho "real gh $*"\n', { mode: 0o755 });
+      // saw's stand-in runs gh, then git as gh would, looking git up on PATH as saw's does when given none.
+      const standin = path.join(root, "saw-git-standin");
+      writeFileSync(standin, `#!/bin/sh\nexec git status\n`, { mode: 0o755 });
+      const configPath = path.join(root, "config.json");
+      writeFileSync(configPath, JSON.stringify({ enabled: true, saw: "", realGit: path.join(root, "gone-git"), realGh, timeoutMs: 1000, folders: [], holdingRoot: root, markerDir: root, resultDir: root, progress: false, standin, standinDirs: [bin] }));
+      const counted = (tool: "git" | "gh") => {
+        const lines = posixWrapper(process.execPath, shim, configPath, tool === "gh" ? realGh : path.join(root, "gone-git"), tool).split("\n");
+        const count = path.join(root, `count-${tool}`);
+        lines.splice(1, 0, `n=0; if [ -f '${count}' ]; then read n < '${count}'; fi; n=$((n + 1)); echo "$n" > '${count}'`, 'if [ "$n" -ge 5 ]; then echo "LOOP" >&2; exit 99; fi');
+        writeFileSync(path.join(bin, tool), lines.join("\n"), { mode: 0o755 });
+      };
+      counted("gh");
+      counted("git");
+      const run = spawnSync("gh", ["--version"], { cwd: root, encoding: "utf8", timeout: 15_000, env: { ...process.env, PATH: bin } });
+      // The git wrapper is never entered: the stand-in's lookup finds no git, and says so itself.
+      expect(existsSync(path.join(root, "count-git"))).toBe(false);
+      expect(run.status).not.toBe(0);
+      expect(run.stderr).not.toContain("LOOP");
+      expect(run.stderr).not.toContain(path.join(bin, "git"));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 20_000);
+
   it("runs a recorded full path as before", async () => {
     const { run, entries } = await runGit(({ real }) => ({ realGit: path.join(real, "git") }));
     expect(entries).toBe(1);

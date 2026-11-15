@@ -86,7 +86,7 @@ export class EngineResolver {
         return { kind: "unavailable", reason: "install-failed", message };
       }
       const installed = await this.installThenFind(listed.message);
-      this.showFailure(installed, undefined);
+      this.showFailure(installed, this.takeFailure(), undefined);
       return installed;
     }
     // The saw this extension installed is kept at the release it pins; one the operator installed is theirs.
@@ -105,22 +105,32 @@ export class EngineResolver {
 
   /** Install the pinned release; when that fails, the saw already installed keeps running, marked as behind. */
   private moveOrKeep(why: string): Promise<Found> {
+    // Held here, not on the resolver, so a reset while the installed saw is listed again cannot lose it.
+    let failure: Diagnosis | undefined;
     return moveOrKeep<Extract<Found, { kind: "ready" }>, Extract<Found, { kind: "unavailable" }>>(this.installer.pinnedSaw, {
-      install: () => this.installThenFind(why),
+      install: async () => {
+        const found = await this.installThenFind(why);
+        failure = this.takeFailure();
+        return found;
+      },
       // Listed again, in case the attempt removed it.
       keep: async () => {
         const listed = await this.listReady();
         return listed.kind === "unavailable" ? listed : this.choose(listed.candidates);
       },
-      failed: (moved, keeping) => this.showFailure(moved, keeping),
+      failed: (moved, keeping) => this.showFailure(moved, failure, keeping),
       warn: (message) => this.log.warn(message),
     });
   }
 
-  /** The installer's notification for the last failed install, once it is known what keeps running. */
-  private showFailure(found: Found, keeping: string | undefined): void {
+  private takeFailure(): Diagnosis | undefined {
     const failure = this.failure;
     this.failure = undefined;
+    return failure;
+  }
+
+  /** The installer's notification for a failed install, once it is known what keeps running. */
+  private showFailure(found: Found, failure: Diagnosis | undefined, keeping: string | undefined): void {
     if (found.kind === "unavailable" && found.reason === "install-failed" && failure) {
       void this.installer.showFailure(failure, keeping);
     }

@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { posixWrapper } from "../../src/core/govern/plan";
-import { checkRealProgram, diskFiles, findRealProgram, isRealProgram, isStandin, type ProgramFiles } from "../../src/core/govern/realProgram";
+import { checkRealProgram, diskFiles, findRealProgram, isRealProgram, isStandin, pathWithoutStandins, type ProgramFiles } from "../../src/core/govern/realProgram";
 
 const posix = process.platform !== "win32";
 
@@ -63,6 +63,10 @@ describe.runIf(posix)("the real program behind saw's stand-in, on disk", () => {
   it("says a recorded program is gone, rather than that it leads back, when it is simply not there", () => {
     expect(checkRealProgram(path.join(root, "removed", "git"), "git", [standin], search(standin), diskFiles)).toEqual({ kind: "missing", recorded: path.join(root, "removed", "git"), why: "gone" });
     expect(checkRealProgram("git", "git", [standin], search(standin), diskFiles)).toEqual({ kind: "missing", recorded: "git", why: "leads-back" });
+  });
+
+  it("gives saw's stand-in a PATH without the stand-in folders, through a symlink too", () => {
+    expect(pathWithoutStandins([standin, alias, real, ""].join(path.delimiter), [standin], diskFiles)).toBe(real);
   });
 
   it("finds nothing when only the stand-in is on PATH", () => {
