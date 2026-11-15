@@ -245,7 +245,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
       }
       case "fix": {
         const record = folder && this.fixes.get(folderKey(folder));
-        if (!folder || !record) return "# saw fix\n\nsaw has not fixed this folder from this window. Use **Fix…** on an infected folder in the saw view.";
+        if (!folder || !record) return "# saw fix\n\nsaw has not fixed this folder from this window. Use **Fix the checkout** on an infected folder in Chat.";
         return fixReport(this.fixInput(folder, record), copy);
       }
       case "audit": {

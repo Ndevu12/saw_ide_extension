@@ -51,7 +51,7 @@ describe("the scan report", () => {
     expect(text).toContain("## Infected\n\nMalicious code is in this folder.");
     expect(text).toContain("- Scanned at `2026-10-19T00:00:00Z` in 1.2 s with saw `0.13.0`");
     expect(text).toContain("- 2 findings: 1 confirmed, 1 to review, 0 residue; 0 dependency advisories");
-    expect(text).toContain("Use **Fix…** on the folder");
+    expect(text).toContain("Use **Fix the checkout** on the folder's card in Chat");
     expect(text.indexOf("### Confirmed (1)")).toBeLessThan(text.indexOf("### To review by hand (1)"));
     expect(text).toContain("**critical** · `.vscode/tasks.json` · `vscode-task-runs-font`");
     expect(text).toContain("**Fix…** removes this.");

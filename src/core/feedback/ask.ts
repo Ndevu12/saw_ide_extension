@@ -152,12 +152,11 @@ const NOT_NOW: ChatButton = { act: "feedback:dismiss", label: "Not now", tone: "
 export function feedbackCard(kind: "held" | "quiet" | "ready", choosing: boolean): ChatCard {
   if (choosing) {
     return {
-      badge: "feedback",
       title: "Report a problem",
       tone: "neutral",
-      paragraphs: [WHICH],
-      actions: [
-        { act: "feedback:editor", label: "The editor", tone: "primary" },
+      text: WHICH,
+      primary: { act: "feedback:editor", label: "The editor", tone: "primary" },
+      links: [
         { act: "feedback:found", label: "What saw found", tone: "secondary" },
         { act: "feedback:back", label: "Back", tone: "secondary" },
       ],
@@ -165,11 +164,11 @@ export function feedbackCard(kind: "held" | "quiet" | "ready", choosing: boolean
   }
   const sentence = kind === "held" ? HELD : kind === "quiet" ? QUIET_COPY : READY;
   return {
-    badge: "feedback",
-    title: "saw",
+    title: "Feedback",
     tone: "neutral",
-    paragraphs: [sentence],
-    actions: [RATE, STAR, REPORT, REQUEST, NOT_NOW],
+    text: sentence,
+    primary: RATE,
+    links: [STAR, REPORT, REQUEST, NOT_NOW],
   };
 }
 

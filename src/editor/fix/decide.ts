@@ -26,11 +26,10 @@ const DECIDE_SCRIPT = `
 `;
 
 /**
- * The Decide view: one question from `saw fix --ask=jsonl`, answered with the same actions the
- * diff toolbar offers. Closing the view does not answer. Stopping the fix does not answer.
+ * The Decide tab: one question from `saw fix --ask=jsonl`, answered with the same actions the
+ * diff toolbar offers. Closing the tab does not answer. Stopping the fix does not answer.
  */
 export class Decide implements vscode.Disposable {
-  private view: vscode.WebviewView | undefined;
   private tab: vscode.WebviewPanel | undefined;
   private folder: vscode.WorkspaceFolder | undefined;
   private question: AskQuestion | undefined;
@@ -50,21 +49,6 @@ export class Decide implements vscode.Disposable {
   ) {
     this.subscriptions = [
       registerAskDocuments(),
-      vscode.window.registerWebviewViewProvider("saw.decide", {
-        resolveWebviewView: (view) => {
-          this.view = view;
-          view.webview.options = { enableScripts: true };
-          view.onDidDispose(() => {
-            if (this.view === view) {
-              this.view = undefined;
-            }
-          });
-          view.webview.onDidReceiveMessage((message: { act?: string; chosen?: unknown }) => {
-            void this.onAct(message.act, Array.isArray(message.chosen) ? message.chosen.filter((item): item is string => typeof item === "string") : []);
-          });
-          this.render();
-        },
-      }),
       vscode.commands.registerCommand("saw.decideShow", () => this.show()),
       vscode.commands.registerCommand("saw.decideKeep", () => this.finish({ action: "keep" })),
       vscode.commands.registerCommand("saw.decideRemove", () => this.finish({ action: "remove" })),
@@ -131,8 +115,7 @@ export class Decide implements vscode.Disposable {
     this.contexts();
     this.render();
     this.output.info(`${folder.name}: saw is waiting on a ${question.kind}.`);
-    await vscode.commands.executeCommand("saw.decide.focus");
-    this.render();
+    await vscode.commands.executeCommand("saw.chat.focus");
     await openAsk(folder, question);
     this.reveal();
     return new Promise((resolve) => {
@@ -344,9 +327,6 @@ export class Decide implements vscode.Disposable {
       this.tab.title = this.tabTitle();
     }
     const body = this.question ? this.questionHtml() : this.idleHtml();
-    if (this.view) {
-      this.view.webview.html = pageDocument(Math.random().toString(36).slice(2), body, DECIDE_SCRIPT, "side");
-    }
     if (this.tab) {
       this.tab.webview.html = pageDocument(Math.random().toString(36).slice(2), body, DECIDE_SCRIPT, "editor");
     }
@@ -354,7 +334,7 @@ export class Decide implements vscode.Disposable {
 
   private idleHtml(): string {
     const done = this.log.map((line) => `<li>${escape(line)}</li>`).join("");
-    return `<p>When a fix needs a decision, it is made here. The diff opens beside it.</p>${done ? `<p class="meta">Last fix</p><ul>${done}</ul>` : ""}`;
+    return `<p>No decision is waiting. When a fix needs one, it opens here with the diff beside it.</p>${done ? `<p class="meta">Last fix</p><ul>${done}</ul>` : ""}`;
   }
 
   private questionHtml(): string {

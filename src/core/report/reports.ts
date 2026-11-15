@@ -95,7 +95,7 @@ const VERDICT_ADVICE: Record<FolderVerdict, string[]> = {
   ],
   infected: [
     "Do not trust this folder, install its dependencies, build or run it.",
-    "Use **Fix…** on the folder in the saw view, or **saw: Fix Folder…**: saw removes what it confirms and prepares the clean-up on a new local branch. Nothing from the folder runs while it does, and nothing is pushed.",
+    "Use **Fix the checkout** on the folder's card in Chat, or **saw: Fix Folder…**: saw removes what it confirms and prepares the clean-up on a new local branch. Nothing from the folder runs while it does, and nothing is pushed.",
     AUDIT_HINT,
   ],
 };
@@ -189,7 +189,7 @@ export function scanReport(input: ScanReportInput, copy: Copy): string {
   }
   out.push("", "## What to do", "", ...VERDICT_ADVICE[outcome.verdict].map((line) => `- ${line}`), "");
   if (findings.length) {
-    out.push("To open a finding's file at its line, click it in the saw view or the Problems panel.", "");
+    out.push("To open a finding's file at its line, click it in the verdict tab or the Problems panel.", "");
   }
   if (outcome.reasons.length) {
     out.push("## Why it is not verified", "", ...outcome.reasons.map((reason) => `- ${prose(reason, 600)}`), "");

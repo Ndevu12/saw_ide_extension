@@ -20,7 +20,6 @@ import { readSettings } from "./editor/settings";
 import { StrictMode } from "./editor/strictMode";
 import { StatusBar } from "./editor/view/statusBar";
 import { ChatView } from "./editor/view/chatView";
-import { FindingsTree } from "./editor/view/tree";
 import { registerTriggers } from "./editor/scan/triggers";
 
 export interface SawApi {
@@ -38,7 +37,6 @@ export function activate(context: vscode.ExtensionContext): SawApi {
   const diagnostics = new Diagnostics(log);
   const alerts = new Alerts();
   const controller = new Controller(model, engines, diagnostics, alerts, readSettings, log);
-  const tree = new FindingsTree(model);
   const reports = new Reports(model, context.storageUri?.fsPath, context.globalStorageUri.fsPath, log);
   const cursorGuard = new CursorAgentGuard(model, readSettings, context.globalStorageUri.fsPath, context.asAbsolutePath("dist/cursor-hook.js"), log);
   const decide = new Decide(model, log);
@@ -63,7 +61,6 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     new OpenGuard(log),
     new StrictMode(context, model, log),
     cursorGuard,
-    tree,
     new ChatView(
       model,
       controller,
@@ -72,10 +69,10 @@ export function activate(context: vscode.ExtensionContext): SawApi {
       (folder) => void reports.open(reports.fixUri(folder)),
       decide,
       feedback,
+      { light: vscode.Uri.joinPath(context.extensionUri, "media", "verdict-light.svg"), dark: vscode.Uri.joinPath(context.extensionUri, "media", "verdict-dark.svg") },
     ),
     new StatusBar(model),
     new SawMcpRegistration(model, readSettings, log),
-    vscode.window.registerTreeDataProvider("saw.findings", tree),
     vscode.commands.registerCommand("saw.scanWorkspace", () => {
       engines.reset();
       alerts.resetEngineWarning();

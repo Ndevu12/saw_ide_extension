@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { chatCards, renderChat, type ChatFolderInput, type ChatMachineInput } from "../../src/core/chat/transcript";
+import { chatPage, renderChat, type ChatFolderInput, type ChatMachineInput } from "../../src/core/chat/transcript";
 import {
   askBlocked,
   askKind,
@@ -104,17 +104,17 @@ describe("the feedback card", () => {
 
   it("uses the hold sentence, then the quiet one, and offers the five actions", () => {
     const held = feedbackCard("held", false);
-    expect(held.paragraphs[0]).toBe("saw held an update before it changed this folder. A rating is how the next person finds it.");
+    expect(held.text).toBe("saw held an update before it changed this folder. A rating is how the next person finds it.");
     const quiet = feedbackCard("quiet", false);
-    expect(quiet.paragraphs[0]).toBe("saw has checked this folder and found nothing it knows. If that matched what you saw, a rating helps the next person.");
-    expect(quiet.actions.map((button) => button.label)).toEqual(["Rate", "Star", "Report a problem", "Request a feature", "Not now"]);
+    expect(quiet.text).toBe("saw has checked this folder and found nothing it knows. If that matched what you saw, a rating helps the next person.");
+    expect([quiet.primary, ...quiet.links].map((button) => button?.label)).toEqual(["Rate", "Star", "Report a problem", "Request a feature", "Not now"]);
     const choosing = feedbackCard("ready", true);
-    expect(choosing.actions.map((button) => button.label)).toEqual(["The editor", "What saw found", "Back"]);
+    expect([choosing.primary, ...choosing.links].map((button) => button?.label)).toEqual(["The editor", "What saw found", "Back"]);
   });
 
   it("renders under the folder cards", () => {
     const folder: ChatFolderInput = { name: "app", phase: "idle", reasons: [], findings: [], verdict: "clean" };
-    const html = renderChat(chatCards([folder], machine, feedbackCard("held", false)), "nonce");
+    const html = renderChat(chatPage([folder], machine, feedbackCard("held", false)), "nonce");
     const folderAt = html.indexOf("app");
     const askAt = html.indexOf("A rating is how the next person finds it.");
     const machineAt = html.indexOf("This machine");

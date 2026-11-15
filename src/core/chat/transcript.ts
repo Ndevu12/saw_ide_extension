@@ -1,13 +1,10 @@
-// The sidebar chat and the editor tab, as data and HTML. No editor API: every VS Code-based IDE hosts the same webview.
+// The sidebar chat, as data and HTML. No editor API: every VS Code-based IDE hosts the same webview.
+// Chat says where each folder stands and what to do next. The verdict itself opens in an editor tab.
 
 import type { Severity } from "../scan/contract";
 import type { FolderVerdict } from "../scan/verdict";
 import { plain } from "../text";
 import { pageDocument } from "./brand";
-
-/** How many kinds of finding a card lists, and how many places under each. The rest stay in the report. */
-export const SHOWN_GROUPS = 5;
-export const SHOWN_PLACES = 4;
 
 export type ButtonTone = "primary" | "secondary" | "danger";
 export type Tone = "neutral" | "ok" | "warn" | "bad";
@@ -24,35 +21,44 @@ export interface ChatFindingGroup {
   severity: Severity;
   count: number;
   places: ChatButton[];
-  /** Places not listed, which the report has. */
+  /** Places not listed, which the full report has. */
   hidden: number;
 }
 
-/** A line of the machine card: what it is, its state, and the one thing to do about it. */
-export interface ChatItem {
-  name: string;
-  state: string;
-  tone: Tone;
-  action?: ChatButton;
-}
-
+/** A card in Chat: a status, one line of what matters, the next step, and where to read more. */
 export interface ChatCard {
-  badge: string;
   title: string;
+  status?: string;
   tone: Tone;
   /** Work that is running now, such as a scan's progress. */
   live?: string;
   summary?: string;
-  notices?: { text: string; tone: Tone }[];
-  paragraphs: string[];
-  /** Explanation in a quieter voice. */
-  hints?: string[];
-  findings?: ChatFindingGroup[];
-  /** Findings the card does not list. */
-  unlisted?: number;
-  items?: ChatItem[];
-  /** A primary or danger action is drawn full width. The rest sit in one row. */
-  actions: ChatButton[];
+  /** The one notice that matters most. The verdict tab has the rest. */
+  notice?: { text: string; tone: Tone };
+  text?: string;
+  primary?: ChatButton;
+  links: ChatButton[];
+}
+
+/** A line of the machine section: what it is, its state, the report it opens, and the one thing to do about it. */
+export interface ChatItem {
+  name: string;
+  state: string;
+  tone: Tone;
+  open?: string;
+  action?: ChatButton;
+}
+
+export interface ChatMachine {
+  status: string;
+  tone: Tone;
+  items: ChatItem[];
+}
+
+export interface ChatPage {
+  cards: ChatCard[];
+  machine: ChatMachine;
+  nav: ChatButton[];
 }
 
 export interface ChatFindingInput {
@@ -74,11 +80,15 @@ export interface ChatCleanup {
 
 export interface ChatFolderInput {
   name: string;
+  /** Shown on the verdict tab, under the name. */
+  path?: string;
   phase: "idle" | "scanning" | "fixing" | "deciding";
   progress?: string;
   verdict?: FolderVerdict;
   reasons: string[];
   findings: ChatFindingInput[];
+  /** Known-vulnerable packages. The full report lists them. */
+  advisories?: number;
   held?: { verdict: FolderVerdict; reasons: string[] };
   /** Set while saw is checking an update that has not changed the folder yet. */
   checking?: boolean;
@@ -110,7 +120,7 @@ export interface ChatMachineInput {
   auditTone?: Tone;
 }
 
-const VERDICT_BADGE: Record<FolderVerdict, string> = {
+export const VERDICT_BADGE: Record<FolderVerdict, string> = {
   clean: "clean",
   residue: "residue",
   suspicious: "suspicious",
@@ -118,7 +128,7 @@ const VERDICT_BADGE: Record<FolderVerdict, string> = {
   infected: "infected",
 };
 
-const VERDICT_TONE: Record<FolderVerdict, ChatCard["tone"]> = {
+export const VERDICT_TONE: Record<FolderVerdict, Tone> = {
   clean: "ok",
   residue: "ok",
   suspicious: "warn",
@@ -126,35 +136,37 @@ const VERDICT_TONE: Record<FolderVerdict, ChatCard["tone"]> = {
   infected: "bad",
 };
 
-/** The cards the chat shows, in order. Folder buttons are keyed by that folder's place in `folders`. */
-export function chatCards(folders: ChatFolderInput[], machine: ChatMachineInput, extra?: ChatCard): ChatCard[] {
+const TONE_RANK: Record<Tone, number> = { bad: 0, warn: 1, ok: 2, neutral: 3 };
+
+/** What Chat shows: a card per folder, the machine, and where the reports are. Folder buttons are keyed by that folder's place in `folders`. */
+export function chatPage(folders: ChatFolderInput[], machine: ChatMachineInput, extra?: ChatCard): ChatPage {
   const cards: ChatCard[] = [];
   if (machine.engine.phase === "installing") {
-    cards.push({ badge: "installing", title: "saw", tone: "neutral", live: "Installing saw.", paragraphs: [], actions: [] });
+    cards.push({ title: "Installing saw", tone: "neutral", live: "Installing with pipx. Folders are scanned when it is ready.", links: [{ act: "log", label: "Show log", tone: "secondary" }] });
   } else if (machine.engine.phase === "unavailable") {
     cards.push({
-      badge: "unavailable",
-      title: "saw",
+      title: "saw cannot run",
       tone: "warn",
-      paragraphs: [machine.engine.message || "saw cannot run."],
-      actions: machine.engine.canInstall ? [{ act: "install", label: "Install saw", tone: "primary" }] : [],
+      text: machine.engine.message || "No scan can run until saw is installed.",
+      ...(machine.engine.canInstall ? { primary: { act: "install", label: "Install saw", tone: "primary" } } : {}),
+      links: [{ act: "log", label: "Show log", tone: "secondary" }],
     });
   }
   if (folders.length === 0) {
-    cards.push({
-      badge: "no folder",
-      title: "Nothing is open",
-      tone: "neutral",
-      paragraphs: ["Open a folder and saw will report it here."],
-      actions: [],
-    });
+    cards.push({ title: "No folder is open", tone: "neutral", text: "Open a folder to scan it.", links: [] });
   }
   folders.forEach((folder, index) => cards.push(folderCard(folder, index)));
   if (extra) {
     cards.push(extra);
   }
-  cards.push(machineCard(machine));
-  return cards;
+  return {
+    cards,
+    machine: machineSection(machine),
+    nav: [
+      { act: "reports", label: "All reports", tone: "secondary" },
+      { act: "docs", label: "What verdicts mean", tone: "secondary" },
+    ],
+  };
 }
 
 const OPEN_UNHELD = "saw has no record of letting this commit in. The folder was left as it is.";
@@ -165,7 +177,7 @@ const MISSED_COMMAND = {
   agent: "A change reached this folder that saw did not let in. It was not held before it landed.",
 } as const;
 
-/** What Chat or an agent says when a folder changed without a check, or was already not a commit saw let in. */
+/** What the verdict tab or an agent says when a folder changed without a check, or was already not a commit saw let in. */
 export function unheldSentence(from: "command" | "open" | undefined, audience: keyof typeof MISSED_COMMAND = "chat"): string {
   if (from === "open") {
     return OPEN_UNHELD;
@@ -173,7 +185,7 @@ export function unheldSentence(from: "command" | "open" | undefined, audience: k
   return MISSED_COMMAND[audience];
 }
 
-/** What Chat, the status bar, and an agent say while a check runs. An open folder is not an update. */
+/** What the verdict tab, the status bar, and an agent say while a check runs. An open folder is not an update. */
 export function checkingSentence(about: "update" | "admission" | undefined, step: string | undefined): string {
   if (about === "admission") {
     return "saw is checking whether it let this folder in. The folder has not changed.";
@@ -199,7 +211,7 @@ export function progressLine(progress: string): string {
 }
 
 /** Findings with the same description become one line, the most severe first. */
-export function groupFindings(findings: readonly ChatFindingInput[], index: string | number): { groups: ChatFindingGroup[]; unlisted: number } {
+export function groupFindings(findings: readonly ChatFindingInput[], index: string | number, placesShown = Number.POSITIVE_INFINITY): ChatFindingGroup[] {
   const byWhat = new Map<string, ChatFindingInput[]>();
   for (const finding of findings) {
     const same = byWhat.get(finding.what);
@@ -210,28 +222,24 @@ export function groupFindings(findings: readonly ChatFindingInput[], index: stri
     }
   }
   const rank = (severity: Severity) => SEVERITY_ORDER.indexOf(severity);
-  const groups = [...byWhat.values()]
+  return [...byWhat.values()]
     .map((same) => ({ same, severity: same.map((finding) => finding.severity).sort((a, b) => rank(a) - rank(b))[0] ?? "low" }))
-    .sort((a, b) => rank(a.severity) - rank(b.severity) || b.same.length - a.same.length);
-  const shown = groups.slice(0, SHOWN_GROUPS);
-  const unlisted = groups.slice(SHOWN_GROUPS).reduce((sum, group) => sum + group.same.length, 0);
-  return {
-    groups: shown.map(({ same, severity }) => ({
+    .sort((a, b) => rank(a.severity) - rank(b.severity) || b.same.length - a.same.length)
+    .map(({ same, severity }) => ({
       what: sentence((same[0] as ChatFindingInput).what),
       severity,
       count: same.length,
-      places: same.slice(0, SHOWN_PLACES).map((finding) => ({ act: `open:${index}:${finding.open}`, label: finding.where, tone: "secondary" as const })),
-      hidden: Math.max(0, same.length - SHOWN_PLACES),
-    })),
-    unlisted,
-  };
+      places: same.slice(0, placesShown).map((finding) => ({ act: `open:${index}:${finding.open}`, label: finding.where, tone: "secondary" as const })),
+      hidden: Math.max(0, same.length - placesShown),
+    }));
 }
 
-function sentence(text: string): string {
+export function sentence(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function summaryLine(findings: readonly ChatFindingInput[]): string | undefined {
+/** "12 findings · 1 high · 10 medium". */
+export function summaryLine(findings: readonly ChatFindingInput[]): string | undefined {
   if (!findings.length) {
     return undefined;
   }
@@ -241,159 +249,164 @@ function summaryLine(findings: readonly ChatFindingInput[]): string | undefined 
   return `${findings.length} ${findings.length === 1 ? "finding" : "findings"} · ${counts.join(" · ")}`;
 }
 
-function folderCard(folder: ChatFolderInput, index: string | number): ChatCard {
-  const { groups, unlisted } = groupFindings(folder.findings, index);
-  const notices: { text: string; tone: Tone }[] = [];
-  const paragraphs = [...folder.reasons];
-  const hints: string[] = [];
-  if (folder.held) {
-    notices.push({ text: `An update was held (${VERDICT_BADGE[folder.held.verdict]}). The folder was not changed.`, tone: folder.held.verdict === "infected" ? "bad" : "warn" });
-    paragraphs.push(...folder.held.reasons);
-  }
-  if (folder.unheld) {
-    notices.push({ text: unheldSentence(folder.unheldFrom), tone: folder.unheldFrom === "open" ? "warn" : "bad" });
-  }
-  if (folder.decision) {
-    notices.push({ text: folder.decision, tone: "warn" });
-  }
-  if (folder.phase === "idle" && !folder.verdict) {
-    paragraphs.unshift("This folder has not been scanned yet. A scan only reads it.");
-  }
-  if (folder.verdict === "clean" && !folder.findings.length && !paragraphs.length) {
-    paragraphs.push("saw found nothing it knows in this folder.");
-  }
-  if (folder.verdict === "infected" && folder.phase === "idle") {
-    hints.push(
-      "Fix the checkout removes what saw confirmed from this folder, including installed packages, build output, and the lockfile. The clean-up sits on a new local branch. Past commits stay as they are, and nothing is pushed.",
-      "Amending history is a different act. It rewrites the commits that still carry the malicious code and force-updates the branches those commits are on. Fix the checkout does not do that.",
-    );
-  }
-  if (folder.cleanup) {
-    notices.push(...cleanupLines(folder.cleanup));
-  }
-  const live = liveLine(folder);
-  const summary = summaryLine(folder.findings);
-  return {
-    badge: folder.verdict ? VERDICT_BADGE[folder.verdict] : folder.phase === "scanning" ? "scanning" : "not scanned",
-    title: folder.name,
-    tone: folder.verdict ? VERDICT_TONE[folder.verdict] : "neutral",
-    ...(live ? { live } : {}),
-    ...(summary ? { summary } : {}),
-    notices,
-    paragraphs,
-    hints,
-    findings: groups,
-    unlisted,
-    actions: folderActions(folder, index),
-  };
+export function folderStatus(folder: ChatFolderInput): string {
+  return folder.verdict ? VERDICT_BADGE[folder.verdict] : folder.phase === "scanning" ? "scanning" : "not scanned";
 }
 
-/** What is running now. A verdict badge stays the last result while the next scan runs. */
-function liveLine(folder: ChatFolderInput): string | undefined {
+/** What is running now. A verdict stays the last result while the next scan runs. */
+export function liveLine(folder: ChatFolderInput): string | undefined {
   if (folder.checking) {
-    return checkingSentence(folder.checkAbout, folder.checkStep);
+    return sentence(checkingBadge(folder.checkAbout, folder.checkStep));
   }
   switch (folder.phase) {
     case "scanning":
-      return folder.progress ? progressLine(folder.progress) : "Scanning.";
+      return folder.progress ? progressLine(folder.progress) : "Scanning";
     case "fixing":
-      return "Fixing the checkout.";
+      return "Fixing the checkout";
     case "deciding":
-      return "A fix is waiting for you.";
+      return "A fix is waiting for your decision";
     case "idle":
       return undefined;
   }
 }
 
-function folderActions(folder: ChatFolderInput, index: string | number): ChatButton[] {
-  const actions: ChatButton[] = [];
-  if (folder.phase === "deciding") {
-    actions.push({ act: `decide:${index}`, label: "Open the decision", tone: "primary" });
-  } else if (folder.verdict === "infected" && folder.phase === "idle") {
-    actions.push({ act: `fix:${index}`, label: "Fix the checkout", tone: "danger" });
+/** The short form of each thing the verdict tab explains, the most serious first. */
+function folderNotice(folder: ChatFolderInput): { text: string; tone: Tone } | undefined {
+  const notices: { text: string; tone: Tone }[] = [];
+  if (folder.held) {
+    notices.push({ text: `An update was held (${VERDICT_BADGE[folder.held.verdict]}). The folder is unchanged.`, tone: folder.held.verdict === "infected" ? "bad" : "warn" });
   }
-  const review = folder.verdict === "suspicious" || folder.verdict === "incomplete";
-  if (folder.verdict) {
-    actions.push({ act: `report:${index}`, label: "Open the scan report", tone: review && !actions.length ? "primary" : "secondary" });
+  if (folder.unheld) {
+    notices.push(folder.unheldFrom === "open"
+      ? { text: "No record of letting this commit in.", tone: "warn" }
+      : { text: "A git command changed this folder without a check.", tone: "bad" });
   }
-  if (folder.phase !== "scanning") {
-    actions.push({ act: `scan:${index}`, label: folder.verdict ? "Scan again" : "Scan this folder", tone: folder.verdict ? "secondary" : "primary" });
+  const cleanup = folder.cleanup;
+  if (cleanup?.historyHoldsPayload) {
+    notices.push({ text: "The malicious code is still in git history.", tone: "bad" });
   }
-  actions.push({ act: `verdict:${index}`, label: "Open verdict", tone: "secondary" });
-  if (folder.cleanup) {
-    actions.push({ act: `fix-report:${index}`, label: "Open the fix report", tone: "secondary" });
+  if (cleanup && (cleanup.partial || cleanup.needsYou)) {
+    notices.push({ text: "Part of the clean-up still needs you.", tone: "warn" });
   }
-  return actions;
+  if (cleanup?.branch) {
+    notices.push({ text: `The clean-up is on ${cleanup.branch}.`, tone: "ok" });
+  }
+  return notices.sort((a, b) => TONE_RANK[a.tone] - TONE_RANK[b.tone])[0];
 }
 
-function cleanupLines(cleanup: ChatCleanup): { text: string; tone: Tone }[] {
-  const lines: { text: string; tone: Tone }[] = [];
-  if (cleanup.branch) {
-    lines.push({ text: `The clean-up is on the local branch ${cleanup.branch}.`, tone: "ok" });
+function folderSummary(folder: ChatFolderInput): string | undefined {
+  const counted = summaryLine(folder.findings);
+  if (counted) {
+    return counted;
   }
-  if (cleanup.historyHoldsPayload) {
-    lines.push({ text: "That clean-up left the malicious code in git history. Amending history is what rewrites those commits. The checkout fix does not.", tone: "bad" });
+  if (!folder.verdict) {
+    return folder.phase === "idle" ? "Not scanned yet. A scan only reads the folder." : undefined;
   }
-  if (cleanup.partial || cleanup.needsYou) {
-    lines.push({ text: "Part of the clean-up still needs you. The fix report says what.", tone: "warn" });
+  if (folder.verdict === "incomplete") {
+    return plain(folder.reasons[0] ?? "The scan did not finish.", 140);
   }
-  return lines;
+  return "Nothing known was found.";
+}
+
+const VIEW = (index: string | number): ChatButton => ({ act: `verdict:${index}`, label: "View verdict", tone: "secondary" });
+const RESCAN = (index: string | number): ChatButton => ({ act: `scan:${index}`, label: "Scan again", tone: "secondary" });
+
+/** The next step, as one button, and the rest as links. */
+function folderSteps(folder: ChatFolderInput, index: string | number): Pick<ChatCard, "primary" | "links"> {
+  const busy = folder.phase !== "idle";
+  const links: ChatButton[] = [];
+  let primary: ChatButton | undefined;
+  if (folder.phase === "deciding") {
+    primary = { act: `decide:${index}`, label: "Open the decision", tone: "primary" };
+    links.push(VIEW(index));
+  } else if (!folder.verdict) {
+    if (!busy) {
+      primary = { act: `scan:${index}`, label: "Scan this folder", tone: "primary" };
+    }
+  } else if (folder.verdict === "infected" && !busy) {
+    primary = { act: `fix:${index}`, label: "Fix the checkout", tone: "danger" };
+    links.push(VIEW(index), RESCAN(index));
+  } else if ((folder.verdict === "suspicious" || folder.verdict === "incomplete") && !busy) {
+    primary = { act: `verdict:${index}`, label: "View verdict", tone: "primary" };
+    links.push(RESCAN(index));
+  } else {
+    links.push(VIEW(index));
+    if (!busy) {
+      links.push(RESCAN(index));
+    }
+  }
+  if (folder.cleanup) {
+    links.push({ act: `fix-report:${index}`, label: "Fix report", tone: "secondary" });
+  }
+  return { ...(primary ? { primary } : {}), links };
+}
+
+function folderCard(folder: ChatFolderInput, index: string | number): ChatCard {
+  const live = liveLine(folder);
+  const summary = folderSummary(folder);
+  const notice = folderNotice(folder);
+  return {
+    title: folder.name,
+    status: folderStatus(folder),
+    tone: folder.verdict ? VERDICT_TONE[folder.verdict] : "neutral",
+    ...(live ? { live } : {}),
+    ...(summary ? { summary } : {}),
+    ...(notice ? { notice } : {}),
+    ...folderSteps(folder, index),
+  };
 }
 
 function auditItem(machine: ChatMachineInput): ChatItem {
+  const name = "Credentials";
+  const open = "machine:audit";
   if (machine.auditing) {
-    return { name: "Credentials", state: machine.auditProgress ? `Auditing: ${machine.auditProgress}` : "Auditing this machine.", tone: "neutral" };
+    return { name, state: machine.auditProgress ? `Auditing: ${machine.auditProgress}` : "Auditing", tone: "neutral", open };
   }
   if (machine.auditLabel) {
-    return { name: "Credentials", state: `Changing them: ${machine.auditLabel}.`, tone: machine.auditTone ?? "neutral", action: { act: "audit", label: "Audit again", tone: "secondary" } };
+    const tone = machine.auditTone ?? "neutral";
+    return { name, state: sentence(machine.auditLabel), tone, open, ...(tone === "ok" ? {} : { action: { act: "audit", label: "Audit again", tone: "secondary" } }) };
   }
-  return { name: "Credentials", state: "Not audited yet. Audit before you change a password or token.", tone: "warn", action: { act: "audit", label: "Audit", tone: "primary" } };
+  return { name, state: "Audit before you change a password or token", tone: "warn", action: { act: "audit", label: "Audit", tone: "primary" } };
 }
 
 function hooksItem(machine: ChatMachineInput): ChatItem {
   const name = "Scan-on-clone hooks";
+  const open = "machine:hooks";
   switch (machine.hooks) {
     case "checking":
-      return { name, state: "Checking.", tone: "neutral" };
+      return { name, state: "Checking", tone: "neutral" };
     case "installed":
-      return { name, state: machine.hooksDetail ? `In place: ${machine.hooksDetail}.` : "In place.", tone: "ok" };
+      return { name, state: "In place", tone: "ok", open };
     case "repair":
-      return { name, state: "Need repair. A clone, pull, or branch switch may not be scanned.", tone: "warn", action: { act: "hooks:repair", label: "Repair", tone: "primary" } };
+      return { name, state: "Need repair", tone: "warn", open, action: { act: "hooks:repair", label: "Repair", tone: "primary" } };
     case "missing":
-      return { name, state: "Not installed. A clone, pull, or branch switch is scanned when they are.", tone: "warn", action: { act: "hooks:install", label: "Install", tone: "primary" } };
+      return { name, state: "Not installed", tone: "warn", open, action: { act: "hooks:install", label: "Install", tone: "primary" } };
     case "unknown":
-      return { name, state: machine.hooksDetail || "saw could not say whether they are installed.", tone: "warn", action: { act: "hooks:check", label: "Check", tone: "secondary" } };
+      return { name, state: "Could not check", tone: "warn", open, action: { act: "hooks:check", label: "Check", tone: "secondary" } };
   }
 }
 
 function watchItem(machine: ChatMachineInput): ChatItem {
-  const action: ChatButton = { act: "watch", label: "Open report", tone: "secondary" };
+  const name = "Watch";
   if (machine.readingWatch) {
-    return { name: "saw watch", state: "Reading what saw watch reported.", tone: "neutral" };
+    return { name, state: "Reading", tone: "neutral" };
   }
-  if (machine.watchLine) {
-    return { name: "saw watch", state: machine.watchLine, tone: "neutral", action };
-  }
-  return { name: "saw watch", state: "Not read yet. It says whether the watcher is in place and what happened since the last report.", tone: "neutral", action };
+  return { name, state: machine.watchLine ? plain(machine.watchLine, 90) : "Not read yet", tone: "neutral", open: "watch" };
 }
 
-function machineCard(machine: ChatMachineInput): ChatCard {
+function machineSection(machine: ChatMachineInput): ChatMachine {
   const items = [auditItem(machine), hooksItem(machine), watchItem(machine)];
-  const open = items.filter((item) => item.tone === "warn" || item.tone === "bad").length;
-  const tone: Tone = items.some((item) => item.tone === "bad") ? "bad" : open ? "warn" : items.every((item) => item.tone === "ok" || item.name === "saw watch") ? "ok" : "neutral";
-  return {
-    badge: machine.auditing ? "auditing" : open ? `${open} to do` : "in order",
-    title: "This machine",
-    tone,
-    paragraphs: [],
-    hints: ["An audit reads this machine. It does not change a credential."],
-    items,
-    actions: [{ act: "docs", label: "What each verdict means", tone: "secondary" }],
-  };
+  const todo = items.filter((item) => item.tone === "warn" || item.tone === "bad").length;
+  const tone: Tone = items.some((item) => item.tone === "bad") ? "bad" : todo ? "warn" : "ok";
+  return { status: machine.auditing ? "auditing" : todo ? `${todo} to do` : "in order", tone, items };
 }
 
-const CHAT_SCRIPT = `
+/** Clicks become messages, and the page keeps its scroll when the extension redraws it. */
+export const PAGE_SCRIPT = `
   const vscode = acquireVsCodeApi();
+  const kept = vscode.getState();
+  if (kept && typeof kept.y === "number") window.scrollTo(0, kept.y);
+  window.addEventListener("scroll", () => vscode.setState({ y: window.scrollY }), { passive: true });
   document.body.addEventListener("click", (event) => {
     const button = event.target instanceof Element ? event.target.closest("button[data-act]") : null;
     if (!button) return;
@@ -402,62 +415,64 @@ const CHAT_SCRIPT = `
 `;
 
 /** The chat page. Every string from a scan is escaped, so it cannot become markup. */
-export function renderChat(cards: ChatCard[], nonce: string, place: "side" | "editor" = "side"): string {
-  const mark = place === "editor"
-    ? `<header class="mark"><p class="word">stayAwakeBot</p><p class="tag">the sentinel saw the worm</p></header>`
-    : "";
-  const body = `${mark}<div class="thread">${cards.map((card) => cardHtml(card)).join("")}</div>`;
-  return pageDocument(nonce, body, CHAT_SCRIPT, place);
+export function renderChat(page: ChatPage, nonce: string): string {
+  const body = `<main class="chat">
+    ${page.cards.map(cardHtml).join("")}
+    ${machineHtml(page.machine)}
+    <nav class="foot">${page.nav.map(linkHtml).join("")}</nav>
+  </main>`;
+  return pageDocument(nonce, body, PAGE_SCRIPT, "side");
 }
 
-function text(value: string, max = 500): string {
+export function text(value: string, max = 500): string {
   return escapeHtml(plain(value, max));
 }
 
-function findingHtml(group: ChatFindingGroup, report: string | undefined): string {
-  const count = group.count > 1 ? ` <span class="count">× ${group.count}</span>` : "";
-  const more = group.hidden > 0 && report
-    ? `<button type="button" class="more" data-act="${escapeHtml(report)}">+${group.hidden} in the report</button>`
-    : "";
-  return `<li>
-    <div class="what"><span class="sev ${group.severity}">${group.severity}</span><span>${text(group.what, 300)}${count}</span></div>
-    <div class="places">${group.places.map((place) => `<button type="button" class="place" title="${text(place.label, 300)}" data-act="${escapeHtml(place.act)}">${text(place.label, 160)}</button>`).join("")}${more}</div>
-  </li>`;
+export function pillHtml(status: string): string {
+  return `<span class="pill">${text(status, 40)}</span>`;
 }
 
-function itemHtml(item: ChatItem): string {
-  return `<div class="item">
-    <span class="name">${text(item.name, 60)}</span>
-    <span class="state"><span class="dot ${item.tone}"></span><span>${text(item.state, 300)}</span></span>
-    ${item.action ? buttonHtml(item.action) : ""}
-  </div>`;
+export function liveHtml(live: string | undefined): string {
+  return live ? `<p class="live"><span class="spin" aria-hidden="true"></span><span>${text(live, 300)}</span></p>` : "";
 }
 
 function cardHtml(card: ChatCard): string {
-  const report = card.actions.find((button) => button.act.startsWith("report:"))?.act;
-  const live = card.live ? `<p class="live"><span class="spin" aria-hidden="true"></span><span>${text(card.live, 300)}</span></p>` : "";
-  const summary = card.summary ? `<p class="summary">${text(card.summary, 120)}</p>` : "";
-  const notices = (card.notices ?? []).map((notice) => `<p class="notice ${notice.tone}">${text(notice.text)}</p>`).join("");
-  const paragraphs = card.paragraphs.map((line) => `<p>${text(line)}</p>`).join("");
-  const findings = card.findings?.length ? `<ul class="findings">${card.findings.map((group) => findingHtml(group, report)).join("")}</ul>` : "";
-  const unlisted = card.unlisted ? `<p class="hint">${card.unlisted} more ${card.unlisted === 1 ? "finding is" : "findings are"} in the report.</p>` : "";
-  const items = card.items?.length ? `<div class="items">${card.items.map(itemHtml).join("")}</div>` : "";
-  const hints = (card.hints ?? []).map((line) => `<p class="hint">${text(line)}</p>`).join("");
-  const main = card.actions.filter((button) => button.tone !== "secondary");
-  const links = card.actions.filter((button) => button.tone === "secondary");
-  const actions = `${main.length ? `<div class="main">${main.map(buttonHtml).join("")}</div>` : ""}${links.length ? `<div class="links">${links.map(buttonHtml).join("")}</div>` : ""}`;
-  return `<article>
-    <section class="card ${card.tone}">
-      <div class="head"><span class="badge">${text(card.badge, 40)}</span><h2 class="title">${text(card.title, 120)}</h2></div>
-      ${live}${summary}${notices}${paragraphs}${findings}${unlisted}${items}${hints}${actions}
-    </section>
+  const status = card.status ? pillHtml(card.status) : "";
+  const summary = card.summary ? `<p class="sum">${text(card.summary, 160)}</p>` : "";
+  const notice = card.notice ? `<p class="notice ${card.notice.tone}">${text(card.notice.text, 200)}</p>` : "";
+  const body = card.text ? `<p class="body">${text(card.text, 400)}</p>` : "";
+  const primary = card.primary ? `<div class="cta">${buttonHtml(card.primary)}</div>` : "";
+  const links = card.links.length ? `<nav class="links">${card.links.map(linkHtml).join("")}</nav>` : "";
+  return `<article class="card ${card.tone}">
+    <header class="top"><h2 class="title" title="${text(card.title, 200)}">${text(card.title, 120)}</h2>${status}</header>
+    ${liveHtml(card.live)}${summary}${notice}${body}${primary}${links}
   </article>`;
 }
 
-function buttonHtml(button: ChatButton): string {
+function machineHtml(machine: ChatMachine): string {
+  return `<section class="machine ${machine.tone}">
+    <header class="top"><h2 class="title">This machine</h2>${pillHtml(machine.status)}</header>
+    <ul class="items">${machine.items.map(itemHtml).join("")}</ul>
+  </section>`;
+}
+
+function itemHtml(item: ChatItem): string {
+  const inner = `<span class="dot ${item.tone}"></span><span class="name">${text(item.name, 60)}</span><span class="state">${text(item.state, 120)}</span>`;
+  const row = item.open
+    ? `<button type="button" class="row" data-act="${escapeHtml(item.open)}" title="Open the report">${inner}</button>`
+    : `<div class="row">${inner}</div>`;
+  const action = item.action ? `<button type="button" class="small ${item.action.tone}" data-act="${escapeHtml(item.action.act)}">${text(item.action.label, 40)}</button>` : "";
+  return `<li class="item">${row}${action}</li>`;
+}
+
+export function buttonHtml(button: ChatButton): string {
   return `<button type="button" class="${button.tone}" data-act="${escapeHtml(button.act)}">${text(button.label, 200)}</button>`;
 }
 
-function escapeHtml(value: string): string {
+function linkHtml(button: ChatButton): string {
+  return `<button type="button" class="link" data-act="${escapeHtml(button.act)}">${text(button.label, 80)}</button>`;
+}
+
+export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
 }

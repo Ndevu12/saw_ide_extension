@@ -4,10 +4,11 @@
 
 ### Changed
 
-- Chat leads with the verdict. A suspicious or could-not-scan folder is amber, an infected one is red, and a clean one is green. The verdict stays on the badge while the next scan runs, and the progress line leaves out the folder's path.
-- Findings are a list. Each kind of finding is one line, with its severity, how many times saw found it, and the places it was found. The most severe come first. A place opens the file, and the places past the first four are in the report. Before, each finding was a button, and six findings of one kind were six buttons.
-- Only the next step is a full-width button: Fix the checkout, Open the decision, Scan this folder, or Open the scan report for a suspicious folder. The other actions sit in one row of small buttons. A held update, a change saw did not hold, and a waiting fix are marked in the card.
-- The machine card is three lines, for credentials, scan-on-clone hooks, and saw watch. Each line has a colored state and its own button. The badge says how many need you.
+- Chat only steers. Each folder is one card: its status, one line of counts, the one notice that matters most, a single main button for the next step, and up to three links. The main button is Fix the checkout for an infected folder, Open the decision while a fix waits, View verdict for a suspicious or could-not-scan folder, and Scan this folder before the first scan. A running scan or check is one line, without the folder's path.
+- The verdict opens in its own editor tab, one per folder, named **Verdict · folder**. It has the status, the path, the counts, the actions with what the checkout fix does and does not do, the full notices, why saw decided, and every finding. Findings of one kind are one line with their severity, a count, and the places, which open the file. The tab keeps its place while saw redraws it.
+- The machine is three short rows: credentials, scan-on-clone hooks, and watch. A row opens its report. A row has a button only when it needs you, such as Repair or Audit.
+- Chat ends with **All reports** and **What verdicts mean**. Its sentences no longer repeat saw's name.
+- The saw sidebar is Chat alone. The Verdict list and the Decide pane are gone from it: the verdict tab and the Decide tab beside the diff hold what they showed.
 
 ## [0.6.1] - 2026-11-13
 
