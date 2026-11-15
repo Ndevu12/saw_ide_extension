@@ -98,7 +98,7 @@ export class Controller implements vscode.Disposable {
       this.model.setScanning(folder, false);
       return;
     }
-    this.model.setOutcome(folder, outcome);
+    this.model.setOutcome(folder, outcome, { version: engine.version, ...(engine.behind ? { behind: engine.behind } : {}) });
     this.diagnostics.publish(folder, outcome);
     const took = `${(outcome.durationMs / 1000).toFixed(1)}s`;
     this.log.info(`${folder.name}: ${VERDICT_LABEL[outcome.verdict]} (${took})`);

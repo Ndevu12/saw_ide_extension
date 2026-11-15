@@ -14,7 +14,7 @@ src/
     run · text · version · capabilities · docs · controls · openRun
     scan/               scan, contract, verdict, progress, schedule
     fix/                what `fix`, `audit`, `hook` and `watch status` reported; `--ask=jsonl` questions
-    install/            locate saw, find Python, pipx install, diagnose a failure
+    install/            locate saw, find Python, pipx install, the packages that fit this machine, diagnose a failure
     report/             Markdown reports, with scanned text kept literal
     agent/              what agents are told, `saw mcp`, the Cursor hook's answer
     feedback/           when Chat may ask for a rating, and the links that ask opens

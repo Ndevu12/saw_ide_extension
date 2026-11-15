@@ -1,8 +1,9 @@
 import * as vscode from "vscode";
 
 import { checkingBadge, checkingSentence } from "../../core/chat/transcript";
+import { behindNotice, type Behind } from "../../core/install/upgrade";
 import type { FolderVerdict } from "../../core/scan/verdict";
-import type { FolderState, Model } from "../model";
+import { olderSawOf, type FolderState, type Model } from "../model";
 import { VERDICT_LABEL } from "../present";
 
 const ICON: Record<FolderVerdict, string> = {
@@ -36,6 +37,29 @@ export class StatusBar implements vscode.Disposable {
   }
 
   private render(): void {
+    const older = this.olderSaw();
+    this.renderState(older?.version);
+    if (older) {
+      // An older saw than the pinned release gave a verdict shown here, or runs now.
+      this.item.backgroundColor ??= new vscode.ThemeColor("statusBarItem.warningBackground");
+      const shown = typeof this.item.tooltip === "string" ? this.item.tooltip : "";
+      this.item.tooltip = [behindNotice(older.version, older.behind), shown].filter(Boolean).join("\n\n");
+    }
+  }
+
+  /** A verdict on show from an older saw wins; otherwise the engine that runs now, when it is behind. */
+  private olderSaw(): { version: string; behind: Behind } | undefined {
+    for (const state of this.model.states()) {
+      const older = olderSawOf(state);
+      if (older) {
+        return older;
+      }
+    }
+    const engine = this.model.engine;
+    return engine?.kind === "ready" && engine.behind ? { version: engine.version, behind: engine.behind } : undefined;
+  }
+
+  private renderState(olderVersion: string | undefined): void {
     const engine = this.model.engine;
     const states = this.model.states();
     if (engine?.kind === "installing") {
@@ -54,12 +78,13 @@ export class StatusBar implements vscode.Disposable {
       return;
     }
     this.item.command = "workbench.view.extension.saw";
+    const saw = olderVersion ? `saw ${olderVersion}` : "saw";
     const checking = states.find((state) => state.checking);
     if (checking) {
       const about = checking.checkAbout === "admission";
       this.item.text = about
-        ? `$(sync~spin) saw: ${checkingBadge("admission", undefined)}`
-        : `$(sync~spin) saw: checking this update${checking.checkStep ? `: ${checking.checkStep}` : ""}`;
+        ? `$(sync~spin) ${saw}: ${checkingBadge("admission", undefined)}`
+        : `$(sync~spin) ${saw}: checking this update${checking.checkStep ? `: ${checking.checkStep}` : ""}`;
       this.item.backgroundColor = undefined;
       this.item.tooltip = about
         ? `${checking.folder.name}: ${checkingSentence("admission", undefined)}`
@@ -71,18 +96,18 @@ export class StatusBar implements vscode.Disposable {
     const progress = states.find((state) => state.scanning && state.progress)?.progress;
     const overall = this.model.overall();
     if (held?.held && !scanning) {
-      this.item.text = `${ICON[held.held.verdict]} saw: update held`;
+      this.item.text = `${ICON[held.held.verdict]} ${saw}: update held`;
       this.item.backgroundColor = BACKGROUND[held.held.verdict];
       this.item.tooltip = `${held.folder.name}: an update was held (${VERDICT_LABEL[held.held.verdict]}). The folder was not changed.`;
       return;
     }
     if (!overall) {
-      this.item.text = scanning ? `$(sync~spin) saw: scanning${progress ? `: ${progress}` : ""}` : "$(shield) saw";
+      this.item.text = scanning ? `$(sync~spin) ${saw}: scanning${progress ? `: ${progress}` : ""}` : `$(shield) ${saw}`;
       this.item.tooltip = scanning ? scanningTooltip(states) : "No scan has run yet.";
       this.item.backgroundColor = undefined;
       return;
     }
-    this.item.text = `${scanning ? "$(sync~spin)" : ICON[overall]} saw: ${VERDICT_LABEL[overall]}`;
+    this.item.text = `${scanning ? "$(sync~spin)" : ICON[overall]} ${saw}: ${VERDICT_LABEL[overall]}`;
     this.item.backgroundColor = BACKGROUND[overall];
     this.item.tooltip = states
       .flatMap((state) => {

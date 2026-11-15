@@ -3,9 +3,10 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 
 import { agentReport, agentUpdate, type AgentFolder } from "../../core/agent/agent";
+import { behindNotice } from "../../core/install/upgrade";
 import type { Controller } from "../scan/controller";
 import type { Engine } from "../install/engine";
-import type { FolderState, Model } from "../model";
+import { olderSawOf, type FolderState, type Model } from "../model";
 import type { Settings } from "../settings";
 
 export const FOLDER_VERDICT_TOOL = "saw_folderVerdict";
@@ -88,7 +89,7 @@ export class FolderVerdictTool implements vscode.LanguageModelTool<FolderVerdict
 /** What an agent is told about a folder from its state now; `waited` when a wait for its scan ran out. */
 export function describeFolder(state: FolderState, engine: Engine | undefined, waited = false): AgentFolder {
   const folder = state.folder;
-  const base = { name: folder.name, path: folder.uri.fsPath, reasons: [], findings: [] };
+  const base = { name: folder.name, path: folder.uri.fsPath, reasons: [], findings: [], ...behindOf(state) };
   const update = agentUpdate({
     checking: state.checking,
     ...(state.checkStep ? { checkStep: state.checkStep } : {}),
@@ -117,6 +118,12 @@ export function describeFolder(state: FolderState, engine: Engine | undefined, w
     reasons: last.reasons,
     findings: last.payload.results.flatMap((result) => result.findings),
   };
+}
+
+/** Which saw gave the verdict, when it was older than the pinned release, in the editor's own words. */
+function behindOf(state: FolderState): { behind?: string } {
+  const older = olderSawOf(state);
+  return older ? { behind: behindNotice(older.version, older.behind) } : {};
 }
 
 function why(state: FolderState, busy: boolean, engine: Engine | undefined): string {

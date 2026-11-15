@@ -18,6 +18,13 @@ function page(folders: ChatFolderInput[], extra?: Partial<ChatMachineInput>): st
 }
 
 describe("the sidebar chat", () => {
+  it("shows a warning card when an older saw than the pinned release gives the verdicts", () => {
+    const cards = chatCards([], { ...machine, engine: { phase: "ready", canInstall: true, message: "saw 0.16.0 is running instead of saw 0.17.0." } });
+    expect(cards[0]).toMatchObject({ badge: "older saw", tone: "warn", paragraphs: ["saw 0.16.0 is running instead of saw 0.17.0."] });
+    expect(cards[0]?.actions).toEqual([{ act: "install", label: "Install or Repair saw", tone: "primary" }]);
+    expect(chatCards([], machine).some((card) => card.badge === "older saw")).toBe(false);
+  });
+
   it("gives an infected folder a fix button and keeps a finding as text", () => {
     const html = page([folder({
       verdict: "infected",

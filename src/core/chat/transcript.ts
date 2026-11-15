@@ -94,6 +94,16 @@ export function chatCards(folders: ChatFolderInput[], machine: ChatMachineInput,
   const cards: ChatCard[] = [];
   if (machine.engine.phase === "installing") {
     cards.push({ badge: "installing", title: "saw", tone: "neutral", paragraphs: ["saw is being installed."], rows: [], actions: [] });
+  } else if (machine.engine.phase === "ready" && machine.engine.message) {
+    // An older saw than the pinned release gives the verdicts below.
+    cards.push({
+      badge: "older saw",
+      title: "saw",
+      tone: "warn",
+      paragraphs: [machine.engine.message],
+      rows: [],
+      actions: machine.engine.canInstall ? [{ act: "install", label: "Install or Repair saw", tone: "primary" }] : [],
+    });
   } else if (machine.engine.phase === "unavailable") {
     cards.push({
       badge: "unavailable",

@@ -9,6 +9,8 @@ import { configOutsideFolders } from "../../core/controls";
 import { offersGovernRestore, offersGovernVerdict, openAdmission, readGoverned, readNotice, readRestore, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig, type Governed, type GovernedReading, type GovernNotice } from "../../core/govern/contract";
 import { quietGit, type Tool } from "../../core/govern/command";
 import { folderKey, governStatusDir, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
+import { diskFiles, findRealProgram, isRealProgram, isStandin } from "../../core/govern/realProgram";
+import { behindVersion } from "../../core/install/upgrade";
 import { defaultIsExecutableFile } from "../../core/install/locate";
 import { runProgram } from "../../core/run";
 import type { Controller } from "../scan/controller";
@@ -236,6 +238,7 @@ export class Governor implements vscode.Disposable {
       progress,
       ...(standin ? { standin } : {}),
       quietHooks,
+      standinDirs: this.standinDirs(),
     };
     this.writeConfig(config);
     this.coverTerminals(systemBin);
@@ -434,17 +437,27 @@ export class Governor implements vscode.Disposable {
   }
 
   private async realBinary(name: "git" | "gh"): Promise<string> {
+    const standins = this.standinDirs();
+    const real = (file: string) => isRealProgram(file, standins, diskFiles);
     const saved = this.savedReal(name);
-    if (saved && defaultIsExecutableFile(saved) && this.realProgram(saved)) {
+    if (real(saved)) {
       return saved;
     }
+    const search = { pathVariable: process.env["PATH"], platform: process.platform, extraDirs: [nodePath.join(homedir(), ".local", "bin")] };
     if (name === "git") {
       const resolved = await gitBinary();
-      if (resolved && this.realProgram(resolved)) {
-        return resolved;
+      // VS Code's git extension can report the bare name `git`, which PATH resolves to the stand-in.
+      const found = resolved && !nodePath.isAbsolute(resolved) ? findRealProgram(resolved, search, standins, diskFiles) : resolved;
+      if (found && real(found)) {
+        return found;
       }
     }
-    return lookUp(name, [this.shimDir, this.systemBin ?? ""]) ?? "";
+    return findRealProgram(name, search, standins, diskFiles) ?? "";
+  }
+
+  /** The folders whose git and gh are stand-ins: this window's, and saw's own when it placed one. */
+  private standinDirs(): string[] {
+    return [this.shimDir, ...(this.systemBin ? [this.systemBin] : [])];
   }
 
   private savedReal(name: "git" | "gh"): string {
@@ -458,20 +471,7 @@ export class Governor implements vscode.Disposable {
   }
 
   private isShim(file: string): boolean {
-    return this.inDir(file, this.shimDir);
-  }
-
-  /** A path this window may call. A stand-in directory is not the real program. */
-  private realProgram(file: string): boolean {
-    return !this.isShim(file) && !this.inDir(file, this.systemBin);
-  }
-
-  private inDir(file: string, dir: string | undefined): boolean {
-    if (!dir) {
-      return false;
-    }
-    const relative = nodePath.relative(dir, file);
-    return relative === "" || (!relative.startsWith("..") && !nodePath.isAbsolute(relative));
+    return isStandin(file, [this.shimDir], diskFiles);
   }
 
   private async pointGit(shim: string): Promise<void> {
@@ -599,10 +599,12 @@ export class Governor implements vscode.Disposable {
     rmSync(nodePath.join(this.markerDir, folderKey(folder.uri.fsPath)), { force: true });
     if (notice.phase === "applied") {
       this.model.setHeld(folder, undefined);
+      const engine = this.model.engine;
+      const checkedBy = engine?.kind === "ready" && engine.behind ? behindVersion(engine.version, engine.behind) : undefined;
       if (notice.verdict) {
-        this.alerts.applied(folder.name, notice.verdict);
+        this.alerts.applied(folder.name, notice.verdict, checkedBy);
       } else {
-        this.alerts.applied(folder.name);
+        this.alerts.applied(folder.name, undefined, checkedBy);
       }
     } else {
       this.model.setHeld(folder, { verdict: notice.verdict ?? "incomplete", reasons: notice.reasons, released: false, at: notice.at });
@@ -661,21 +663,3 @@ async function gitBinary(): Promise<string | undefined> {
   }
 }
 
-function lookUp(name: string, skipDirs: readonly string[]): string | undefined {
-  const skip = new Set(skipDirs.filter((dir) => dir).map((dir) => nodePath.resolve(dir)));
-  const names = process.platform === "win32" ? [`${name}.exe`, `${name}.cmd`, name] : [name];
-  for (const dir of (process.env["PATH"] ?? "").split(nodePath.delimiter)) {
-    if (!dir || skip.has(nodePath.resolve(dir))) {
-      continue;
-    }
-    for (const file of names) {
-      const candidate = nodePath.join(dir, file);
-      if (defaultIsExecutableFile(candidate)) {
-        return candidate;
-      }
-    }
-  }
-  // pipx's default folder is not always on the PATH the editor was started with.
-  const local = nodePath.join(homedir(), ".local", "bin", name);
-  return defaultIsExecutableFile(local) ? local : undefined;
-}

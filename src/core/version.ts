@@ -14,6 +14,12 @@ export function parseVersion(output: string): Version | null {
   return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
+/** Read a bare release such as `0.17.0`, the form a pin and a shown version take. A dev build reads as its base. */
+export function parseRelease(text: string): Version | null {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(text.trim());
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+}
+
 export function atLeast(version: Version, minimum: string): boolean {
   const floor = minimum.split(".").map(Number);
   for (let i = 0; i < 3; i++) {

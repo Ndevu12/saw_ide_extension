@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-15
+
+### Added
+
+- When the saw release this extension installs has no ready-built package for this machine, the notification names the machine (for example Linux x86_64, macOS on Apple silicon, or Windows on Arm) and the platforms that release has a package for. It also says when the release is not on PyPI, when the Linux glibc is older than the package needs, and when a dependency has no package here. **Report It** opens an issue on the right repository, with the machine and versions filled in. Such a release is tried again after a day, or at once with **saw: Install or Repair saw**.
+
+### Fixed
+
+- `git` and `gh` run again in the editor's terminal. The package now carries saw's git stand-in, which every release since 0.4.0 left out, so each command stopped with `Cannot find module …/dist/govern-shim.js`. If the stand-in's script is ever missing, the command runs the real program and says saw did not check it.
+- The stand-in runs git from its full path. A bare `git` led back to the stand-in. The stand-in also checks the git and gh it was given before it runs one: a bare name, or a path that leads to its own folder through a symlink or another spelling, is replaced by the real program on PATH, or not run at all, and the terminal says which. Every stand-in carries a mark, so another editor's stand-in, or a copy of one, is never taken for the real git. When no real program is left, nothing runs, not even saw's own stand-in.
+- When saw cannot be moved up to the release this extension installs, the saw already installed keeps scanning, and the notification says so. Before, saw stopped until the install worked, and the notification said no folder is scanned. While the older saw runs, the status bar names it, for example `saw 0.16.0: clean`, and its tooltip says which release could not be installed and that a folder shown as clean may still hold what that release finds. The Folders view, the chat panel, reports, and the answer an AI agent gets say the same. The notification is shown once it is known whether an older saw is still there.
+
 ## [0.6.1] - 2026-11-13
 
 ### Changed
@@ -133,7 +145,8 @@
 - The log of a successful install no longer shows the expected "no pipx yet" check as a warning,
   or a step twice.
 
-[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.4.0...v0.5.0

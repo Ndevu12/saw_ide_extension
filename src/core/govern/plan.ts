@@ -3,6 +3,7 @@ import * as path from "node:path";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit, type Tool } from "./command";
 import type { GovernConfig } from "./contract";
+import { STANDIN_MARK } from "./realProgram";
 
 export interface Hold {
   kind: "hold";
@@ -79,11 +80,24 @@ export function activationEnv(config: GovernConfig, tool: Tool, holding: string)
   };
 }
 
+/** A wrapper's fallback runs `real` directly. A bare name would find the wrapper itself first on PATH. */
+function requireFullPath(real: string, tool: Tool, flavour: typeof path.posix): void {
+  if (!flavour.isAbsolute(real)) {
+    throw new Error(`saw's ${tool} stand-in needs the real ${tool} as a full path, not "${real}".`);
+  }
+}
+
 /** A POSIX stand-in. Missing config runs the real program, so a removed extension does not keep git. */
 export function posixWrapper(node: string, shim: string, configPath: string, real: string, tool: Tool): string {
+  requireFullPath(real, tool, path.posix);
   const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
   return [
     "#!/bin/sh",
+    `# ${STANDIN_MARK}: saw's ${tool} stand-in, never the real ${tool}.`,
+    `if [ ! -f ${quote(shim)} ]; then`,
+    `  echo ${quote(`saw: ${shim} is missing, so this ${tool} runs without saw's check. Reinstall the saw extension.`)} >&2`,
+    `  exec ${quote(real)} "$@"`,
+    "fi",
     `if [ ! -f ${quote(configPath)} ]; then`,
     `  exec ${quote(real)} "$@"`,
     "fi",
@@ -95,8 +109,16 @@ export function posixWrapper(node: string, shim: string, configPath: string, rea
 
 /** A Windows stand-in for the integrated terminal. The Git view is not pointed at a batch file. */
 export function windowsWrapper(node: string, shim: string, configPath: string, real: string, tool: Tool): string {
+  requireFullPath(real, tool, path.win32);
   return [
     "@echo off",
+    `rem ${STANDIN_MARK}: saw's ${tool} stand-in, never the real ${tool}.`,
+    `if not exist "${shim}" (`,
+    // Quoted: inside this ( ) block, a ")" or "&" in the path would end the block or start a command.
+    `  echo saw: "${shim}" is missing, so this ${tool} runs without saw's check. Reinstall the saw extension. 1>&2`,
+    `  "${real}" %*`,
+    "  exit /b %ERRORLEVEL%",
+    ")",
     `if not exist "${configPath}" (`,
     `  "${real}" %*`,
     "  exit /b %ERRORLEVEL%",
