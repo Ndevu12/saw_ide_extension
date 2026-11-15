@@ -170,7 +170,11 @@ are needed, and nothing is written into the system Python. The status bar shows
 `saw: installing` until saw is ready.
 
 If the install fails, one notification says why and what to run, with **Retry**,
-**Copy Diagnostics** and **Show Log**. To install saw yourself instead, see
+**Copy Diagnostics** and **Show Log**. When the release has no ready-built package for this
+machine, the notification names the machine and the platforms the release does have, and
+**Report It** opens an issue with those details filled in. A saw that is already installed keeps
+scanning, and a release that has nothing for this machine is tried again after a day. To install
+saw yourself instead, see
 [saw's first scan tutorial](https://saw-docs.ndevuspace.com/latest/tutorial/first-scan/).
 
 ## Commands
@@ -227,6 +231,7 @@ of you.
 ## Privacy and safety
 
 - **Nothing is sent anywhere.** saw scans offline. The only download is installing saw from PyPI.
+  When pip finds no package for this machine, the extension reads that release's file list from PyPI.
 - **Nothing changes without you.** Only **Fix…**, after you confirm, changes files. Nothing is ever
   pushed, and no pull request is opened.
 - **Nothing from the folder runs.** saw is started without a shell, from settings the folder can't

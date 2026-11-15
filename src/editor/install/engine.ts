@@ -60,7 +60,9 @@ export class EngineResolver {
         const listed = await this.listReady();
         return listed.kind === "unavailable" ? listed : this.choose(listed.candidates);
       }
-      const installed = await this.installThenFind("Install or repair was asked for.");
+      const before = await this.listReady();
+      const running = before.kind === "ready" ? sawToRun(before.candidates, this.installer.pinnedSaw)?.versionText : undefined;
+      const installed = await this.installThenFind("Install or repair was asked for.", running);
       if (installed.kind === "ready") {
         return installed;
       }
@@ -83,13 +85,24 @@ export class EngineResolver {
       if (!this.settings().autoInstall) {
         return { ...listed, message: `${listed.message} saw.autoInstall is off: run saw: Install or Repair saw to install it.` };
       }
+      const known = this.installer.knownUnsupported();
+      if (known) {
+        const message = `saw ${this.installer.pinnedSaw} cannot be installed on this machine. ${known} Run saw: Install or Repair saw to try again.`;
+        this.log.warn(message);
+        return { kind: "unavailable", reason: "install-failed", message };
+      }
       return this.installThenFind(listed.message);
     }
     // The saw this extension installed is kept at the release it pins; one the operator installed is theirs.
     const pin = this.installer.pinnedSaw;
     const ours = listed.candidates.find((candidate) => candidate.ours);
     if (ours && movesToPin(this.settings().path, this.settings().autoInstall, true, ours.version, pin)) {
-      const moved = await this.installThenFind(`The saw this extension installed is ${ours.versionText}; it now installs ${pin}.`);
+      const known = this.installer.knownUnsupported();
+      if (known) {
+        this.log.info(`saw ${ours.versionText} keeps running: ${known} saw ${pin} is tried again after a day, or now with saw: Install or Repair saw.`);
+        return this.choose(listed.candidates);
+      }
+      const moved = await this.installThenFind(`The saw this extension installed is ${ours.versionText}; it now installs ${pin}.`, ours.versionText);
       if (moved.kind === "ready") {
         return moved;
       }
@@ -105,9 +118,9 @@ export class EngineResolver {
     return listed.kind === "unavailable" ? listed : this.choose(listed.candidates);
   }
 
-  private async installThenFind(why: string): Promise<Found> {
+  private async installThenFind(why: string, keeping?: string): Promise<Found> {
     this.onInstalling();
-    const outcome = await this.installer.install(why);
+    const outcome = await this.installer.install(why, keeping);
     switch (outcome.kind) {
       case "failed":
         return { kind: "unavailable", reason: "install-failed", message: `saw could not be installed. ${outcome.diagnosis.cause}` };

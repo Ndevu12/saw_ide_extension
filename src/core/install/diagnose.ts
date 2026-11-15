@@ -1,14 +1,18 @@
 import type { InstallResult, StepName } from "./install";
+import { machineName, pipWanted, support, type Machine, type Release } from "./platform";
 
 export interface Diagnosis {
   /** One sentence: what is missing or what went wrong. */
   cause: string;
   /** What the operator can do about it, with the command when there is one. */
   fix: string;
+  /** The issue to open where it can be fixed, when nothing on this machine can fix it. */
+  report?: { where: "saw" | "extension"; title: string; lines: string[] };
+  /** No package of this release installs here: installing again fails the same way until the release changes. */
+  unsupported?: boolean;
 }
 
-export interface Host {
-  platform: NodeJS.Platform;
+export interface Host extends Machine {
   /** `ID` and `ID_LIKE` from /etc/os-release, lower-cased; empty off Linux. */
   distro: string[];
 }
@@ -55,8 +59,102 @@ function outputOf(result: Extract<InstallResult, { kind: "failed" }>, step: Step
   return result.steps.filter((s) => s.name === step && !s.ok).map((s) => s.output).join("\n");
 }
 
+/** A GitHub issue for a diagnosis's report, with the machine and versions filled in. Nothing from a folder or PATH is included. */
+export function reportUrl(diagnosis: Diagnosis, extension: string): string | undefined {
+  const report = diagnosis.report;
+  if (!report) {
+    return undefined;
+  }
+  const base = report.where === "saw"
+    ? "https://github.com/Ndevu12/stayAwakeBot/issues/new"
+    : "https://github.com/Ndevu12/saw_ide_extension/issues/new";
+  const body = ["The editor extension could not install saw.", "", diagnosis.cause, "", ...report.lines.map((line) => `- ${line}`), `- Extension: ${extension}`].join("\n");
+  return `${base}?title=${encodeURIComponent(report.title)}&body=${encodeURIComponent(body)}`;
+}
+
+/** True when pip found no package it could install, so the release's file list on PyPI says why. */
+export function lacksPackage(result: Extract<InstallResult, { kind: "failed" }>): boolean {
+  const output = outputOf(result, result.failedStep);
+  return result.failedStep === "install-saw" && NO_WHEEL.test(output) && !NO_NETWORK.test(output);
+}
+
+function listed(items: readonly string[]): string {
+  return items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/** Why no package of the pinned release installs on this machine, from pip's output and, when it was read, PyPI's file list. */
+function noPackage(output: string, host: Host, pin: string, release: Release | undefined): Diagnosis {
+  const machine = machineName(host);
+  const manual = `pipx install stayawakebot==${pin}`;
+  const facts = [`Machine: ${machine}${host.glibc ? `, glibc ${host.glibc}` : ""}`, `Release: stayawakebot ${pin}`];
+  const wanted = pipWanted(output);
+  if (wanted && wanted.name.toLowerCase() !== "stayawakebot") {
+    return {
+      cause: `${wanted.name}, which stayawakebot ${pin} needs, has no ready-built package for ${machine}.`,
+      fix: `Report it so saw can ship one, or build it on this machine: ${manual}`,
+      report: { where: "saw", title: `${wanted.name} has no ready-built package for ${machine}`, lines: facts },
+      unsupported: true,
+    };
+  }
+  const found = release ? support(release, host) : undefined;
+  switch (found?.kind) {
+    case "unpublished":
+      return {
+        cause: `stayawakebot ${pin}, the release this extension installs, is not on PyPI.`,
+        fix: "Report it so the release is published or the extension installs one that is.",
+        report: { where: "extension", title: `stayawakebot ${pin} is not on PyPI`, lines: facts },
+        unsupported: true,
+      };
+    case "elsewhere": {
+      const on = found.on.length ? ` It has one for ${listed(found.on)}.` : " It has none for any platform.";
+      return {
+        cause: `stayawakebot ${pin} has no ready-built package for ${machine}, which this machine runs.${on}`,
+        fix: found.source
+          ? `Report it so saw publishes one, or build it on this machine: ${manual}`
+          : "Report it so saw publishes one.",
+        report: { where: "saw", title: `stayawakebot ${pin} has no ready-built package for ${machine}`, lines: [...facts, `On PyPI for: ${found.on.join(", ") || "nothing"}`] },
+        unsupported: true,
+      };
+    }
+    case "old-glibc":
+      return {
+        cause: `stayawakebot ${pin} for ${machine} needs glibc ${found.needs} or later, and this machine has glibc ${found.has}.`,
+        fix: `Update the operating system, or build saw on this machine: ${manual}`,
+        unsupported: true,
+      };
+    case "fits":
+      return {
+        cause: `stayawakebot ${pin} has a ready-built package for ${machine}, but pip could not install it with this Python.`,
+        fix: `See the log for pip's output, or install it by hand: ${manual}`,
+      };
+    case undefined:
+      break;
+  }
+  if (wanted && wanted.versions.length === 0) {
+    return {
+      cause: `pip found no stayawakebot release with a ready-built package for ${machine}.`,
+      fix: `Report it so saw publishes one, or build it on this machine: ${manual}`,
+      report: { where: "saw", title: `stayawakebot has no ready-built package for ${machine}`, lines: facts },
+      unsupported: true,
+    };
+  }
+  if (wanted && !wanted.versions.includes(pin)) {
+    const newest = wanted.versions[wanted.versions.length - 1];
+    return {
+      cause: `pip found stayawakebot up to ${newest} for ${machine}, but not ${pin}. Either ${pin} has no ready-built package for this machine, or the package index pip uses does not have it yet.`,
+      fix: `Report it if it lasts, or build it on this machine: ${manual}`,
+      report: { where: "saw", title: `stayawakebot ${pin} has no ready-built package for ${machine}`, lines: [...facts, `pip found: ${newest ?? "none"} and older`] },
+      unsupported: true,
+    };
+  }
+  return {
+    cause: `A ready-built package for stayawakebot ${pin} or one of its dependencies is not available for ${machine} with this Python.`,
+    fix: `Install it by hand, which may build from source: ${manual}`,
+  };
+}
+
 /** Turn a failed install into what the operator needs: what is wrong, and what to run. */
-export function diagnose(result: Extract<InstallResult, { kind: "failed" }>, host: Host, pins: { saw: string }): Diagnosis {
+export function diagnose(result: Extract<InstallResult, { kind: "failed" }>, host: Host, pins: { saw: string }, release?: Release): Diagnosis {
   const os = family(host);
   const output = outputOf(result, result.failedStep);
   const manual = `pipx install stayawakebot==${pins.saw}`;
@@ -79,10 +177,13 @@ export function diagnose(result: Extract<InstallResult, { kind: "failed" }>, hos
       fix: `Install the venv module or pipx from your package manager (${INSTALL_PYTHON[os]}), then run saw: Install or Repair saw.`,
     };
   }
+  if (result.failedStep === "install-saw" && NO_WHEEL.test(output)) {
+    return noPackage(output, host, pins.saw, release);
+  }
   if (NO_WHEEL.test(output)) {
     return {
-      cause: `A ready-built package for stayawakebot ${pins.saw} or one of its dependencies is not available for this Python.`,
-      fix: `Install it by hand, which may build from source: ${manual}`,
+      cause: `A ready-built package for pipx or one of its dependencies is not available for ${machineName(host)} with this Python.`,
+      fix: `Install pipx from your package manager (${INSTALL_PYTHON[os]}), then run saw: Install or Repair saw.`,
     };
   }
   const where: Record<StepName, string> = {

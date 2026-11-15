@@ -4,11 +4,15 @@
 
 ## [0.6.2] - 2026-11-15
 
+### Added
+
+- When the saw release this extension installs has no ready-built package for this machine, the notification names the machine (for example Linux x86_64, macOS on Apple silicon, or Windows on Arm) and the platforms that release has a package for. It also says when the release is not on PyPI, when the Linux glibc is older than the package needs, and when a dependency has no package here. **Report It** opens an issue on the right repository, with the machine and versions filled in. Such a release is tried again after a day, or at once with **saw: Install or Repair saw**.
+
 ### Fixed
 
 - `git` and `gh` run again in the editor's terminal. The package now carries saw's git stand-in, which every release since 0.4.0 left out, so each command stopped with `Cannot find module …/dist/govern-shim.js`. If the stand-in's script is ever missing, the command runs the real program and says saw did not check it.
 - The stand-in runs git from its full path. A bare `git` led back to the stand-in.
-- When saw cannot be moved up to the release this extension installs, the saw already installed keeps running, and the log names the release that could not be installed. Before, saw stopped until the install worked.
+- When saw cannot be moved up to the release this extension installs, the saw already installed keeps scanning, and the notification says so. Before, saw stopped until the install worked, and the notification said no folder is scanned.
 
 ## [0.6.1] - 2026-11-13
 
