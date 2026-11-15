@@ -42,6 +42,16 @@ const MERGES = ["0fb8655554", "23f55a6aa7", "25600c5d1e", "4a0d3dc770", "4aebdbc
 const HOOK = finding("a Claude Code hook that runs a command when Claude Code starts", ".claude/settings.json", "high", 0);
 
 describe("the sidebar chat", () => {
+  it("warns when an older saw than the pinned release gives the results, on the card and the folder's tab", () => {
+    const message = "saw 0.16.0 is running instead of saw 0.17.0.";
+    const html = chat([], { engine: { phase: "ready", canInstall: true, message } });
+    expect(html).toContain('<span class="pill">older saw</span>');
+    expect(html).toContain(message);
+    expect(html).toContain('class="primary" data-act="install">Install or Repair saw<');
+    expect(chat([])).not.toContain("older saw");
+    expect(tab(folder({ verdict: "clean", olderSaw: message }))).toContain(`<p class="notice warn">${message}</p>`);
+  });
+
   it("says where a folder stands and leaves the findings to the verdict tab", () => {
     const html = chat([folder({ verdict: "suspicious", findings: [HOOK, ...MERGES], unheld: true, unheldFrom: "open" })]);
     expect(html).toContain('<article class="card warn">');

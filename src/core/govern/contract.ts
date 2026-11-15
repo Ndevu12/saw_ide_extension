@@ -24,6 +24,11 @@ export interface GovernConfig {
    * outside the folder, otherwise an empty directory this extension owns.
    */
   quietHooks?: string;
+  /**
+   * The folders whose git and gh are stand-ins. The stand-in will not run a program from one, and
+   * looks past them when the recorded program is not a full path. Older configurations lack it.
+   */
+  standinDirs?: string[];
 }
 
 /** Clean and residue may change the open folder. Anything else waits. */

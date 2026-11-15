@@ -14,7 +14,7 @@ src/
     run · text · version · capabilities · docs · controls · openRun
     scan/               scan, contract, verdict, progress, schedule
     fix/                what `fix`, `audit`, `hook` and `watch status` reported; `--ask=jsonl` questions
-    install/            locate saw, find Python, pipx install, diagnose a failure
+    install/            locate saw, find Python, pipx install, the packages that fit this machine, diagnose a failure
     report/             Markdown reports, with scanned text kept literal
     agent/              what agents are told, `saw mcp`, the Cursor hook's answer
     feedback/           when Chat may ask for a rating, and the links that ask opens
@@ -55,11 +55,14 @@ cancellable progress notification. saw's output is collected as it arrives, and 
 report follows it live. When saw finishes, **actions** reads its result: the JSON where saw writes
 it, otherwise its exit status and its own words. A fix ends with a rescan of the folder.
 
-Installing saw never asks, because it changes nothing the operator owns. Fixing always asks: it
-deletes files from the checkout, so it runs only from an explicit **Fix…** and a modal that says
-what will change. The extension never passes `--pr`, so nothing is pushed or published. When saw
-announces `fix.ask.json`, the fix also passes `--ask=jsonl` and the Your choice tab answers what a
-terminal would ask. How that looks is specified in [FIX-DECISIONS.md](FIX-DECISIONS.md).
+Installing saw never asks, because it changes nothing the operator owns. Fixing always asks, and
+the two fixes are separate commands. **Fix Infection in Files…** runs `saw fix`: it deletes files
+from the checkout, so it runs only after a modal that says what will change. The extension never
+passes `--pr`, so it pushes and publishes nothing. **Fix Infection in Git History…** runs
+`saw fix amend`, which rewrites past commits and force-pushes their branches, so it runs only after
+a modal that lists what it changes and needs, and after the operator types the folder's name. When
+saw announces `fix.ask.json`, either fix also passes `--ask=jsonl` and the Your choice tab answers
+what a terminal would ask, naming the fix that asked. How that looks is specified in [FIX-DECISIONS.md](FIX-DECISIONS.md).
 
 ## Finding and installing saw
 

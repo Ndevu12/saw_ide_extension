@@ -131,6 +131,9 @@ export function verdictPage(folder: ChatFolderInput, index: string | number): Ve
   if (folder.unheld) {
     notices.push({ text: unheldSentence(folder.unheldFrom), tone: folder.unheldFrom === "open" ? "warn" : "bad" });
   }
+  if (folder.olderSaw) {
+    notices.push({ text: folder.olderSaw, tone: "warn" });
+  }
   if (folder.decision) {
     notices.push({ text: folder.decision, tone: "warn" });
   }

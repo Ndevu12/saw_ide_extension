@@ -8,6 +8,7 @@ import type { AmendOutcome, FixOutcome } from "../../core/fix/actions";
 import { prose } from "../../core/report/markdown";
 import { detailsPage, linkTarget } from "../../core/report/page";
 import { amendReport, auditReport, fixReport, hooksReport, scanReport, watchReport, when, type CommandRun, type Copy } from "../../core/report/reports";
+import { behindVersion } from "../../core/install/upgrade";
 import type { Model, Settled } from "../model";
 
 export const REPORT_SCHEME = "saw-report";
@@ -331,12 +332,12 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
 
   private render(kind: Kind, folder: vscode.WorkspaceFolder | undefined, copy: Copy): string {
     const engine = this.model.engine;
-    const sawVersion = engine?.kind === "ready" ? engine.version : undefined;
+    const sawVersion = shownVersion(engine);
     switch (kind) {
       case "scan": {
         if (!folder) return "# saw scan";
         const state = this.model.get(folder);
-        return scanReport({ folderName: folder.name, folderPath: folder.uri.fsPath, scanning: state.scanning, fixing: state.fixing, step: state.scanning ? state.progress : undefined, outcome: state.last, sawVersion }, copy);
+        return scanReport({ folderName: folder.name, folderPath: folder.uri.fsPath, scanning: state.scanning, fixing: state.fixing, step: state.scanning ? state.progress : undefined, outcome: state.last, sawVersion: state.scannedBy ? behindVersion(state.scannedBy.version, state.scannedBy.behind) : sawVersion }, copy);
       }
       case "fix": {
         const record = folder && this.fixes.get(folderKey(folder));
@@ -367,7 +368,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
 
   private fixInput<R extends FixRecord | AmendRecord>(folder: vscode.WorkspaceFolder, record: R): R & { folderName: string; folderPath: string; sawVersion: string | undefined } {
     const engine = this.model.engine;
-    return { ...record, folderName: folder.name, folderPath: folder.uri.fsPath, sawVersion: engine?.kind === "ready" ? engine.version : undefined };
+    return { ...record, folderName: folder.name, folderPath: folder.uri.fsPath, sawVersion: shownVersion(engine) };
   }
 
   private modelChanged(): void {
@@ -495,4 +496,12 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     this.subscriptions.forEach((s) => s.dispose());
     this.changed.dispose();
   }
+}
+
+/** The saw that ran, and the release it stands in for when it is older than the pin. */
+function shownVersion(engine: Model["engine"]): string | undefined {
+  if (engine?.kind !== "ready") {
+    return undefined;
+  }
+  return behindVersion(engine.version, engine.behind);
 }

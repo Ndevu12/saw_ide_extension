@@ -1,12 +1,13 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { arch, homedir, release, tmpdir } from "node:os";
+import { arch, homedir, release as osRelease, tmpdir } from "node:os";
 import * as path from "node:path";
 
 import * as vscode from "vscode";
 
-import { diagnose, parseOsRelease, type Diagnosis, type Host } from "../../core/install/diagnose";
+import { diagnose, lacksPackage, parseOsRelease, reportUrl, type Diagnosis, type Host } from "../../core/install/diagnose";
 import { installSaw, type InstallResult, type Pins, type StepName } from "../../core/install/install";
 import { defaultIsExecutableFile, type LocateEnv } from "../../core/install/locate";
+import { machineName, readRelease, type Release } from "../../core/install/platform";
 import { runProgram } from "../../core/run";
 
 export type InstallOutcome =
@@ -44,14 +45,48 @@ export function readPins(context: vscode.ExtensionContext): Pins {
 
 function host(): Host {
   let distro: string[] = [];
-  if (process.platform === "linux") {
-    try {
-      distro = parseOsRelease(readFileSync("/etc/os-release", "utf8"));
-    } catch {
-      distro = [];
-    }
+  if (process.platform !== "linux") {
+    return { platform: process.platform, arch: process.arch, distro };
   }
-  return { platform: process.platform, distro };
+  try {
+    distro = parseOsRelease(readFileSync("/etc/os-release", "utf8"));
+  } catch {
+    distro = [];
+  }
+  let header: { glibcVersionRuntime?: string } | undefined;
+  try {
+    header = (process.report.getReport() as { header?: { glibcVersionRuntime?: string } }).header;
+  } catch {
+    return { platform: process.platform, arch: process.arch, distro };
+  }
+  // Node reports glibcVersionRuntime on glibc Linux only.
+  return header?.glibcVersionRuntime
+    ? { platform: process.platform, arch: process.arch, glibc: header.glibcVersionRuntime, distro }
+    : { platform: process.platform, arch: process.arch, musl: true, distro };
+}
+
+/** What PyPI lists for the pinned release. Undefined when PyPI does not answer, so pip's own output is used. */
+async function pypiRelease(version: string): Promise<Release | undefined> {
+  try {
+    const response = await fetch(`https://pypi.org/pypi/stayawakebot/${encodeURIComponent(version)}/json`, { signal: AbortSignal.timeout(10_000) });
+    if (response.status === 404) {
+      return { kind: "unpublished" };
+    }
+    return response.ok ? readRelease(await response.text()) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A machine no package of the pinned release fits is asked again after a day, since the release can gain one. */
+const UNSUPPORTED_RECHECK_MS = 24 * 60 * 60_000;
+const UNSUPPORTED_KEY = "install.unsupported";
+
+interface Unsupported {
+  pin: string;
+  machine: string;
+  at: number;
+  cause: string;
 }
 
 function locateEnv(): LocateEnv {
@@ -106,6 +141,7 @@ export class Installer {
     return this.lastReport;
   }
 
+  /** A failed install is not shown here: the caller knows whether an older saw keeps running. */
   async install(why: string): Promise<InstallOutcome> {
     const lock = await this.acquire();
     try {
@@ -113,6 +149,15 @@ export class Installer {
     } finally {
       rmSync(this.lockPath, { recursive: true, force: true });
     }
+  }
+
+  /** Why the pinned release did not install here within the last day, when no package of it fits this machine. */
+  knownUnsupported(): string | undefined {
+    const known = this.context.globalState.get<Unsupported>(UNSUPPORTED_KEY);
+    if (!known || known.pin !== this.pins.saw || known.machine !== machineName(host()) || Date.now() - known.at > UNSUPPORTED_RECHECK_MS) {
+      return undefined;
+    }
+    return known.cause;
   }
 
   private async installLocked(why: string): Promise<InstallOutcome> {
@@ -144,10 +189,12 @@ export class Installer {
         this.log.warn(`${line}\n${step.output}`);
       }
     }
-    this.lastReport = this.report(why, result);
+    const release = result.kind === "failed" && lacksPackage(result) ? await pypiRelease(this.pins.saw) : undefined;
+    this.lastReport = this.report(why, result, release);
 
     switch (result.kind) {
       case "installed": {
+        void this.context.globalState.update(UNSUPPORTED_KEY, undefined);
         this.remember({ binary: result.binary, binDir: result.binDir });
         this.exposeToTerminals();
         const pipx = result.installedPipx ? ` pipx was installed first, at ${result.pipx}.` : "";
@@ -159,22 +206,29 @@ export class Installer {
         this.log.warn("Installing saw was cancelled.");
         return { kind: "cancelled" };
       case "failed": {
-        const diagnosis = diagnose(result, host(), this.pins);
-        this.log.error(`saw could not be installed. ${diagnosis.cause} ${diagnosis.fix}`);
-        void this.showFailure(diagnosis);
+        const machine = host();
+        const diagnosis = diagnose(result, machine, this.pins, release);
+        await this.context.globalState.update(
+          UNSUPPORTED_KEY,
+          diagnosis.unsupported ? { pin: this.pins.saw, machine: machineName(machine), at: Date.now(), cause: diagnosis.cause } satisfies Unsupported : undefined,
+        );
+        this.log.error(`saw ${this.pins.saw} could not be installed. ${diagnosis.cause} ${diagnosis.fix}`);
         return { kind: "failed", diagnosis };
       }
     }
   }
 
-  private async showFailure(diagnosis: Diagnosis): Promise<void> {
-    const choice = await vscode.window.showErrorMessage(
-      `saw could not be installed, so no folder is scanned. ${diagnosis.cause} ${diagnosis.fix}`,
-      "Retry",
-      "Copy Diagnostics",
-      "Show Log",
-    );
-    if (choice === "Retry") {
+  /** `keeping`: the version of the saw that still runs after this failure, found after the attempt. */
+  async showFailure(diagnosis: Diagnosis, keeping: string | undefined): Promise<void> {
+    const extension = `${this.context.extension.id} ${(this.context.extension.packageJSON as { version?: string }).version ?? "?"}`;
+    const report = reportUrl(diagnosis, extension);
+    const actions = [...(report ? ["Report It"] : []), "Retry", "Copy Diagnostics", "Show Log"];
+    const choice = keeping
+      ? await vscode.window.showWarningMessage(`saw ${this.pins.saw} could not be installed, so saw ${keeping} keeps scanning. ${diagnosis.cause} ${diagnosis.fix}`, ...actions)
+      : await vscode.window.showErrorMessage(`saw could not be installed, so no folder is scanned. ${diagnosis.cause} ${diagnosis.fix}`, ...actions);
+    if (choice === "Report It" && report) {
+      await vscode.env.openExternal(vscode.Uri.parse(report));
+    } else if (choice === "Retry") {
       await vscode.commands.executeCommand("saw.install");
     } else if (choice === "Copy Diagnostics") {
       await vscode.commands.executeCommand("saw.copyDiagnostics");
@@ -183,7 +237,7 @@ export class Installer {
     }
   }
 
-  private report(why: string, result: InstallResult): string {
+  private report(why: string, result: InstallResult, release: Release | undefined): string {
     const extension = (this.context.extension.packageJSON as { version?: string }).version ?? "?";
     const lines = [
       "## saw install diagnostics",
@@ -192,9 +246,15 @@ export class Installer {
       `- Why: ${why}`,
       `- Extension: ${this.context.extension.id} ${extension}; pins stayawakebot ${this.pins.saw}, pipx ${this.pins.pipx}`,
       `- Editor: ${vscode.env.appName} ${vscode.version}${vscode.env.remoteName ? ` (remote: ${vscode.env.remoteName})` : ""}`,
-      `- System: ${process.platform} ${release()} ${arch()}${host().distro.length ? ` (${host().distro.join(", ")})` : ""}`,
+      `- System: ${process.platform} ${osRelease()} ${arch()}${host().distro.length ? ` (${host().distro.join(", ")})` : ""}`,
+      `- Machine: ${machineName(host())}${host().glibc ? `, glibc ${host().glibc}` : ""}`,
       `- PATH: ${process.env["PATH"] ?? ""}`,
     ];
+    if (release?.kind === "unpublished") {
+      lines.push(`- PyPI: stayawakebot ${this.pins.saw} is not published`);
+    } else if (release) {
+      lines.push(`- PyPI: stayawakebot ${this.pins.saw} wheels: ${release.wheels.join(", ") || "none"}${release.source ? "; source package" : ""}`);
+    }
     if (result.kind === "failed" && result.tried.length) {
       lines.push("", "### Python interpreters", "", ...result.tried.map((line) => `- ${line}`));
     }

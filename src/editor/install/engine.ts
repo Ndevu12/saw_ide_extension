@@ -5,6 +5,8 @@ import * as vscode from "vscode";
 
 import { probeCapabilities, type Capabilities } from "../../core/capabilities";
 import { defaultIsExecutableFile, locate, movesToPin, probe, sameInstall, sawToRun, type Probed } from "../../core/install/locate";
+import type { Diagnosis } from "../../core/install/diagnose";
+import { behindPin, moveOrKeep, type Behind } from "../../core/install/upgrade";
 import { atLeast, formatVersion, type Version } from "../../core/version";
 import type { Installer } from "./installer";
 
@@ -18,7 +20,8 @@ export type Unavailable =
   | "install-cancelled";
 
 export type Engine =
-  | { kind: "ready"; binary: string; version: string; capabilities: Capabilities }
+  /** `behind`: the extension could not move this saw up to the release it pins. */
+  | { kind: "ready"; binary: string; version: string; capabilities: Capabilities; behind?: Behind }
   | { kind: "installing" }
   | { kind: "unavailable"; reason: Unavailable; message: string };
 
@@ -32,6 +35,8 @@ export interface EngineSettings {
 /** Finds and checks the saw program once, installing it when it is missing, until settings change or a scan is asked for by hand. */
 export class EngineResolver {
   private pending: Promise<Found> | undefined;
+  /** Why the last install failed, until its notification is shown. */
+  private failure: Diagnosis | undefined;
 
   constructor(
     private readonly log: vscode.LogOutputChannel,
@@ -60,7 +65,7 @@ export class EngineResolver {
         const listed = await this.listReady();
         return listed.kind === "unavailable" ? listed : this.choose(listed.candidates);
       }
-      return this.installThenFind("Install or repair was asked for.");
+      return this.moveOrKeep("Install or repair was asked for.");
     })();
     return this.pending;
   }
@@ -74,22 +79,60 @@ export class EngineResolver {
       if (!this.settings().autoInstall) {
         return { ...listed, message: `${listed.message} saw.autoInstall is off: run saw: Install or Repair saw to install it.` };
       }
-      return this.installThenFind(listed.message);
+      const known = this.installer.knownUnsupported();
+      if (known) {
+        const message = `saw ${this.installer.pinnedSaw} cannot be installed on this machine. ${known} Run saw: Install or Repair saw to try again.`;
+        this.log.warn(message);
+        return { kind: "unavailable", reason: "install-failed", message };
+      }
+      const installed = await this.installThenFind(listed.message);
+      this.showFailure(installed, undefined);
+      return installed;
     }
     // The saw this extension installed is kept at the release it pins; one the operator installed is theirs.
     const pin = this.installer.pinnedSaw;
     const ours = listed.candidates.find((candidate) => candidate.ours);
     if (ours && movesToPin(this.settings().path, this.settings().autoInstall, true, ours.version, pin)) {
-      return this.installThenFind(`The saw this extension installed is ${ours.versionText}; it now installs ${pin}.`);
+      const known = this.installer.knownUnsupported();
+      if (known) {
+        this.log.info(`saw ${ours.versionText} keeps running: ${known} saw ${pin} is tried again after a day, or now with saw: Install or Repair saw.`);
+        return behindPin(await this.choose(listed.candidates), pin, known);
+      }
+      return this.moveOrKeep(`The saw this extension installed is ${ours.versionText}; it now installs ${pin}.`);
     }
     return this.choose(listed.candidates);
   }
 
+  /** Install the pinned release; when that fails, the saw already installed keeps running, marked as behind. */
+  private moveOrKeep(why: string): Promise<Found> {
+    return moveOrKeep<Extract<Found, { kind: "ready" }>, Extract<Found, { kind: "unavailable" }>>(this.installer.pinnedSaw, {
+      install: () => this.installThenFind(why),
+      // Listed again, in case the attempt removed it.
+      keep: async () => {
+        const listed = await this.listReady();
+        return listed.kind === "unavailable" ? listed : this.choose(listed.candidates);
+      },
+      failed: (moved, keeping) => this.showFailure(moved, keeping),
+      warn: (message) => this.log.warn(message),
+    });
+  }
+
+  /** The installer's notification for the last failed install, once it is known what keeps running. */
+  private showFailure(found: Found, keeping: string | undefined): void {
+    const failure = this.failure;
+    this.failure = undefined;
+    if (found.kind === "unavailable" && found.reason === "install-failed" && failure) {
+      void this.installer.showFailure(failure, keeping);
+    }
+  }
+
   private async installThenFind(why: string): Promise<Found> {
     this.onInstalling();
+    this.failure = undefined;
     const outcome = await this.installer.install(why);
     switch (outcome.kind) {
       case "failed":
+        this.failure = outcome.diagnosis;
         return { kind: "unavailable", reason: "install-failed", message: `saw could not be installed. ${outcome.diagnosis.cause}` };
       case "cancelled":
         return { kind: "unavailable", reason: "install-cancelled", message: "Installing saw was cancelled. Run saw: Install or Repair saw to try again." };

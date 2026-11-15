@@ -1,10 +1,14 @@
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import * as path from "node:path";
 
+import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit, quietGit, repoConfigText, silencedRepoConfig } from "../../src/core/govern/command";
 import { mayRelease, offersGovernRestore, offersGovernVerdict, openAdmission, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
-import { activationEnv, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin } from "../../src/core/govern/plan";
+import { activationEnv, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
 const config = (overrides: Partial<GovernConfig> = {}): GovernConfig => ({
@@ -178,6 +182,116 @@ describe("what the stand-in does", () => {
     expect(wrapper).toContain("exec '/usr/bin/git' \"$@\"");
     expect(wrapper).toContain("--tool git");
   });
+
+  it("runs the real program, and says so, when the stand-in's script is missing", () => {
+    const wrapper = posixWrapper("/usr/bin/node", "/ext/govern-shim.js", "/ext/config.json", "/usr/bin/git", "git");
+    const missing = wrapper.indexOf("if [ ! -f '/ext/govern-shim.js' ]; then");
+    expect(missing).toBeGreaterThan(-1);
+    expect(missing).toBeLessThan(wrapper.indexOf("export ELECTRON_RUN_AS_NODE=1"));
+    const branch = wrapper.slice(missing, wrapper.indexOf("fi", missing));
+    expect(branch).toContain("is missing, so this git runs without saw");
+    expect(branch).toContain(">&2");
+    expect(branch).toContain("exec '/usr/bin/git' \"$@\"");
+  });
+
+  it("runs the real program from a shell when the stand-in's script is missing", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const dir = mkdtempSync(path.join(tmpdir(), "saw-wrapper-"));
+    try {
+      const wrapper = path.join(dir, "git");
+      writeFileSync(wrapper, posixWrapper("/no/node", path.join(dir, "gone.js"), path.join(dir, "config.json"), "/bin/echo", "git"), { mode: 0o755 });
+      const run = spawnSync(wrapper, ["still", "ran"], { encoding: "utf8" });
+      expect(run.status).toBe(0);
+      expect(run.stdout.trim()).toBe("still ran");
+      expect(run.stderr).toContain("gone.js is missing");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("what the stand-in runs when it falls back", () => {
+  it("refuses to write a wrapper whose fallback is a bare name, which PATH resolves to the wrapper", () => {
+    expect(() => posixWrapper("/usr/bin/node", "/ext/govern-shim.js", "/ext/config.json", "git", "git")).toThrow(/full path/);
+    expect(() => windowsWrapper("C:\\node.exe", "C:\\ext\\govern-shim.js", "C:\\ext\\config.json", "git", "git")).toThrow(/full path/);
+    expect(() => windowsWrapper("C:\\node.exe", "C:\\ext\\govern-shim.js", "C:\\ext\\config.json", "C:\\Program Files\\Git\\cmd\\git.exe", "git")).not.toThrow();
+  });
+
+  it("quotes the missing script's path on Windows, so a ) in it does not end the block", () => {
+    const shim = "C:\\Apps (portable)\\data\\extensions\\saw\\dist\\govern-shim.js";
+    const wrapper = windowsWrapper("C:\\node.exe", shim, "C:\\cfg.json", "C:\\Git\\cmd\\git.exe", "git");
+    const echo = wrapper.split("\r\n").find((line) => line.includes("echo saw:"));
+    expect(echo).toBe(`  echo saw: "${shim}" is missing, so this git runs without saw's check. Reinstall the saw extension. 1>&2`);
+  });
+});
+
+// The bundled stand-in, run the way a terminal runs it: a recorded bare git must not lead back to it.
+describe.runIf(process.platform !== "win32")("the stand-in and a recorded bare git", () => {
+  async function runGit(config: (dirs: { bin: string; real: string }) => Partial<GovernConfig>, options: { standin?: boolean; realOnPath?: boolean } = {}) {
+    const root = mkdtempSync(path.join(tmpdir(), "saw-standin-"));
+    const bin = path.join(root, "bin");
+    const real = path.join(root, "real");
+    mkdirSync(bin);
+    mkdirSync(real);
+    const shim = path.join(root, "govern-shim.js");
+    await build({ entryPoints: [path.resolve(__dirname, "../../src/governShim.ts")], bundle: true, platform: "node", format: "cjs", outfile: shim, logLevel: "silent" });
+    writeFileSync(path.join(real, "git"), '#!/bin/sh\necho "real git $*"\n', { mode: 0o755 });
+    // saw's own stand-in, standing in for one that looks git up on PATH when it is given none.
+    const standinMark = path.join(root, "standin-ran");
+    const standinConfig = () => {
+      if (!options.standin) {
+        return {};
+      }
+      const file = path.join(root, "saw-git-standin");
+      writeFileSync(file, `#!/bin/sh\n: > '${standinMark}'\nexec git "$@"\n`, { mode: 0o755 });
+      return { standin: file };
+    };
+    const configPath = path.join(root, "config.json");
+    writeFileSync(configPath, JSON.stringify({ enabled: true, saw: "", realGh: "", timeoutMs: 1000, folders: [], holdingRoot: root, markerDir: root, resultDir: root, progress: false, ...standinConfig(), ...config({ bin, real }) }));
+    // Each entry to the wrapper is counted, and a fifth stops it, so a loop fails the test instead of the machine.
+    const count = path.join(root, "count");
+    const lines = posixWrapper(process.execPath, shim, configPath, path.join(real, "git"), "git").split("\n");
+    // Shell builtins only, so the guard holds even when PATH has nothing but the stand-in.
+    lines.splice(1, 0, `n=0; if [ -f '${count}' ]; then read n < '${count}'; fi; n=$((n + 1)); echo "$n" > '${count}'`, 'if [ "$n" -ge 5 ]; then echo "LOOP" >&2; exit 99; fi');
+    writeFileSync(path.join(bin, "git"), lines.join("\n"), { mode: 0o755 });
+    const run = spawnSync("git", ["--version"], { cwd: root, encoding: "utf8", timeout: 15_000, env: { ...process.env, PATH: options.realOnPath === false ? bin : [bin, real, process.env["PATH"]].join(path.delimiter) } });
+    const standinRan = existsSync(standinMark);
+    const entries = Number(readFileSync(count, "utf8").trim());
+    rmSync(root, { recursive: true, force: true });
+    return { run, entries, standinRan };
+  }
+
+  it("runs the real git on PATH, and says so, when it knows its own folders", async () => {
+    const { run, entries } = await runGit(({ bin }) => ({ realGit: "git", standinDirs: [bin] }));
+    expect(entries).toBe(1);
+    expect(run.stdout.trim()).toBe("real git --version");
+    expect(run.stderr).toContain("would run saw's stand-in again, so it runs");
+  }, 20_000);
+
+  it("runs nothing, and says why, when an older configuration does not name its folders", async () => {
+    const { run, entries } = await runGit(() => ({ realGit: "git" }));
+    expect(entries).toBe(1);
+    expect(run.status).toBe(127);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toContain("would run saw's stand-in again, and no other was found");
+  }, 20_000);
+
+  it("does not start saw's own stand-in without a real git, since it would find this one on PATH", async () => {
+    const { run, entries, standinRan } = await runGit(({ real }) => ({ realGit: path.join(real, "removed-git"), standinDirs: [] }), { standin: true, realOnPath: false });
+    expect(entries).toBe(1);
+    expect(run.status).toBe(127);
+    expect(standinRan).toBe(false);
+    expect(run.stderr).toContain("is no longer there, and no other was found");
+  }, 20_000);
+
+  it("runs a recorded full path as before", async () => {
+    const { run, entries } = await runGit(({ real }) => ({ realGit: path.join(real, "git") }));
+    expect(entries).toBe(1);
+    expect(run.stdout.trim()).toBe("real git --version");
+    expect(run.stderr).toBe("");
+  }, 20_000);
 });
 
 describe("saw govern's report", () => {

@@ -4,6 +4,7 @@ import type { AuditDetails, AuditVerdict, HookStatus } from "../core/fix/actions
 import type { ScanOutcome } from "../core/scan/scan";
 import { strongest, type FolderVerdict } from "../core/scan/verdict";
 import type { Engine } from "./install/engine";
+import type { ScannedBy } from "../core/install/upgrade";
 
 /** An update that was checked before it was allowed to change the folder. */
 export interface HeldUpdate {
@@ -14,6 +15,8 @@ export interface HeldUpdate {
 }
 
 export type Settled = Exclude<ScanOutcome, { kind: "cancelled" }>;
+
+export { olderSawOf, type ScannedBy } from "../core/install/upgrade";
 
 export interface FolderState {
   folder: vscode.WorkspaceFolder;
@@ -38,6 +41,8 @@ export interface FolderState {
   /** Set while an incoming update is held. Cleared once that update is applied. */
   held: HeldUpdate | undefined;
   last: Settled | undefined;
+  /** The saw that gave `last`, and whether it was behind the pinned release then. */
+  scannedBy: ScannedBy | undefined;
 }
 
 export interface AuditRecord {
@@ -112,7 +117,7 @@ export class Model implements vscode.Disposable {
     const key = folder.uri.toString();
     let state = this.folders.get(key);
     if (!state) {
-      state = { folder, scanning: false, fixing: false, treating: undefined, deciding: false, progress: undefined, checking: false, checkStep: undefined, checkAbout: undefined, unheld: false, unheldFrom: undefined, held: undefined, last: undefined };
+      state = { folder, scanning: false, fixing: false, treating: undefined, deciding: false, progress: undefined, checking: false, checkStep: undefined, checkAbout: undefined, unheld: false, unheldFrom: undefined, held: undefined, last: undefined, scannedBy: undefined };
       this.folders.set(key, state);
     }
     return state;
@@ -178,9 +183,10 @@ export class Model implements vscode.Disposable {
     this.changed.fire();
   }
 
-  setOutcome(folder: vscode.WorkspaceFolder, outcome: Settled): void {
+  setOutcome(folder: vscode.WorkspaceFolder, outcome: Settled, scannedBy: ScannedBy): void {
     const state = this.get(folder);
     state.last = outcome;
+    state.scannedBy = scannedBy;
     state.scanning = false;
     state.progress = undefined;
     this.changed.fire();

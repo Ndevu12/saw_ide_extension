@@ -6,11 +6,12 @@ import { renderVerdict, verdictPage } from "../../core/chat/verdictPage";
 import type { Finding } from "../../core/scan/contract";
 import { plain } from "../../core/text";
 import type { AmendOutcome, AuditVerdict, FixOutcome, HookStatus } from "../../core/fix/actions";
+import { behindNotice } from "../../core/install/upgrade";
 import type { Feedback } from "../feedback/feedback";
 import type { Decide } from "../fix/decide";
 import type { Controller } from "../scan/controller";
 import { findingRange, findingUri } from "../scan/diagnostics";
-import type { FolderState, Model } from "../model";
+import { olderSawOf, type FolderState, type Model } from "../model";
 
 const AUDIT_LABEL: Record<AuditVerdict, string> = {
   "no-hazard": "safe to change them",
@@ -147,7 +148,7 @@ export class ChatView implements vscode.Disposable {
     const audit = this.model.machine.audit;
     const detail = hooksDetail(hooks);
     return {
-      engine: engineInput(engine),
+      engine: engineInput(engine, this.model.states().map(olderSawOf).find(Boolean)),
       auditing: this.model.machine.auditing,
       ...(this.model.machine.auditProgress ? { auditProgress: this.model.machine.auditProgress } : {}),
       ...(audit ? { auditLabel: AUDIT_LABEL[audit.verdict], auditTone: AUDIT_TONE[audit.verdict] } : {}),
@@ -303,6 +304,7 @@ function folderInput(state: FolderState, decide: Decide, fixes: FixRuns): ChatFo
     ...decisionOf(state, decide),
     ...cleanupOf(fixes.files(state.folder)),
     ...historyOf(fixes.history(state.folder)),
+    ...olderOf(state),
   };
 }
 
@@ -329,6 +331,11 @@ function cleanupOf(outcome: FixOutcome | undefined): { cleanup: ChatCleanup } | 
   };
 }
 
+function olderOf(state: FolderState): { olderSaw: string } | Record<string, never> {
+  const older = olderSawOf(state);
+  return older ? { olderSaw: behindNotice(older.version, older.behind) } : {};
+}
+
 function historyOf(outcome: AmendOutcome | "running" | undefined): { history: NonNullable<ChatFolderInput["history"]> } | Record<string, never> {
   if (!outcome) {
     return {};
@@ -349,9 +356,10 @@ function openings(state: FolderState): OpenTarget[] {
   return found;
 }
 
-function engineInput(engine: Model["engine"]): ChatMachineInput["engine"] {
+function engineInput(engine: Model["engine"], olderVerdict: ReturnType<typeof olderSawOf>): ChatMachineInput["engine"] {
   if (!engine || engine.kind === "ready") {
-    return { phase: "ready", canInstall: false };
+    const older = olderVerdict ?? (engine?.behind ? { version: engine.version, behind: engine.behind } : undefined);
+    return older ? { phase: "ready", canInstall: true, message: behindNotice(older.version, older.behind) } : { phase: "ready", canInstall: false };
   }
   if (engine.kind === "installing") {
     return { phase: "installing", canInstall: false };

@@ -107,6 +107,8 @@ export interface ChatFolderInput {
   /** Set while a fix is waiting, naming which act the question belongs to. */
   decision?: string;
   cleanup?: ChatCleanup;
+  /** Set when an older saw than the pinned release gave these results: what that means. */
+  olderSaw?: string;
   /** The last git history fix (`saw fix amend`) this window ran. */
   history?: "running" | "done" | "review" | "failed";
 }
@@ -149,6 +151,16 @@ export function chatPage(folders: ChatFolderInput[], machine: ChatMachineInput, 
   const cards: ChatCard[] = [];
   if (machine.engine.phase === "installing") {
     cards.push({ title: "Installing saw", tone: "neutral", live: "Installing. Folders are scanned when it is ready.", links: [{ act: "log", label: "Show log", tone: "secondary" }] });
+  } else if (machine.engine.phase === "ready" && machine.engine.message) {
+    // An older saw than the pinned release gives the results below.
+    cards.push({
+      title: "An older saw is scanning",
+      status: "older saw",
+      tone: "warn",
+      text: machine.engine.message,
+      ...(machine.engine.canInstall ? { primary: { act: "install", label: "Install or Repair saw", tone: "primary" } } : {}),
+      links: [{ act: "log", label: "Show log", tone: "secondary" }],
+    });
   } else if (machine.engine.phase === "unavailable") {
     cards.push({
       title: "saw cannot run",
