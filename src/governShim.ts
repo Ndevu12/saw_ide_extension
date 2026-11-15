@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 
 import { applyArgs, prepareArgs, readApply, readPrepare, UNCHECKED_CLONE, type GovernConfig, type GovernPhase } from "./core/govern/contract";
@@ -154,13 +154,25 @@ function withoutConfigInjection(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return Object.fromEntries(Object.entries(source).filter(([key]) => !injectsConfig(key)));
 }
 
+/** How many entries a folder has, or undefined when it does not exist. */
+function entriesIn(dir: string): number | undefined {
+  try {
+    return readdirSync(dir).length;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether a clone left a checkout: a new folder, or files in a folder that was empty. */
+function landed(before: number | undefined, now: number | undefined): boolean {
+  return now !== undefined && now > 0 && (before === undefined || before === 0);
+}
+
 function runReal(program: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env, after?: () => void): void {
   const child = spawn(program, args, { stdio: "inherit", shell: false, env });
   child.on("error", () => process.exit(127));
   child.on("exit", (code, signal) => {
-    if (code === 0 && !signal) {
-      after?.();
-    }
+    after?.();
     if (signal) {
       process.kill(process.pid, signal);
       return;
@@ -186,17 +198,23 @@ async function main(): Promise<void> {
   }
   const action = plan(config, tool, args, process.cwd(), { env: process.env, aliasOf: aliasOf(config) });
   const scanAfter = action.kind === "passthrough" ? action.scanAfter : undefined;
-  // Only after a clone that worked: a failed one landed nothing to scan or to warn about.
-  const after = scanAfter ? () => notice(config, scanAfter, "finished", [UNCHECKED_CLONE]) : undefined;
+  const landsAt = action.kind === "passthrough" ? action.landsAt : undefined;
+  // Judged by what landed, not by the exit code: a clone can fail partway and leave its checkout.
+  const before = landsAt ? entriesIn(landsAt) : undefined;
+  const after = scanAfter && landsAt
+    ? () => {
+      if (landed(before, entriesIn(landsAt))) {
+        notice(config, scanAfter, "finished", [UNCHECKED_CLONE]);
+      }
+    }
+    : undefined;
   if (config.standin && action.kind === "passthrough") {
     runPlaced(config, tool, args, config.holdingRoot, () => undefined, (code, spawnFailed) => {
       if (spawnFailed) {
         runRealOrExit(config, tool, args, after);
         return;
       }
-      if (code === 0) {
-        after?.();
-      }
+      after?.();
       process.exit(code);
     });
     return;

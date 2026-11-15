@@ -6,7 +6,8 @@ import * as path from "node:path";
 export type Tool = "git" | "gh";
 
 const GIT_VALUE = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env", "--exec-path"]);
-const OPTION_VALUE = new Set(["-b", "-B", "-c", "-C", "-m", "--orphan", "--recurse-submodules", "--conflict"]);
+/** checkout and switch options that take the next word. `-m` (merge) and `--recurse-submodules` take none. */
+const OPTION_VALUE = new Set(["-b", "-B", "-c", "-C", "--orphan", "--conflict"]);
 const UNDO = new Set(["--abort", "--quit"]);
 
 export interface GitInvocation {

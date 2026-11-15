@@ -49,6 +49,20 @@ describe("the folder a git command acts on", () => {
   });
 });
 
+describe("checkout and switch options", () => {
+  it("hold a merge checkout or switch, since -m takes no value", () => {
+    expect(plan(config, "git", ["checkout", "-qm", "feature"], "/work/app")).toMatchObject({ kind: "hold" });
+    expect(plan(config, "git", ["checkout", "-m", "feature"], "/work/app")).toMatchObject({ kind: "hold" });
+    expect(plan(config, "git", ["switch", "-qm", "feature"], "/work/app")).toMatchObject({ kind: "hold" });
+    expect(plan(config, "git", ["checkout", "--recurse-submodules", "main"], "/work/app")).toMatchObject({ kind: "hold" });
+  });
+
+  it("still pass a new branch through, alone or in a cluster", () => {
+    expect(plan(config, "git", ["checkout", "-qb", "topic"], "/work/app")).toMatchObject({ kind: "passthrough" });
+    expect(plan(config, "git", ["switch", "-c", "topic"], "/work/app")).toMatchObject({ kind: "passthrough" });
+  });
+});
+
 describe("git aliases", () => {
   it("are never looked up for a command git ships", () => {
     expect(mayBeAlias("status")).toBe(false);
@@ -108,7 +122,7 @@ describe("a clone into an open folder", () => {
   });
 
   it("runs, and has the folder scanned once it has, since saw cannot hold a clone", () => {
-    expect(plan(config, "git", ["clone", "https://example.com/o/lib.git"], "/work/app")).toEqual({ kind: "passthrough", program: "/usr/bin/git", scanAfter: "/work/app" });
+    expect(plan(config, "git", ["clone", "https://example.com/o/lib.git"], "/work/app")).toEqual({ kind: "passthrough", program: "/usr/bin/git", scanAfter: "/work/app", landsAt: "/work/app/lib" });
     expect(plan(config, "git", ["clone", "https://example.com/o/lib.git", "/work/app/vendor/lib"], "/tmp")).toMatchObject({ scanAfter: "/work/app" });
     expect(plan(config, "git", ["clone", "https://example.com/o/lib.git"], "/tmp")).toEqual({ kind: "passthrough", program: "/usr/bin/git" });
   });

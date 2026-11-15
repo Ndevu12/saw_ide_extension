@@ -344,7 +344,7 @@ describe.runIf(process.platform !== "win32")("the stand-in and a recorded bare g
     }
   }, 20_000);
 
-  it("warns about an unchecked clone only when the clone landed", async () => {
+  it("warns about an unchecked clone whenever files landed, whatever git's exit code", async () => {
     const root = realpathSync(mkdtempSync(path.join(tmpdir(), "saw-standin-")));
     try {
       const open = path.join(root, "app");
@@ -353,16 +353,20 @@ describe.runIf(process.platform !== "win32")("the stand-in and a recorded bare g
       await build({ entryPoints: [path.resolve(__dirname, "../../src/governShim.ts")], bundle: true, platform: "node", format: "cjs", outfile: shim, logLevel: "silent" });
       const results = path.join(root, "res");
       const configPath = path.join(root, "config.json");
-      const cloneWith = (exitCode: number) => {
-        const realGit = path.join(root, `git-${exitCode}`);
-        writeFileSync(realGit, `#!/bin/sh\nexit ${exitCode}\n`, { mode: 0o755 });
+      // A fake git that leaves a checkout or not, and exits as told.
+      const cloneWith = (exitCode: number, leaves: boolean) => {
+        rmSync(path.join(open, "lib"), { recursive: true, force: true });
+        const realGit = path.join(root, `git-${exitCode}-${leaves}`);
+        writeFileSync(realGit, `#!/bin/sh\n${leaves ? `mkdir -p '${path.join(open, "lib")}' && : > '${path.join(open, "lib", "run.sh")}'\n` : ""}exit ${exitCode}\n`, { mode: 0o755 });
         writeFileSync(configPath, JSON.stringify({ enabled: true, saw: "/usr/bin/true", realGit, realGh: "", timeoutMs: 5000, folders: [open], holdingRoot: path.join(root, "hold"), markerDir: path.join(root, "mark"), resultDir: results, progress: false, standinDirs: [] }));
         rmSync(results, { recursive: true, force: true });
         const run = spawnSync(process.execPath, [shim, "--config", configPath, "--tool", "git", "--", "clone", "https://example.invalid/o/lib.git"], { cwd: open, encoding: "utf8", timeout: 15_000 });
         return { status: run.status, noticed: existsSync(path.join(results, `${folderKey(open)}.json`)) };
       };
-      expect(cloneWith(128)).toEqual({ status: 128, noticed: false });
-      expect(cloneWith(0)).toEqual({ status: 0, noticed: true });
+      expect(cloneWith(128, false)).toEqual({ status: 128, noticed: false });
+      expect(cloneWith(0, true)).toEqual({ status: 0, noticed: true });
+      // Failed partway, as when a submodule or LFS checkout fails: the files are there, so the warning is too.
+      expect(cloneWith(1, true)).toEqual({ status: 1, noticed: true });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

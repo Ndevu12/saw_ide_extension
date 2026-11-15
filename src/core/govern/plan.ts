@@ -20,6 +20,8 @@ export interface Passthrough {
   program: string;
   /** An open folder a clone lands in. saw cannot hold a clone, so the folder is scanned once it has run. */
   scanAfter?: string;
+  /** Where that clone puts its checkout, so the stand-in can see whether anything landed. */
+  landsAt?: string;
 }
 
 /** What the stand-in knows beyond the command line. */
@@ -28,7 +30,7 @@ export type PlanContext = AliasContext;
 /** What the stand-in does with one command: run the real program, or ask saw to check it first. */
 export function plan(config: GovernConfig, tool: Tool, args: readonly string[], cwd: string, context: PlanContext = {}): Hold | Passthrough {
   const program = tool === "git" ? config.realGit : config.realGh;
-  const through = (scanAfter?: string): Passthrough => ({ kind: "passthrough", program, ...(scanAfter ? { scanAfter } : {}) });
+  const through = (scanAfter?: string, landsAt?: string): Passthrough => ({ kind: "passthrough", program, ...(scanAfter && landsAt ? { scanAfter, landsAt } : {}) });
   if (!config.enabled || !config.saw || !program) {
     return through();
   }
@@ -43,7 +45,7 @@ export function plan(config: GovernConfig, tool: Tool, args: readonly string[], 
   }
   const landing = cloneTarget(expanded.command);
   if (landing) {
-    return through(enclosingFolder(config.folders, landing));
+    return through(enclosingFolder(config.folders, landing), landing);
   }
   const { directory, gitDirFolder } = expanded.command;
   // The work tree, or the open folder whose git directory the command changes from outside it.
