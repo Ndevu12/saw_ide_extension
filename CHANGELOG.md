@@ -11,6 +11,7 @@
 - The machine is three short rows. A row opens its details. A row has a button only when it needs you, such as Repair or Check.
 - Chat ends with **All details** and **What these results mean**. Its sentences no longer repeat saw's name.
 - The infected and could-not-scan alerts offer **See What Was Found**, which opens the Scan results tab.
+- Every details document opens in a tab of its own, named for what it is, such as **Full details · payments-api** or **Git history fix details · payments-api**, in the same colors as Scan results. It no longer opens as a Markdown preview, so the tab does not say Preview or end in .md. It updates live while saw works, and a link opens in the browser.
 - The saw sidebar is Chat alone. The Verdict list and the Decide pane are gone from it: the Scan results tab and the Your choice tab beside the change hold what they showed.
 
 ## [0.6.1] - 2026-11-13

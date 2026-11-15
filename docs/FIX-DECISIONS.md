@@ -77,5 +77,5 @@ The fix finishes as it does now. The report lists the choices made in this fix, 
 you to decide** still lists anything that was not answered. **Open Changes** is still the diff of
 the branch saw prepared.
 
-The preview stays in this view. Agents are told the verdict, not the contents of a file saw is
+What saw shows of a file stays in the editor. Agents are told the verdict, not the contents of a file saw is
 unsure about, and the editor's chat is not where these questions are asked or answered.

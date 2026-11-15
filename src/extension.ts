@@ -37,7 +37,8 @@ export function activate(context: vscode.ExtensionContext): SawApi {
   const diagnostics = new Diagnostics(log);
   const alerts = new Alerts();
   const controller = new Controller(model, engines, diagnostics, alerts, readSettings, log);
-  const reports = new Reports(model, context.storageUri?.fsPath, context.globalStorageUri.fsPath, log);
+  const icon = { light: vscode.Uri.joinPath(context.extensionUri, "media", "verdict-light.svg"), dark: vscode.Uri.joinPath(context.extensionUri, "media", "verdict-dark.svg") };
+  const reports = new Reports(model, context.storageUri?.fsPath, context.globalStorageUri.fsPath, log, icon);
   const cursorGuard = new CursorAgentGuard(model, readSettings, context.globalStorageUri.fsPath, context.asAbsolutePath("dist/cursor-hook.js"), log);
   const decide = new Decide(model, log);
   const actions = new Actions(model, engines, controller, readSettings, log, context.globalState, reports, decide);
@@ -72,7 +73,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
       },
       decide,
       feedback,
-      { light: vscode.Uri.joinPath(context.extensionUri, "media", "verdict-light.svg"), dark: vscode.Uri.joinPath(context.extensionUri, "media", "verdict-dark.svg") },
+      icon,
     ),
     new StatusBar(model),
     new SawMcpRegistration(model, readSettings, log),

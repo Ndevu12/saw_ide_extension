@@ -5,11 +5,11 @@ import { block, inline, prose, webLink } from "./markdown";
 import type { ScanOutcome } from "../scan/scan";
 import type { FolderVerdict } from "../scan/verdict";
 
-// The reports the editor shows in a Markdown preview, built from what saw reported. A report is
-// built twice: for the preview, with the evidence saw quoted, and for the copy the extension keeps
+// The reports the editor shows in a details tab, built from what saw reported. A report is
+// built twice: for the tab, with the evidence saw quoted, and for the copy the extension keeps
 // in its own storage, without it.
 
-export type Copy = "preview" | "saved";
+export type Copy = "shown" | "saved";
 export type SettledScan = Exclude<ScanOutcome, { kind: "cancelled" }>;
 
 /** A saw command the operator started, as it runs and once it has finished. */
@@ -24,7 +24,7 @@ export interface CommandRun {
 }
 
 const AUDIT_HINT =
-  "Before you change any password or token, run **saw: Audit This Machine**: changing them while something on the machine still watches them can set off code that deletes your files.";
+  "Before you change any password or token, use **Check** under **Before you change passwords** in Chat, or run **saw: Check Before Changing Passwords**: changing them while something on the machine still watches them can set off code that deletes your files.";
 
 export function when(ms: number): string {
   return `${new Date(ms).toISOString().slice(0, 19).replace("T", " ")} UTC`;
@@ -39,7 +39,7 @@ function sawVersion(version: string | undefined): string {
 }
 
 function footer(copy: Copy, source: string, learn: { title: string; url: string }): string {
-  const evidence = copy === "preview" ? " Evidence is shown here only: the copy the extension keeps withholds it." : " This is the copy the extension keeps: evidence is withheld.";
+  const evidence = copy === "shown" ? " Evidence is shown here only: the copy the extension keeps withholds it." : " This is the copy the extension keeps: evidence is withheld.";
   return `---\n\nLearn more in saw's documentation: [${learn.title}](${learn.url}).\n\n*Built by the saw extension from ${source}. Nothing from the folder ran to make it.${evidence}*`;
 }
 
@@ -305,11 +305,11 @@ export function fixReport(input: FixReportInput, copy: Copy): string {
   if (input.decisions?.length) {
     out.push("## What you decided", "", ...input.decisions.map((line) => `- ${prose(line, 400)}`), "");
   }
+  const finished = run.finishedAt === undefined ? "" : `, took ${seconds(run.finishedAt - run.startedAt)}`;
+  out.push(`Folder ${inline(input.folderPath, 400)}. Started ${when(run.startedAt)}${finished}${sawVersion(input.sawVersion)}.`, "");
   if (outcome?.kind === "prepared" && outcome.details) {
     out.push(...fixDetails(outcome.details));
   }
-  const finished = run.finishedAt === undefined ? "" : `, took ${seconds(run.finishedAt - run.startedAt)}`;
-  out.push(`- Folder: ${inline(input.folderPath, 400)}`, `- Started ${when(run.startedAt)}${finished}${sawVersion(input.sawVersion)}`, "");
   out.push("## saw's report", "", said(run), "", footer(copy, "`saw fix --json` and saw's own report", { title: "saw fix", url: DOCS.fix }));
   return out.join("\n");
 }
@@ -356,7 +356,7 @@ export function amendReport(input: AmendReportInput, copy: Copy): string {
     out.push("## What you decided", "", ...input.decisions.map((line) => `- ${prose(line, 400)}`), "");
   }
   const finished = run.finishedAt === undefined ? "" : `, took ${seconds(run.finishedAt - run.startedAt)}`;
-  out.push(`- Folder: ${inline(input.folderPath, 400)}`, `- Started ${when(run.startedAt)}${finished}${sawVersion(input.sawVersion)}`, "");
+  out.push(`Folder ${inline(input.folderPath, 400)}. Started ${when(run.startedAt)}${finished}${sawVersion(input.sawVersion)}.`, "");
   out.push("## saw's report", "", said(run), "", footer(copy, "`saw fix amend` and saw's own report", { title: "saw fix amend", url: DOCS.amend }));
   return out.join("\n");
 }
@@ -387,7 +387,7 @@ const AUDIT_ADVICE: Record<AuditVerdict, string> = {
   "to-confirm": "saw found nothing that makes changing credentials unsafe, provided the items below are yours. If any is not, treat this as an incident: do not change anything yet.",
   "rotation-unsafe": "Something on this machine still watches your credentials. Act on saw's report below first, then audit again before you change anything.",
   incomplete: "saw could not read all of this machine, so changing credentials is not known to be safe. saw's report below says what it could not read.",
-  failed: "This machine was not checked. saw's report below may say why; run **saw: Audit This Machine** again.",
+  failed: "This machine was not checked. saw's report below may say why; run **saw: Check Before Changing Passwords** again.",
 };
 
 function auditFinding(f: AuditDetails["findings"][number]): string[] {
@@ -500,7 +500,7 @@ export function watchReport(input: WatchReportInput, copy: Copy): string {
   const { run } = input;
   if (!run) {
     out.push(
-      "This machine's watcher has not been read from this editor yet. Run **saw: Open Watch Report**.",
+      "This machine's watcher has not been read from this editor yet. Run **saw: Open Background Checks**.",
       "",
       "That report says whether `saw watch` is in place, what is still open, and what happened since the last report.",
       "",

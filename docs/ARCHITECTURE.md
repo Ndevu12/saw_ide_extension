@@ -50,7 +50,7 @@ The whole folder is always scanned, because saw judges a file by where it sits:
 
 ## How an action runs
 
-**Fix…**, **Audit This Machine** and the hook commands run saw in the background behind a
+**Fix Infection in Files…**, **Fix Infection in Git History…**, **Check Before Changing Passwords** and the hook commands run saw in the background behind a
 cancellable progress notification. saw's output is collected as it arrives, and the action's
 report follows it live. When saw finishes, **actions** reads its result: the JSON where saw writes
 it, otherwise its exit status and its own words. A fix ends with a rescan of the folder.
@@ -132,11 +132,13 @@ verdict never comes from progress.
 - **Scanned text stays literal.** File names, descriptions, evidence and saw's output can come from
   whoever wrote the scanned folder. They reach Markdown only as code spans, fenced blocks or fully
   escaped text, so they cannot form a link, an image or HTML. The only links are to plain https
-  pages.
+  pages. A report opens in the extension's own details tab, drawn by markdown-it with raw HTML off,
+  under a policy that loads nothing from outside the page; a click on a link opens it in the browser
+  only when it is https.
 - **Reports live in the extension's own storage, never in the project.** Folder reports go in
   workspace storage, keyed by a hash of the folder; machine reports (audit, hooks, watch) go in global
   storage. A cloned repository cannot plant or fake a report. The kept copies withhold evidence;
-  the preview shows it from memory.
+  the details tab shows it from memory.
 - **Agents get the verdict, not the evidence.** `saw_folderVerdict` answers from the model after
   any due scan has run, and fails closed: with no current answer, it says stop. It leaves out
   evidence and flattens file names, so a scanned file cannot put text into an agent's prompt. It is

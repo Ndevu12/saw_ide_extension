@@ -155,12 +155,12 @@ if (process.env.SAW_REMOTE_ACTIONS === "1" && verdict === "Infected") {
       actions.alert = await workbench.dialog();
     }
     actions.alertDismissed = await workbench.click("Cancel");
-    await workbench.run("saw: Audit This Machine");
+    await workbench.run("saw: Check Before Changing Passwords");
     await shot("1-audit-started");
     actions.audit = await finished(() => globalReport("audit"), (t) => t.includes("## saw's report") && !t.includes("## Auditing now"));
 
     await shot("2-audit-finished");
-    await workbench.run("saw: Install Scan-on-Clone Hooks");
+    await workbench.run("saw: Turn On Checks on Clone and Pull");
     await shot("3-hooks-started");
     actions.hooks = await finished(() => globalReport("hooks"), (t) => t.includes("Last `saw hook install`") && !t.includes("running now"));
     // What saw itself says on the server, apart from what the extension shows.
@@ -168,9 +168,9 @@ if (process.env.SAW_REMOTE_ACTIONS === "1" && verdict === "Infected") {
     actions.hooks &&= { ...actions.hooks, sawSays: sawSays.split("\n").find((line) => line.startsWith("scan-on-clone:")) ?? null };
 
     await shot("4-hooks-finished");
-    await workbench.run("saw: Fix Folder…");
+    await workbench.run("saw: Fix Infection in Files…");
     await shot("5-fix-asked");
-    actions.fixConfirmed = await workbench.click("Fix");
+    actions.fixConfirmed = await workbench.click("Fix Files");
     actions.fix = await finished(fixReportOf, (t) => t.includes("## saw's report") && !t.includes("## Fixing now"));
     actions.fix &&= {
       ...actions.fix,

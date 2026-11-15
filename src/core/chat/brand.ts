@@ -75,6 +75,31 @@ export function pageCss(): string {
     ${sharedCss()}
     ${chatCss()}
     ${verdictCss()}
+    ${detailsCss()}
+  `;
+}
+
+/** A details tab: saw's report as a document, in the same colors. */
+function detailsCss(): string {
+  return `
+    .details { max-width: 860px; margin: 0 auto; font-size: 13.5px; line-height: 1.6; }
+    .details h1 { margin: 0 0 18px; padding-bottom: 14px; border-bottom: 1px solid ${EDGE}; font-size: 22px; color: ${WHITE}; overflow-wrap: anywhere; }
+    .details h2 { margin: 26px 0 8px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: ${MINT}; }
+    .details h3 { margin: 18px 0 6px; font-size: 14px; color: ${WHITE}; }
+    .details p, .details li { overflow-wrap: anywhere; }
+    .details strong { color: ${WHITE}; }
+    .details a { color: ${CYAN}; text-decoration: none; }
+    .details a:hover { text-decoration: underline; }
+    .details code { font-family: var(--vscode-editor-font-family, monospace); font-size: 12.5px; color: ${CYAN}; background: #0e1c18; border: 1px solid #16302c; border-radius: 4px; padding: 0 4px; }
+    .details pre { margin: 8px 0 14px; padding: 12px 14px; background: ${CARD}; border: 1px solid ${EDGE}; border-radius: 6px; overflow-x: auto; }
+    .details pre code { display: block; padding: 0; border: none; background: none; color: ${INK}; white-space: pre; }
+    .details blockquote { margin: 0 0 14px; padding: 8px 12px; border-left: 2px solid ${AMBER}; background: #1d1a0e; }
+    .details blockquote p { margin: 0; }
+    .details hr { border: none; border-top: 1px solid ${EDGE}; margin: 24px 0 14px; }
+    .details hr ~ p { color: ${DIM}; font-size: 12px; }
+    .details table { border-collapse: collapse; margin: 8px 0 14px; font-size: 12.5px; }
+    .details th, .details td { border: 1px solid ${EDGE}; padding: 5px 9px; text-align: left; vertical-align: top; }
+    .details th { color: ${WHITE}; background: ${CARD}; }
   `;
 }
 

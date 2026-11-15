@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 
 import type { AmendOutcome, FixOutcome } from "../../core/fix/actions";
 import { prose } from "../../core/report/markdown";
+import { detailsPage, linkTarget } from "../../core/report/page";
 import { amendReport, auditReport, fixReport, hooksReport, scanReport, watchReport, when, type CommandRun, type Copy } from "../../core/report/reports";
 import type { Model, Settled } from "../model";
 
@@ -19,6 +20,7 @@ export type Treatment = "files" | "history";
 const FIXES_KEPT = 5;
 
 const MACHINE_TITLE = { audit: "Before you change passwords", hooks: "Checks on clone and pull", watch: "Background checks" } as const;
+const FOLDER_TITLE = { scan: "Full details", fix: "Files fix details", amend: "Git history fix details" } as const;
 const REFRESH_MS = 300;
 
 interface FixRecord {
@@ -42,8 +44,16 @@ function label(name: string): string {
   return name.replace(/[^\w.-]+/g, "_").slice(0, 60) || "folder";
 }
 
+/** A details tab and the last page it was given, so a redraw that changes nothing is skipped. */
+interface DetailsTab {
+  panel: vscode.WebviewPanel;
+  uri: vscode.Uri;
+  nonce: string;
+  html?: string;
+}
+
 /**
- * saw's reports as read-only Markdown documents, opened in the editor's Markdown preview. Each is
+ * saw's reports as read-only Markdown documents, each shown in a details tab of its own. Each is
  * built from what the extension knows now, so it follows a scan or a command as it runs. A copy
  * without evidence is kept in the extension's own storage, never in the project, and shown when
  * this window has nothing newer.
@@ -53,6 +63,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
   readonly onDidChangeFile = this.changed.event;
   /** Reports something has read, with the time each last changed, so they can be told to re-read. */
   private readonly watched = new Map<string, { uri: vscode.Uri; mtime: number }>();
+  private readonly tabs = new Map<string, DetailsTab>();
   private readonly fixes = new Map<string, FixRecord>();
   private readonly amends = new Map<string, AmendRecord>();
   private readonly savedScans = new Map<string, Settled>();
@@ -70,6 +81,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     private readonly workspaceStorage: string | undefined,
     private readonly globalStorage: string,
     private readonly log: vscode.LogOutputChannel,
+    private readonly icon?: { light: vscode.Uri; dark: vscode.Uri },
   ) {
     this.subscriptions = [
       vscode.workspace.registerFileSystemProvider(REPORT_SCHEME, this, { isReadonly: true, isCaseSensitive: true }),
@@ -119,8 +131,51 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     return (await vscode.window.showQuickPick(items, { placeHolder: "Details to open" }))?.uri;
   }
 
+  /** Open a report in its own tab, or bring that tab forward. */
   async open(uri: vscode.Uri): Promise<void> {
-    await vscode.commands.executeCommand("markdown.showPreview", uri);
+    const key = uri.toString();
+    const open = this.tabs.get(key);
+    if (open) {
+      open.panel.reveal(vscode.ViewColumn.Active);
+      return;
+    }
+    const panel = vscode.window.createWebviewPanel("saw.details", this.title(uri), vscode.ViewColumn.Active, { enableScripts: true });
+    if (this.icon) {
+      panel.iconPath = this.icon;
+    }
+    const tab: DetailsTab = { panel, uri, nonce: Math.random().toString(36).slice(2) };
+    this.tabs.set(key, tab);
+    const messages = panel.webview.onDidReceiveMessage((message: { link?: unknown }) => {
+      const target = linkTarget(message?.link);
+      if (target) {
+        void vscode.env.openExternal(vscode.Uri.parse(target));
+      }
+    });
+    const gone = panel.onDidDispose(() => {
+      messages.dispose();
+      gone.dispose();
+      if (this.tabs.get(key) === tab) {
+        this.tabs.delete(key);
+      }
+    });
+    await this.draw(tab);
+  }
+
+  private title(uri: vscode.Uri): string {
+    const [, kind, key] = uri.path.split("/") as [string, Kind, string];
+    if (kind === "audit" || kind === "hooks" || kind === "watch") {
+      return MACHINE_TITLE[kind];
+    }
+    const folder = (vscode.workspace.workspaceFolders ?? []).find((f) => folderKey(f) === key);
+    return folder ? `${FOLDER_TITLE[kind]} · ${folder.name}` : FOLDER_TITLE[kind];
+  }
+
+  private async draw(tab: DetailsTab): Promise<void> {
+    const html = detailsPage(await this.content(tab.uri), tab.nonce);
+    if (tab.html !== html && this.tabs.get(tab.uri.toString()) === tab) {
+      tab.html = html;
+      tab.panel.webview.html = html;
+    }
   }
 
   // --- what the actions tell it ---------------------------------------------------------------------
@@ -248,7 +303,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
     if (saved) {
       return saved;
     }
-    return this.render(kind, folder, "preview");
+    return this.render(kind, folder, "shown");
   }
 
   /** The report from this window's own state, or undefined when the window has none yet. */
@@ -257,20 +312,20 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
       case "scan": {
         if (!folder) return "# saw scan\n\nThis folder is no longer open in this window.";
         const state = this.model.get(folder);
-        return state.last || state.scanning || state.fixing ? this.render(kind, folder, "preview") : undefined;
+        return state.last || state.scanning || state.fixing ? this.render(kind, folder, "shown") : undefined;
       }
       case "fix":
         if (!folder) return "# saw fix\n\nThis folder is no longer open in this window.";
-        return this.fixes.has(folderKey(folder)) ? this.render(kind, folder, "preview") : undefined;
+        return this.fixes.has(folderKey(folder)) ? this.render(kind, folder, "shown") : undefined;
       case "amend":
         if (!folder) return "# saw fix amend\n\nThis folder is no longer open in this window.";
-        return this.amends.has(folderKey(folder)) ? this.render(kind, folder, "preview") : undefined;
+        return this.amends.has(folderKey(folder)) ? this.render(kind, folder, "shown") : undefined;
       case "audit":
-        return this.auditRun ? this.render(kind, undefined, "preview") : undefined;
+        return this.auditRun ? this.render(kind, undefined, "shown") : undefined;
       case "hooks":
-        return this.model.machine.hooks || this.hooksChange ? this.render(kind, undefined, "preview") : undefined;
+        return this.model.machine.hooks || this.hooksChange ? this.render(kind, undefined, "shown") : undefined;
       case "watch":
-        return this.watchRun ? this.render(kind, undefined, "preview") : undefined;
+        return this.watchRun ? this.render(kind, undefined, "shown") : undefined;
     }
   }
 
@@ -345,6 +400,9 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
       });
       if (events.length) {
         this.changed.fire(events);
+      }
+      for (const tab of this.tabs.values()) {
+        void this.draw(tab);
       }
     }, REFRESH_MS);
   }
@@ -428,6 +486,9 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
   }
 
   dispose(): void {
+    for (const tab of this.tabs.values()) {
+      tab.panel.dispose();
+    }
     if (this.timer) {
       clearTimeout(this.timer);
     }
