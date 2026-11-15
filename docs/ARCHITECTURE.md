@@ -21,9 +21,9 @@ src/
   editor/               VS Code adapters, grouped the same way
     model · settings · present
     scan/               controller, triggers, diagnostics
-    fix/                Fix…, the Decide tab, diffs
+    fix/                Clean this folder, the Your choice tab, diffs
     install/            find saw, install it, the install lock
-    view/               the Chat sidebar, the verdict tab, status bar, alerts, reports
+    view/               the Chat sidebar, the Scan results tab, status bar, alerts, reports
     feedback/           opens the rating, star, and issue pages; stores the dismissal
     agent/              the language-model tool, MCP registration, the Cursor guard
 test/
@@ -58,7 +58,7 @@ it, otherwise its exit status and its own words. A fix ends with a rescan of the
 Installing saw never asks, because it changes nothing the operator owns. Fixing always asks: it
 deletes files from the checkout, so it runs only from an explicit **Fix…** and a modal that says
 what will change. The extension never passes `--pr`, so nothing is pushed or published. When saw
-announces `fix.ask.json`, the fix also passes `--ask=jsonl` and the Decide tab answers what a
+announces `fix.ask.json`, the fix also passes `--ask=jsonl` and the Your choice tab answers what a
 terminal would ask. How that looks is specified in [FIX-DECISIONS.md](FIX-DECISIONS.md).
 
 ## Finding and installing saw

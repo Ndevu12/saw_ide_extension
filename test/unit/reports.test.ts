@@ -47,14 +47,14 @@ describe("Markdown from scanned data", () => {
 describe("the scan report", () => {
   it("leads with the verdict and what to do, then the findings strongest first", () => {
     const text = scanReport(input(infected()), "preview");
-    expect(text).toMatch(/^# saw scan: web\n/);
+    expect(text).toMatch(/^# Full details: web\n/);
     expect(text).toContain("## Infected\n\nMalicious code is in this folder.");
     expect(text).toContain("- Scanned at `2026-10-19T00:00:00Z` in 1.2 s with saw `0.13.0`");
-    expect(text).toContain("- 2 findings: 1 confirmed, 1 to review, 0 residue; 0 dependency advisories");
-    expect(text).toContain("Use **Fix the checkout** on the folder's card in Chat");
+    expect(text).toContain("- 2 findings: 1 confirmed, 1 to review, 0 traces left; 0 dependency advisories");
+    expect(text).toContain("Use **Clean this folder** on the folder's card in Chat");
     expect(text.indexOf("### Confirmed (1)")).toBeLessThan(text.indexOf("### To review by hand (1)"));
     expect(text).toContain("**critical** · `.vscode/tasks.json` · `vscode-task-runs-font`");
-    expect(text).toContain("**Fix…** removes this.");
+    expect(text).toContain("**Clean this folder** removes this.");
     expect(text).toContain("saw does not remove this itself: deal with it by hand.");
   });
 
@@ -118,7 +118,7 @@ describe("the command reports", () => {
     const text = auditReport({ run, verdict: "rotation-unsafe", sentence: "Rotation safety: UNSAFE — a watcher is running", sawVersion: "0.13.0" }, "preview");
     expect(text).toContain("## Do not change your passwords or tokens yet");
     expect(text).toContain("> Rotation safety\\: UNSAFE — a watcher is running");
-    expect(auditReport({ run: undefined, verdict: undefined, sentence: undefined, sawVersion: undefined }, "preview")).toContain("has not been audited");
+    expect(auditReport({ run: undefined, verdict: undefined, sentence: undefined, sawVersion: undefined }, "preview")).toContain("has not been checked");
   });
 
   it("fix: where the clean-up is, what it removed, and work it could not save", () => {
@@ -152,18 +152,18 @@ describe("the command reports", () => {
 
   it("hooks: the state, what to run, and the last install", () => {
     expect(hooksReport({ status: { kind: "installed", events: ["post-checkout"], problems: [] }, checkedAt: 0, change: undefined, sawVersion: undefined }, "preview"))
-      .toContain("## In place");
+      .toContain("## On");
     const text = hooksReport({ status: { kind: "installed", events: [], problems: ["core.hooksPath points elsewhere"] }, checkedAt: 0, change: { ...run, subcommand: "repair" }, sawVersion: undefined }, "preview");
-    expect(text).toContain("## Need repair");
+    expect(text).toContain("## Needs repair");
     expect(text).toContain("- core\\.hooksPath points elsewhere");
     expect(text).toContain("## Last `saw hook repair`");
     expect(hooksReport({ status: { kind: "not-installed" }, checkedAt: undefined, change: undefined, sawVersion: undefined }, "preview"))
-      .toContain("Install Scan-on-Clone Hooks");
+      .toContain("Turn On Checks on Clone and Pull");
   });
 
   it("watch: saw's status, kept as text", () => {
     const text = watchReport({ run: { ...run, said: "Watch is in place.\nSince the last report: nothing arrived.\n<img>" }, sawVersion: undefined }, "preview");
-    expect(text).toContain("# saw watch");
+    expect(text).toContain("# Background checks");
     expect(text).toContain("## What the watcher reported");
     expect(text).toContain("Watch is in place.");
     expect(text).toContain("<img>");

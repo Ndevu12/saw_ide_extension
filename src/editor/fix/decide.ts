@@ -96,10 +96,10 @@ export class Decide implements vscode.Disposable {
       return undefined;
     }
     const specialty = this.question.kind === "file"
-      ? "This question is about amending history. The answer can rewrite the commits that carried this file. Fixing the checkout does not ask it."
+      ? "This choice is part of cleaning past commits. Your answer can rewrite the commits that carried this file."
       : this.question.kind === "package"
-        ? "This question is part of fixing the checkout. It decides whether a known-malicious package stays declared. It does not rewrite past commits."
-        : "This question is part of fixing the checkout. It decides which files added beside the malicious code stay. It does not rewrite past commits.";
+        ? "This choice is part of cleaning this folder. It decides whether a known-malicious package stays listed. Past commits are not changed."
+        : "This choice is part of cleaning this folder. It decides which files added alongside the malicious code stay. Past commits are not changed.";
     return { folder: this.folder, specialty };
   }
 
@@ -166,7 +166,7 @@ export class Decide implements vscode.Disposable {
   }
 
   private tabTitle(): string {
-    return this.folder ? `Decide · ${this.folder.name}` : "Decide";
+    return this.folder ? `Your choice · ${this.folder.name}` : "Your choice";
   }
 
   private async reopen(): Promise<void> {
@@ -334,7 +334,7 @@ export class Decide implements vscode.Disposable {
 
   private idleHtml(): string {
     const done = this.log.map((line) => `<li>${escape(line)}</li>`).join("");
-    return `<p>No decision is waiting. When a fix needs one, it opens here with the diff beside it.</p>${done ? `<p class="meta">Last fix</p><ul>${done}</ul>` : ""}`;
+    return `<p>No choice is waiting. When cleaning needs one, it opens here with the change beside it.</p>${done ? `<p class="meta">Last cleaning</p><ul>${done}</ul>` : ""}`;
   }
 
   private questionHtml(): string {
@@ -344,8 +344,8 @@ export class Decide implements vscode.Disposable {
     }
     const hint = this.hint ? `<p class="hint">${escape(this.hint)}</p>` : "";
     const done = this.log.map((line) => `<li>${escape(line)}</li>`).join("");
-    const history = done ? `<p class="meta">Already decided</p><ul>${done}</ul>` : "";
-    return `${this.stepHtml(question)}${hint}<p class="actions"><button type="button" class="secondary" data-act="show">Show diff</button></p>${history}`;
+    const history = done ? `<p class="meta">Already chosen</p><ul>${done}</ul>` : "";
+    return `${this.stepHtml(question)}${hint}<p class="actions"><button type="button" class="secondary" data-act="show">Show the change</button></p>${history}`;
   }
 
   private stepHtml(question: AskQuestion): string {

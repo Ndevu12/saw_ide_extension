@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import { DOCS } from "../../core/docs";
-import { chatPage, renderChat, type ChatCleanup, type ChatFolderInput, type ChatMachineInput, type Tone } from "../../core/chat/transcript";
+import { chatPage, renderChat, VERDICT_BADGE, type ChatCleanup, type ChatFolderInput, type ChatMachineInput, type Tone } from "../../core/chat/transcript";
 import { renderVerdict, verdictPage } from "../../core/chat/verdictPage";
 import type { Finding } from "../../core/scan/contract";
 import { plain } from "../../core/text";
@@ -13,11 +13,11 @@ import { findingRange, findingUri } from "../scan/diagnostics";
 import type { FolderState, Model } from "../model";
 
 const AUDIT_LABEL: Record<AuditVerdict, string> = {
-  "no-hazard": "no hazard found",
-  "to-confirm": "safe once you confirm the listed items",
+  "no-hazard": "safe to change them",
+  "to-confirm": "safe once you confirm a few items",
   "rotation-unsafe": "do not change them yet",
   incomplete: "not known to be safe",
-  failed: "audit did not finish",
+  failed: "the check did not finish",
 };
 
 const AUDIT_TONE: Record<AuditVerdict, Tone> = {
@@ -88,8 +88,8 @@ export class ChatView implements vscode.Disposable {
     }
     if (!folder && states.length > 1) {
       const picked = await vscode.window.showQuickPick(
-        states.map((state) => ({ label: state.folder.name, description: state.last?.verdict ?? "not scanned", folder: state.folder })),
-        { placeHolder: "Folder whose verdict to open" },
+        states.map((state) => ({ label: state.folder.name, description: state.last ? VERDICT_BADGE[state.last.verdict] : "not scanned", folder: state.folder })),
+        { placeHolder: "Folder whose scan results to open" },
       );
       folder = picked?.folder;
     }
@@ -102,7 +102,7 @@ export class ChatView implements vscode.Disposable {
       open.panel.reveal(vscode.ViewColumn.Active);
       return;
     }
-    const panel = vscode.window.createWebviewPanel("saw.verdict", `Verdict · ${folder.name}`, vscode.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true });
+    const panel = vscode.window.createWebviewPanel("saw.verdict", `Scan results · ${folder.name}`, vscode.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true });
     panel.iconPath = this.icon;
     this.verdicts.set(key, { panel, surface: { webview: panel.webview, nonce: nonce() } });
     const messages = panel.webview.onDidReceiveMessage((message: { act?: unknown }) => this.onMessage(message));

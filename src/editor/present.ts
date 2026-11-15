@@ -6,7 +6,7 @@ import type { FolderVerdict } from "../core/scan/verdict";
 
 export const VERDICT_LABEL: Record<FolderVerdict, string> = {
   clean: "clean",
-  residue: "residue",
+  residue: "traces left",
   suspicious: "suspicious",
   incomplete: "could not scan",
   infected: "infected",

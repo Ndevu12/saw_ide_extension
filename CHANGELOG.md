@@ -4,11 +4,13 @@
 
 ### Changed
 
-- Chat only steers. Each folder is one card: its status, one line of counts, the one notice that matters most, a single main button for the next step, and up to three links. The main button is Fix the checkout for an infected folder, Open the decision while a fix waits, View verdict for a suspicious or could-not-scan folder, and Scan this folder before the first scan. A running scan or check is one line, without the folder's path.
-- The verdict opens in its own editor tab, one per folder, named **Verdict · folder**. It has the status, the path, the counts, the actions with what the checkout fix does and does not do, the full notices, why saw decided, and every finding. Findings of one kind are one line with their severity, a count, and the places, which open the file. The tab keeps its place while saw redraws it.
-- The machine is three short rows: credentials, scan-on-clone hooks, and watch. A row opens its report. A row has a button only when it needs you, such as Repair or Audit.
-- Chat ends with **All reports** and **What verdicts mean**. Its sentences no longer repeat saw's name.
-- The saw sidebar is Chat alone. The Verdict list and the Decide pane are gone from it: the verdict tab and the Decide tab beside the diff hold what they showed.
+- The screens use plain words instead of saw's own terms. **See results** opens a folder's **Scan results** tab, and **Full details** is the longer document with the evidence. **Clean this folder** replaces Fix the checkout, with "Past commits are not changed" under it, and **Cleaning past commits** replaces amending history. **Choose what to keep** opens the **Your choice** tab. A residue result reads **traces left**. This machine's rows are **Before you change passwords**, **Check repos on clone and pull**, and **Background checks**. "saw didn't check this version before it arrived" replaces "not a commit saw let in". The commands carry the same names.
+- Chat only steers. Each folder is one card: its status, one line of counts, the one notice that matters most, a single main button for the next step, and up to three links. The main button is Clean this folder for an infected folder, Choose what to keep while cleaning waits, See what was found for a suspicious or could-not-scan folder, and Scan this folder before the first scan. A running scan or check is one line, without the folder's path.
+- Each folder's scan results open in their own editor tab. The tab has the status, the path, the counts, the actions with what cleaning does and does not do, the full notices, why saw says this, and everything it found. Findings of one kind are one line with their severity, a count, and the places, which open the file. The tab keeps its place while saw redraws it.
+- The machine is three short rows. A row opens its details. A row has a button only when it needs you, such as Repair or Check.
+- Chat ends with **All details** and **What these results mean**. Its sentences no longer repeat saw's name.
+- The infected and could-not-scan alerts offer **See What Was Found**, which opens the Scan results tab.
+- The saw sidebar is Chat alone. The Verdict list and the Decide pane are gone from it: the Scan results tab and the Your choice tab beside the change hold what they showed.
 
 ## [0.6.1] - 2026-11-13
 

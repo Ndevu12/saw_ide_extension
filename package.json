@@ -111,35 +111,35 @@
       },
       {
         "command": "saw.openReport",
-        "title": "Open Report",
+        "title": "Open Full Details…",
         "category": "saw",
         "icon": "$(book)"
       },
       {
         "command": "saw.fixFolder",
-        "title": "Fix Folder…",
+        "title": "Clean This Folder…",
         "category": "saw",
         "icon": "$(wand)"
       },
       {
         "command": "saw.auditMachine",
-        "title": "Audit This Machine",
+        "title": "Check Before Changing Passwords",
         "category": "saw"
       },
       {
         "command": "saw.openWatchReport",
-        "title": "Open Watch Report",
+        "title": "Open Background Checks",
         "category": "saw",
         "icon": "$(eye)"
       },
       {
         "command": "saw.installHooks",
-        "title": "Install Scan-on-Clone Hooks",
+        "title": "Turn On Checks on Clone and Pull",
         "category": "saw"
       },
       {
         "command": "saw.repairHooks",
-        "title": "Repair Scan-on-Clone Hooks",
+        "title": "Repair Checks on Clone and Pull",
         "category": "saw"
       },
       {
@@ -156,13 +156,13 @@
       },
       {
         "command": "saw.openVerdict",
-        "title": "Open Verdict",
+        "title": "See Scan Results",
         "category": "saw",
         "icon": "$(open-preview)"
       },
       {
         "command": "saw.decideShow",
-        "title": "Open the Decision",
+        "title": "Choose What to Keep",
         "category": "saw",
         "icon": "$(open-preview)"
       },
@@ -211,7 +211,7 @@
     "languageModelTools": [
       {
         "name": "saw_folderVerdict",
-        "displayName": "saw folder verdict",
+        "displayName": "saw folder safety check",
         "toolReferenceName": "sawVerdict",
         "canBeReferencedInPrompt": true,
         "icon": "$(shield)",
@@ -351,13 +351,13 @@
           "type": "boolean",
           "default": true,
           "scope": "machine",
-          "markdownDescription": "In Cursor, check saw's verdict before the agent runs a command that installs or runs a folder's code (a package manager, build tool, interpreter, `./script`, or a git command that runs the repository's hooks). It refuses the command in a folder saw found infected, and asks you first when saw found it suspicious or could not check it."
+          "markdownDescription": "In Cursor, check saw's scan result before the agent runs a command that installs or runs a folder's code (a package manager, build tool, interpreter, `./script`, or a git command that runs the repository's hooks). It refuses the command in a folder saw found infected, and asks you first when saw found it suspicious or could not check it."
         },
         "saw.governUpdates": {
           "type": "boolean",
           "default": true,
           "scope": "machine",
-          "markdownDescription": "When the installed saw can check an incoming update, wait for that check before a pull, checkout, or similar command changes an open folder. Clean and residue are applied. Anything else leaves the folder as it was. Covers the editor's integrated terminal and, except on Windows, its Git view."
+          "markdownDescription": "When the installed saw can check an incoming update, wait for that check before a pull, checkout, or similar command changes an open folder. Clean updates, and those with only traces left, are applied. Anything else leaves the folder as it was. Covers the editor's integrated terminal and, except on Windows, its Git view."
         },
         "saw.configPath": {
           "type": "string",

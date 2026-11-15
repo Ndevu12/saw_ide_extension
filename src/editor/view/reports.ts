@@ -14,6 +14,8 @@ export const REPORT_SCHEME = "saw-report";
 type Kind = "scan" | "fix" | "audit" | "hooks" | "watch";
 
 const FIXES_KEPT = 5;
+
+const MACHINE_TITLE = { audit: "Before you change passwords", hooks: "Checks on clone and pull", watch: "Background checks" } as const;
 const REFRESH_MS = 300;
 
 interface FixRecord {
@@ -66,7 +68,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
   }
 
   scanUri(folder: vscode.WorkspaceFolder): vscode.Uri {
-    return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/scan/${folderKey(folder)}/saw scan - ${label(folder.name)}.md` });
+    return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/scan/${folderKey(folder)}/Full details - ${label(folder.name)}.md` });
   }
 
   /** The fix this window finished for the folder, when it prepared a clean-up. */
@@ -76,24 +78,24 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
   }
 
   fixUri(folder: vscode.WorkspaceFolder): vscode.Uri {
-    return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/fix/${folderKey(folder)}/saw fix - ${label(folder.name)}.md` });
+    return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/fix/${folderKey(folder)}/Cleaning details - ${label(folder.name)}.md` });
   }
 
   machineUri(kind: "audit" | "hooks" | "watch"): vscode.Uri {
-    return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/${kind}/machine/saw ${kind}.md` });
+    return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/${kind}/machine/${MACHINE_TITLE[kind]}.md` });
   }
 
   /** Ask which report to open: each folder's scan, each fix run in this window, and the machine's. */
   async choose(): Promise<vscode.Uri | undefined> {
     const folders = vscode.workspace.workspaceFolders ?? [];
     const items: Array<vscode.QuickPickItem & { uri: vscode.Uri }> = [
-      ...folders.map((folder) => ({ label: `$(shield) ${folder.name}`, description: "scan", uri: this.scanUri(folder) })),
-      ...folders.filter((folder) => this.fixes.has(folderKey(folder))).map((folder) => ({ label: `$(wand) ${folder.name}`, description: "last fix", uri: this.fixUri(folder) })),
-      { label: "$(device-desktop) This machine", description: "audit", uri: this.machineUri("audit") },
-      { label: "$(git-merge) This machine", description: "scan-on-clone hooks", uri: this.machineUri("hooks") },
-      { label: "$(eye) This machine", description: "watch", uri: this.machineUri("watch") },
+      ...folders.map((folder) => ({ label: `$(shield) ${folder.name}`, description: "scan results", uri: this.scanUri(folder) })),
+      ...folders.filter((folder) => this.fixes.has(folderKey(folder))).map((folder) => ({ label: `$(wand) ${folder.name}`, description: "last cleaning", uri: this.fixUri(folder) })),
+      { label: "$(device-desktop) Before you change passwords", description: "this machine", uri: this.machineUri("audit") },
+      { label: "$(git-merge) Checks on clone and pull", description: "this machine", uri: this.machineUri("hooks") },
+      { label: "$(eye) Background checks", description: "this machine", uri: this.machineUri("watch") },
     ];
-    return (await vscode.window.showQuickPick(items, { placeHolder: "saw report to open" }))?.uri;
+    return (await vscode.window.showQuickPick(items, { placeHolder: "Details to open" }))?.uri;
   }
 
   async open(uri: vscode.Uri): Promise<void> {
@@ -245,7 +247,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
       }
       case "fix": {
         const record = folder && this.fixes.get(folderKey(folder));
-        if (!folder || !record) return "# saw fix\n\nsaw has not fixed this folder from this window. Use **Fix the checkout** on an infected folder in Chat.";
+        if (!folder || !record) return "# saw fix\n\nsaw has not fixed this folder from this window. Use **Clean this folder** on an infected folder in Chat.";
         return fixReport(this.fixInput(folder, record), copy);
       }
       case "audit": {

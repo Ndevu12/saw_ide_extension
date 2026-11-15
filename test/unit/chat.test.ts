@@ -47,8 +47,8 @@ describe("the sidebar chat", () => {
     expect(html).toContain('<article class="card warn">');
     expect(html).toContain('<span class="pill">suspicious</span>');
     expect(html).toContain("7 findings · 1 high · 6 medium");
-    expect(html).toContain('<p class="notice warn">No record of letting this commit in.</p>');
-    expect(html).toContain('<div class="cta"><button type="button" class="primary" data-act="verdict:0">View verdict</button></div>');
+    expect(html).toContain('<p class="notice warn">This version arrived without a check.</p>');
+    expect(html).toContain('<div class="cta"><button type="button" class="primary" data-act="verdict:0">See what was found</button></div>');
     expect(html).toContain('<button type="button" class="link" data-act="scan:0">Scan again</button>');
     expect(html).not.toContain("Claude Code hook");
     expect(html).not.toContain("0fb8655554");
@@ -77,7 +77,7 @@ describe("the sidebar chat", () => {
   it("does not repeat saw's name in what it says about a folder or the machine", () => {
     const html = chat(
       [folder({ verdict: "suspicious", findings: MERGES, unheld: true, unheldFrom: "open", held: { verdict: "infected", reasons: [] } })],
-      { hooks: "repair", auditLabel: "safe once you confirm the listed items", auditTone: "warn" },
+      { hooks: "repair", auditLabel: "safe once you confirm a few items", auditTone: "warn" },
     );
     expect(words(html)).not.toMatch(/\bsaw\b/i);
     expect(html).not.toContain("stayAwakeBot");
@@ -85,11 +85,11 @@ describe("the sidebar chat", () => {
 
   it("makes the fix the next step for an infected folder, with the verdict a link away", () => {
     const html = chat([folder({ verdict: "infected", findings: [finding("a task <img src=x onerror=alert(1)>", "tasks.json", "critical", 0)] })]);
-    expect(html).toContain('<div class="cta"><button type="button" class="danger" data-act="fix:0">Fix the checkout</button></div>');
-    expect(html).toContain('data-act="verdict:0">View verdict</button>');
+    expect(html).toContain('<div class="cta"><button type="button" class="danger" data-act="fix:0">Clean this folder</button><p class="note">Past commits are not changed. Nothing is pushed.</p></div>');
+    expect(html).toContain('data-act="verdict:0">See results</button>');
     expect(html).toContain('<article class="card bad">');
     expect(html).not.toContain("<img");
-    expect(html).not.toContain("Amending history");
+    expect(html).not.toContain("Cleaning past commits");
   });
 
   it("asks to scan a folder that has not been scanned", () => {
@@ -104,12 +104,12 @@ describe("the sidebar chat", () => {
       verdict: "clean",
       cleanup: { branch: "security/auto-clean-main", historyHoldsPayload: true, partial: false, needsYou: true },
     })]);
-    expect(html).toContain('<p class="notice bad">The malicious code is still in git history.</p>');
+    expect(html).toContain('<p class="notice bad">Past commits still contain the malicious code.</p>');
     expect(html).not.toContain("security/auto-clean-main");
-    expect(html).toContain('data-act="fix-report:0">Fix report<');
+    expect(html).toContain('data-act="fix-report:0">Cleaning details<');
     expect(html).not.toContain("fix:0");
     const held = chat([folder({ verdict: "clean", held: { verdict: "infected", reasons: ["a workflow arrived"] } })]);
-    expect(held).toContain('<p class="notice bad">An update was held (infected). The folder is unchanged.</p>');
+    expect(held).toContain('<p class="notice bad">An update was stopped (infected). The folder is unchanged.</p>');
     expect(held).not.toContain("a workflow arrived");
     for (const verdict of ["clean", "infected"] as const) {
       expect(chat([folder({ verdict, unheld: true, unheldFrom: "open" })])).not.toContain('class="notice');
@@ -131,28 +131,28 @@ describe("the sidebar chat", () => {
 
   it("opens a waiting decision from the card", () => {
     const html = chat([folder({ verdict: "infected", phase: "deciding", decision: "This question is part of fixing the checkout." })]);
-    expect(html).toContain('class="primary" data-act="decide:0">Open the decision<');
-    expect(html).toContain("A fix is waiting for your decision");
+    expect(html).toContain('class="primary" data-act="decide:0">Choose what to keep<');
+    expect(html).toContain("Cleaning is waiting for your choice");
     expect(html).not.toContain("fix:0");
   });
 
   it("shows the machine as short rows that open their reports, with an action only for what needs one", () => {
-    const html = chat([], { hooks: "repair", auditLabel: "safe once you confirm the listed items", auditTone: "warn" });
+    const html = chat([], { hooks: "repair", auditLabel: "safe once you confirm a few items", auditTone: "warn" });
     expect(html).toContain('<span class="pill">2 to do</span>');
     expect(html).toContain('data-act="machine:audit"');
     expect(html).toContain('data-act="machine:hooks"');
     expect(html).toContain('class="small primary" data-act="hooks:repair">Repair<');
-    expect(html).toContain('class="small secondary" data-act="audit">Audit again<');
-    const ready = chat([], { auditLabel: "no hazard found", auditTone: "ok", watchLine: "The watcher is in place. <img src=x>" });
-    expect(ready).toContain('<span class="pill">in order</span>');
+    expect(html).toContain('class="small secondary" data-act="audit">Check again<');
+    const ready = chat([], { auditLabel: "safe to change them", auditTone: "ok", watchLine: "The watcher is in place. <img src=x>" });
+    expect(ready).toContain('<span class="pill">all good</span>');
     expect(ready).not.toContain('class="small');
     expect(ready).toContain("The watcher is in place. &lt;img src=x&gt;");
-    expect(chat([])).toContain('class="small primary" data-act="audit">Audit<');
+    expect(chat([])).toContain('class="small primary" data-act="audit">Check<');
   });
 
   it("ends with the way to every report and to what the verdicts mean", () => {
     const html = chat([folder({ verdict: "clean" })]);
-    expect(html).toContain('<nav class="foot"><button type="button" class="link" data-act="reports">All reports</button><button type="button" class="link" data-act="docs">What verdicts mean</button></nav>');
+    expect(html).toContain('<nav class="foot"><button type="button" class="link" data-act="reports">All details</button><button type="button" class="link" data-act="docs">What these results mean</button></nav>');
   });
 
   it("says saw cannot run, with the install as the one button", () => {
@@ -172,18 +172,18 @@ describe("the verdict tab", () => {
     expect(html).toContain('<span class="count">× 6</span>');
     expect(html).toContain('data-act="open:0:6"');
     expect(html.indexOf("Claude Code hook")).toBeLessThan(html.indexOf("A merge commit"));
-    expect(html).toContain("<h2>Why</h2>");
-    expect(html).toContain("38 advisories name known-vulnerable packages. The full report lists them.");
-    expect(html).toContain('data-act="report:0">Full report<');
+    expect(html).toContain("<h2>Why saw says this</h2>");
+    expect(html).toContain("38 packages have known security problems. Full details lists them.");
+    expect(html).toContain('data-act="report:0">Full details<');
     expect(html).toContain('data-act="scan:0">Scan again<');
     expect(html).toContain('class="editor"');
   });
 
   it("explains the checkout fix beside its button, and what it does not do", () => {
     const html = tab(folder({ verdict: "infected", findings: [finding("a payload loader <img src=x>", "a1b2c3", "critical", 0)] }));
-    expect(html).toContain('<div class="bar"><button type="button" class="danger" data-act="fix:0">Fix the checkout</button>');
-    expect(html).toContain("Past commits stay as they are, and nothing is pushed.");
-    expect(html).toContain("Amending history is a different act.");
+    expect(html).toContain('<div class="bar"><button type="button" class="danger" data-act="fix:0">Clean this folder</button>');
+    expect(html).toContain("Past commits are not changed, and nothing is pushed.");
+    expect(html).toContain("Cleaning past commits is a separate step.");
     expect(html).toContain('<span class="sev critical">critical</span>');
     expect(html).toContain("&lt;img src=x&gt;");
     expect(html).not.toContain("<img");
@@ -196,13 +196,13 @@ describe("the verdict tab", () => {
       unheldFrom: "open",
       cleanup: { branch: "security/auto-clean-main", historyHoldsPayload: true, partial: false, needsYou: true },
     }));
-    expect(html).toContain("saw has no record of letting this commit in. The folder was left as it is.");
-    expect(html).toContain("The clean-up is on the local branch security/auto-clean-main.");
-    expect(html).toContain("left the malicious code in git history");
+    expect(html).toContain("check this version of the folder before it arrived. Nothing was changed.");
+    expect(html).toContain("The cleaned files are on the local branch security/auto-clean-main.");
+    expect(html).toContain("Past commits still contain the malicious code.");
     expect(html).toContain('data-act="fix-report:0"');
-    expect(html).toContain("saw found nothing it knows in this folder.");
+    expect(html).toContain("saw found nothing harmful that it knows of.");
     const checking = tab(folder({ verdict: "clean", checking: true, checkAbout: "admission" }));
-    expect(checking).toContain("saw is checking whether it let this folder in. The folder has not changed.");
+    expect(checking).toContain("saw is checking this version of the folder. Nothing has changed.");
   });
 
   it("leaves places past the first few to the full report", () => {
@@ -210,7 +210,7 @@ describe("the verdict tab", () => {
     const [group] = groupFindings(many, 0, PAGE_PLACES);
     expect(group?.places).toHaveLength(PAGE_PLACES);
     expect(group?.hidden).toBe(3);
-    expect(tab(folder({ verdict: "suspicious", findings: many }))).toContain("+3 in the full report");
+    expect(tab(folder({ verdict: "suspicious", findings: many }))).toContain("+3 more in Full details");
   });
 
   it("paints saw's own colors", () => {

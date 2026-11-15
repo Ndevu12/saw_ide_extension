@@ -70,11 +70,11 @@ export class Actions {
     }
     const state = this.model.get(folder);
     if (state.fixing) {
-      void vscode.window.showInformationMessage(`saw is already fixing ${folder.name}.`);
+      void vscode.window.showInformationMessage(`saw is already cleaning ${folder.name}.`);
       return;
     }
     if (state.last && state.last.verdict !== "infected" && state.last.verdict !== "incomplete") {
-      void vscode.window.showInformationMessage(`saw no longer finds ${folder.name} infected (last scan: ${VERDICT_LABEL[state.last.verdict]}), so there is nothing to fix.`);
+      void vscode.window.showInformationMessage(`saw no longer finds ${folder.name} infected (last scan: ${VERDICT_LABEL[state.last.verdict]}), so there is nothing to clean.`);
       return;
     }
     const engine = await this.engines.resolve();
@@ -85,7 +85,7 @@ export class Actions {
     }
     if (!canFix(engine.version, engine.capabilities)) {
       const update = await vscode.window.showWarningMessage(
-        `saw ${engine.version} is too old to fix a folder from the editor; it needs ${FIX_SINCE} or later.`,
+        `saw ${engine.version} is too old to clean a folder from the editor; it needs ${FIX_SINCE} or later.`,
         "Install or Repair saw",
       );
       if (update) {
@@ -100,19 +100,19 @@ export class Actions {
           "it stays on disk only. To keep it on a branch, cancel and set user.name and user.email first."
         : "";
     const choice = await vscode.window.showWarningMessage(
-      `Fix ${folder.name} with saw?`,
+      `Clean ${folder.name} with saw?`,
       {
         modal: true,
         detail:
           "saw removes what it confirms as malicious from this checkout, together with the installed packages, " +
           "the generated build output and the lockfile, and prepares the clean-up on a new local branch. " +
           "First it tries to keep what you have not committed on a local saw/uncommitted-… branch; its report says if it could not. " +
-          "Nothing is pushed or published, and no code from this folder runs." +
+          "Past commits are not changed. Nothing is pushed or published, and no code from this folder runs." +
           unsaved,
       },
-      "Fix",
+      "Clean",
     );
-    if (choice !== "Fix") {
+    if (choice !== "Clean") {
       return;
     }
     this.model.setFixing(folder, true);
@@ -129,12 +129,12 @@ export class Actions {
     this.controller.request(folder, { immediate: true });
     if (refused) {
       this.reports.fixFinished(folder, undefined);
-      void vscode.window.showErrorMessage(`${refused} The fix was stopped, and ${folder.name} is scanned again now.`, "Show Report").then((c) => c && showReport());
+      void vscode.window.showErrorMessage(`${refused} Cleaning was stopped, and ${folder.name} is scanned again now.`, "Cleaning Details").then((c) => c && showReport());
       return;
     }
     if (run.cancelled) {
       this.reports.fixFinished(folder, undefined);
-      void vscode.window.showWarningMessage(`saw fix was stopped before it finished ${folder.name}. It is scanned again now.`, "Show Report").then((c) => c && showReport());
+      void vscode.window.showWarningMessage(`Cleaning ${folder.name} was stopped before it finished. It is scanned again now.`, "Cleaning Details").then((c) => c && showReport());
       return;
     }
     const outcome = readFix(run.stdout, run.exitCode);
@@ -143,23 +143,23 @@ export class Actions {
     switch (outcome.kind) {
       case "prepared": {
         const { details } = outcome;
-        const more = outcome.needsReview ? " Part of it needs you: the report says what." : "";
+        const more = outcome.needsReview ? " Part of it needs you: Cleaning Details says what." : "";
         const where = details?.branch ? ` on the local branch ${plain(details.branch, 120)}` : " on a local branch";
         const cleaned = details?.partial ? `saw cleaned part of ${folder.name}` : `saw cleaned ${folder.name}`;
         const unsaved = unsavedWork(details);
         const notify = unsaved || details?.partial ? vscode.window.showWarningMessage : vscode.window.showInformationMessage;
         const changes = details?.branch && details.base ? { base: details.base, branch: details.branch } : undefined;
         const choice2 = await notify(
-          `${cleaned} and prepared the clean-up${where}.${more}${unsaved ?? ""} Review the change before you push it.`,
+          `${cleaned} and put the cleaned files${where}.${more}${unsaved ?? ""} Review the change before you push it.`,
           ...(changes ? ["Open Changes"] : []),
-          "Show Report",
+          "Cleaning Details",
           "Source Control",
         );
         if (choice2 === "Open Changes" && changes && !(await openFixChanges(folder, changes.base, changes.branch, this.log))) {
           // The report gives the git diff command to run instead.
           showReport();
         }
-        if (choice2 === "Show Report") showReport();
+        if (choice2 === "Cleaning Details") showReport();
         if (choice2 === "Source Control") await vscode.commands.executeCommand("workbench.view.scm");
         return;
       }
@@ -167,7 +167,7 @@ export class Actions {
         void vscode.window.showInformationMessage(`saw confirmed nothing to remove in ${folder.name}, so it changed nothing.`);
         return;
       case "failed": {
-        const choice2 = await vscode.window.showErrorMessage(`saw could not fix ${folder.name}: ${plain(outcome.cause, 300)}`, "Show Report");
+        const choice2 = await vscode.window.showErrorMessage(`saw could not clean ${folder.name}: ${plain(outcome.cause, 300)}`, "Cleaning Details");
         if (choice2) showReport();
         return;
       }
@@ -208,26 +208,26 @@ export class Actions {
     switch (audit.verdict) {
       case "rotation-unsafe":
         void vscode.window
-          .showErrorMessage(`saw audit: do not change any password or token yet.${said} Act on the report first.`, "Show Report")
+          .showErrorMessage(`Do not change any password or token yet.${said} Act on the details first.`, "Details")
           .then(show);
         return;
       case "incomplete":
         void vscode.window
-          .showWarningMessage(`saw audit could not read all of this machine, so changing credentials is not known to be safe.${said}`, "Show Report")
+          .showWarningMessage(`saw could not read all of this machine, so changing passwords is not known to be safe.${said}`, "Details")
           .then(show);
         return;
       case "to-confirm":
         void vscode.window
-          .showWarningMessage(`saw audit: confirm that the items saw lists are yours before you change any password or token.${said}`, "Show Report")
+          .showWarningMessage(`Confirm that the items saw lists are yours before you change any password or token.${said}`, "Details")
           .then(show);
         return;
       case "no-hazard":
         void vscode.window
-          .showInformationMessage(said.trim() || "saw audit found nothing that makes changing credentials unsafe.", "Show Report")
+          .showInformationMessage(said.trim() || "saw found nothing that makes changing passwords unsafe.", "Details")
           .then(show);
         return;
       case "failed":
-        void vscode.window.showErrorMessage("saw audit did not finish, so this machine was not checked.", "Show Report").then(show);
+        void vscode.window.showErrorMessage("The check did not finish, so this machine was not checked.", "Details").then(show);
         return;
     }
   }
@@ -292,9 +292,9 @@ export class Actions {
     }
     const hooks = this.model.machine.hooks;
     if (hooks?.kind === "installed" && !hooks.problems.length) {
-      void vscode.window.showInformationMessage("saw's scan-on-clone hooks are in place: clones, pulls and branch switches are scanned.");
+      void vscode.window.showInformationMessage("Checks on clone and pull are on: every clone, pull and branch switch is scanned.");
     } else {
-      void vscode.window.showWarningMessage("saw's scan-on-clone hooks are not fully in place. saw's report says why.", "Show Report").then((c) => c && showReport());
+      void vscode.window.showWarningMessage("Checks on clone and pull are not fully working. The details say why.", "Details").then((c) => c && showReport());
     }
   }
 
@@ -430,6 +430,6 @@ export class Actions {
     }
     const infected = folders.filter((folder) => this.model.get(folder).last?.verdict === "infected");
     const choices = (infected.length ? infected : folders).map((folder) => ({ label: folder.name, description: folder.uri.fsPath, folder }));
-    return (await vscode.window.showQuickPick(choices, { placeHolder: "Folder for saw to fix" }))?.folder;
+    return (await vscode.window.showQuickPick(choices, { placeHolder: "Folder for saw to clean" }))?.folder;
   }
 }

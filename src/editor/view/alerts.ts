@@ -27,26 +27,26 @@ export class Alerts {
       await this.infected(folder, outcome);
     } else if (outcome.verdict === "incomplete") {
       const reason = plain(outcome.reasons[0] ?? "saw did not finish", 300);
-      void vscode.window.showWarningMessage(`saw could not scan ${folder.name} fully, so it is not shown as clean: ${reason}`, "View Verdict", "Show Log")
-        .then((choice) => choice && vscode.commands.executeCommand(choice === "View Verdict" ? "saw.openVerdict" : "saw.showOutput", ...(choice === "View Verdict" ? [{ uri: folder.uri }] : [])));
+      void vscode.window.showWarningMessage(`saw could not scan ${folder.name} fully, so it is not shown as clean: ${reason}`, "See What Was Found", "Show Log")
+        .then((choice) => choice && vscode.commands.executeCommand(choice === "See What Was Found" ? "saw.openVerdict" : "saw.showOutput", ...(choice === "See What Was Found" ? [{ uri: folder.uri }] : [])));
     }
   }
 
   private async infected(folder: vscode.WorkspaceFolder, outcome: Settled): Promise<void> {
     const count = confirmedCount(outcome);
     const what = `saw: ${folder.name} is INFECTED — ${count} confirmed finding${count === 1 ? "" : "s"}.`;
-    const act = "saw can remove what it confirms; nothing from the folder runs while it does.";
+    const act = "saw can clean it: it removes what it confirmed, and nothing from the folder runs while it does.";
     const choice = vscode.workspace.isTrusted
-      ? await vscode.window.showErrorMessage(`${what} ${act}`, "Fix…", "View Verdict")
+      ? await vscode.window.showErrorMessage(`${what} ${act}`, "Clean This Folder…", "See What Was Found")
       : await vscode.window.showWarningMessage(
           `${what} Do not trust this folder: Restricted Mode keeps its tasks and debug configurations from running. ${act}`,
           { modal: true },
-          "Fix…",
-          "View Verdict",
+          "Clean This Folder…",
+          "See What Was Found",
         );
-    if (choice === "Fix…") {
+    if (choice === "Clean This Folder…") {
       await vscode.commands.executeCommand("saw.fixFolder", folder);
-    } else if (choice === "View Verdict") {
+    } else if (choice === "See What Was Found") {
       await vscode.commands.executeCommand("saw.openVerdict", { uri: folder.uri });
     }
   }
@@ -80,14 +80,14 @@ export class Alerts {
 
   /** The folder was already open, and it is not a commit saw let in. Nothing was put back. */
   notAdmitted(name: string): void {
-    void vscode.window.showWarningMessage(`saw did not let ${name} in, and it was not put back. The scan is of the folder as it is now.`);
+    void vscode.window.showWarningMessage(`saw didn't check this version of ${name} before it arrived, and could not undo it. saw scanned the folder as it is now.`);
   }
 
   held(name: string, verdict: FolderVerdict): void {
-    const message = `saw held an update to ${name} (${VERDICT_LABEL[verdict]}). The folder was not changed.`;
+    const message = `saw stopped an update to ${name} (${VERDICT_LABEL[verdict]}). The folder was not changed.`;
     const show = verdict === "infected" ? vscode.window.showErrorMessage : vscode.window.showWarningMessage;
-    void show(message, "Open Report").then((choice) => {
-      if (choice === "Open Report") {
+    void show(message, "Full Details").then((choice) => {
+      if (choice === "Full Details") {
         void vscode.commands.executeCommand("saw.openReport");
       }
     });

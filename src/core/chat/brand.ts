@@ -118,6 +118,7 @@ function chatCss(): string {
     .body { margin: 6px 0 0; font-size: 12.5px; }
     .cta { margin-top: 10px; }
     .cta button { min-height: 30px; padding: 5px 12px; }
+    .cta .note { margin: 5px 0 0; font-size: 11.5px; color: ${DIM}; text-align: center; }
     .links { display: flex; flex-wrap: wrap; gap: 2px 16px; margin-top: 8px; }
     .machine { margin-top: 2px; padding-top: 10px; border-top: 1px solid #16251f; }
     .machine > .top { padding: 0 2px 4px; }

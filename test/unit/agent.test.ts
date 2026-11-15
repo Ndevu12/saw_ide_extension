@@ -68,7 +68,7 @@ describe("what an AI agent is told about a folder", () => {
 
   it("tells an agent the same checking, held, and not-held state the editor shows", () => {
     const checking = agentUpdate({ checking: true, checkStep: "scanning what arrived", unheld: false });
-    expect(checking).toEqual({ wait: "saw is checking this update: scanning what arrived. The folder has not changed. Wait for that check before you bring files in or run anything here." });
+    expect(checking).toEqual({ wait: "saw is checking this update: scanning what arrived. Nothing has changed yet. Wait for that check before you bring files in or run anything here." });
     expect(agentUpdate({ checking: false, held: { verdict: "infected" }, unheld: false })).toEqual({ notice: "An update was held (infected). The folder was not changed." });
     const landed = agentUpdate({ checking: false, unheld: true });
     expect(landed && "notice" in landed ? landed.notice : "").toContain("A change reached this folder that saw did not let in. It was not held before it landed.");
@@ -76,9 +76,9 @@ describe("what an AI agent is told about a folder", () => {
     expect(agentReport([folder({ notice: "An update was held (infected). The folder was not changed." })])).toContain("The folder was not changed.");
     expect(agentUpdate({ checking: false, unheld: false })).toBeUndefined();
     const opening = agentUpdate({ checking: true, checkAbout: "admission", unheld: false });
-    expect(opening).toEqual({ wait: "saw is checking whether it let this folder in. The folder has not changed. Wait for that check before you bring files in or run anything here." });
+    expect(opening).toEqual({ wait: "saw is checking this version of the folder. Nothing has changed. Wait for that check before you bring files in or run anything here." });
     const admitted = agentUpdate({ checking: false, unheld: true, unheldFrom: "open" });
-    expect(admitted && "notice" in admitted ? admitted.notice : "").toContain("saw has no record of letting this commit in. The folder was left as it is.");
+    expect(admitted && "notice" in admitted ? admitted.notice : "").toContain("saw didn't check this version of the folder before it arrived. Nothing was changed.");
   });
 
   it("never passes on evidence, and flattens names from the folder to one plain line", () => {

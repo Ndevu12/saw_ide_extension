@@ -73,7 +73,7 @@ export class StatusBar implements vscode.Disposable {
     if (held?.held && !scanning) {
       this.item.text = `${ICON[held.held.verdict]} saw: update held`;
       this.item.backgroundColor = BACKGROUND[held.held.verdict];
-      this.item.tooltip = `${held.folder.name}: an update was held (${VERDICT_LABEL[held.held.verdict]}). The folder was not changed.`;
+      this.item.tooltip = `${held.folder.name}: saw stopped an update (${VERDICT_LABEL[held.held.verdict]}). The folder was not changed.`;
       return;
     }
     if (!overall) {

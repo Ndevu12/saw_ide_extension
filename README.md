@@ -29,7 +29,7 @@ appear in the **Problems** panel.
 | --- | --- |
 | **infected** | At least one confirmed finding: the content is malicious. Don't trust, install, build or run anything in the folder. |
 | **suspicious** | Heuristic findings only: something doesn't look right, and a person should decide. Nothing was changed. |
-| **residue** | Traces an infection left behind. Nothing found runs, but it isn't what the project would carry. |
+| **traces left** | Traces an infection left behind (saw calls this *residue*). Nothing found runs, but it isn't what the project would carry. |
 | **could not scan** | The folder couldn't be fully scanned: unknown, never clean. |
 | **clean** | Nothing found, and the folder was fully scanned. |
 
@@ -43,49 +43,51 @@ you have not trusted yet, the extension warns you before you trust it.
 
 ### Chat
 
-The saw sidebar is **Chat**. It says where each open folder stands and what to do next: a status, one line of counts, the notice that matters most, one main button, and a few links. The verdict opens in an editor tab, **Verdict · folder**, with why saw decided and every finding; a finding opens its file. A decision during a fix opens in a **Decide** tab beside the diff, and reports open as Markdown tabs. Under the folders, three rows cover this machine: credentials, scan-on-clone hooks, and watch. A row opens its report, and it has a button only when it needs you. The pages use the colors `saw intro` prints: mint, green, and cyan on black, amber for something to check, and red for infected. A scan only reads the folder. **Fix the checkout** removes what saw confirmed and puts the clean-up on a new local branch. It does not rewrite past commits, and it does not push. Amending history is named separately: that act rewrites the commits that still carry the malicious code and force-updates the branches they are on, and the checkout fix does not do it. When a fix is waiting, the Decide tab says whether the question is part of the checkout fix or of amending history. These views are part of the extension, so they look the same in every editor built on VS Code. After saw holds an update, or after several quiet checks, a card under the folders asks for a rating. **Share feedback** opens it any time.
+The saw sidebar is **Chat**. It says where each open folder stands and what to do next: a status, one line of counts, the notice that matters most, one main button, and a few links. **See results** opens the folder's **Scan results** tab: why saw says this, and everything it found. Click a finding to open its file. **Full details** is the longer document with the evidence. When cleaning needs your choice, **Choose what to keep** opens the **Your choice** tab beside the change. Under the folders, three rows cover this machine: **Before you change passwords**, **Check repos on clone and pull**, and **Background checks**. A row opens its details, and it has a button only when it needs you. The pages use the colors `saw intro` prints: mint, green, and cyan on black, amber for something to check, and red for infected. A scan only reads the folder. **Clean this folder** removes what saw confirmed and puts the cleaned files on a new local branch. Past commits are not changed, and nothing is pushed. **Cleaning past commits** is a separate step: it rewrites the commits that still contain the malicious code, and the branches that hold them then need a force-push. When cleaning asks you something, the **Your choice** tab says which of the two the question belongs to. These views are part of the extension, so they look the same in every editor built on VS Code. After saw stops an update, or after several quiet checks, a card under the folders asks for a rating. **Share feedback** opens it any time.
 
-### Reports you can read
+### Full details you can read
 
-**Open Report** opens a folder's scan as a document in an editor tab: the verdict, what to do, and
-every finding with its remedy and evidence. Fix, Audit, the hook commands, and **Open Watch Report**
-open their own reports, which update live as saw works. The watch report is what `saw watch status`
-says: whether the watcher is in place, what is still open, and what happened since the last report.
+**Full details** opens a folder's scan as a document in an editor tab: the result, what to do, and
+every finding with its remedy and evidence. Cleaning, the password check, the clone and pull checks,
+and **Background checks** open their own details, which update live as saw works. Background checks
+is what `saw watch status` says: whether the watcher is in place, what is still open, and what
+happened since the last report.
 Reports are kept in the extension's own storage, never in your project.
 
-### Fix an infected folder
+### Clean an infected folder
 
-**Fix…** runs [`saw fix`](https://saw-docs.ndevuspace.com/latest/reference/cli/fix/) after you
-confirm. It's available from the alert, from the infected folder in the saw view, or as
-**saw: Fix Folder…**.
+**Clean this folder** runs [`saw fix`](https://saw-docs.ndevuspace.com/latest/reference/cli/fix/) after you
+confirm. It's available from the alert, from the infected folder's card in Chat, or as
+**saw: Clean This Folder…**.
 
 - **What it removes:** what saw confirmed as malicious, plus the installed packages, build output
   and lockfile.
 - **Where the clean-up goes:** onto a new local branch. Nothing is pushed or published.
 - **Your uncommitted work:** saw first tries to keep it on a `saw/uncommitted-…` branch. That needs
   git to know your name and email, and the confirmation warns you when it doesn't.
-- **Restricted Mode:** Fix works there too. saw runs git with the repository's own hooks and
+- **Restricted Mode:** Cleaning works there too. saw runs git with the repository's own hooks and
   settings switched off, so nothing from the folder runs.
 
 When it's done, the folder is scanned again. With a saw that names the clean-up branch,
 **Open Changes** shows the whole clean-up as one diff.
 
-When saw can ask during a fix, the **Decide** view offers the choice and a diff opens beside it.
-Keep is the focused action. Closing the diff does not answer. Stopping the fix does not answer.
+When saw needs your choice while cleaning, the **Your choice** tab offers it and the change opens
+beside it. Keep is the focused action. Closing the change does not answer. Stopping the cleaning
+does not answer.
 
 ![The confirmation names what saw will change](docs/images/fix-confirmation.png)
 
-### Audit this machine
+### Before you change passwords
 
-**saw: Audit This Machine** runs [`saw audit`](https://saw-docs.ndevuspace.com/latest/how-to/audit-a-machine/)
+**saw: Check Before Changing Passwords** runs [`saw audit`](https://saw-docs.ndevuspace.com/latest/how-to/audit-a-machine/)
 and tells you, in saw's own words, whether changing your passwords and tokens is safe yet. Changing
 them while something on the machine still watches them can set off code that deletes your files.
 See [credential hygiene](https://saw-docs.ndevuspace.com/latest/explanation/credential-hygiene/).
 
-### Scan-on-clone hooks
+### Check repos on clone and pull
 
-The saw view shows whether saw's [scan-on-clone hooks](https://saw-docs.ndevuspace.com/latest/how-to/scan-on-clone/)
-are in place, so every clone, pull and branch switch is scanned. It installs or repairs them in one
+Chat shows whether saw's [scan-on-clone hooks](https://saw-docs.ndevuspace.com/latest/how-to/scan-on-clone/)
+are on, so every clone, pull and branch switch is scanned. It turns them on or repairs them in one
 click.
 
 ### Updates wait for a check
@@ -180,13 +182,14 @@ All commands are in the Command Palette under **saw:**.
 | Command | What it does |
 | --- | --- |
 | **Scan Workspace** | Scan every workspace folder now. |
-| **Open Report** | Open a folder's scan report, or the audit, hooks, or watch report. |
-| **Open Watch Report** | Read what `saw watch` has reported. |
-| **Fix Folder…** | Clean an infected folder with `saw fix`, after you confirm. |
-| **Show the Decision** | Open the diff for a fix that is waiting on you. |
-| **Audit This Machine** | Check whether changing credentials is safe yet. |
-| **Install Scan-on-Clone Hooks** | Scan every clone, pull and branch switch. |
-| **Repair Scan-on-Clone Hooks** | Put saw's hooks back when something changed them. |
+| **See Scan Results** | Open a folder's Scan results tab. |
+| **Open Full Details…** | Open a folder's full details, or this machine's password check, clone and pull checks, or background checks. |
+| **Open Background Checks** | Read what `saw watch` has reported. |
+| **Clean This Folder…** | Clean an infected folder with `saw fix`, after you confirm. |
+| **Choose What to Keep** | Open the choice that cleaning is waiting on. |
+| **Check Before Changing Passwords** | Check whether changing passwords and tokens is safe yet. |
+| **Turn On Checks on Clone and Pull** | Scan every clone, pull and branch switch. |
+| **Repair Checks on Clone and Pull** | Put saw's hooks back when something changed them. |
 | **Install or Repair saw** | Reinstall saw at the tested release. |
 | **Copy Install Diagnostics** | Copy the last install's details for an issue report. |
 | **Show Log** | Open the extension's log. |
@@ -204,7 +207,7 @@ All commands are in the Command Palette under **saw:**.
 | `saw.scanOnChange` | `true` | Scan again on save, and when a file that can run code changes. |
 | `saw.scanTimeoutSeconds` | `120` | How long one folder's scan may take. |
 | `saw.registerMcpServer` | `true` | Offer saw's read-only MCP server to AI agents, when saw provides one. |
-| `saw.guardAgentCommands` | `true` | In Cursor, check saw's verdict before the agent installs or runs a folder's code. |
+| `saw.guardAgentCommands` | `true` | In Cursor, check saw's scan result before the agent installs or runs a folder's code. |
 | `saw.governUpdates` | `true` | When saw can, check a pull, checkout, or similar update before it changes an open folder. |
 
 These are read from your **user** settings only. A folder's own `.vscode/settings.json` can't choose
@@ -220,14 +223,14 @@ nothing open still needs it.
 
 The extension runs on the machine where the files are. A local window is this computer, on Windows,
 macOS, or Linux. In Remote - SSH, WSL, or a dev container, it finds or installs saw on that remote,
-scans the remote's files, and **Fix…** and the hooks act on the remote's git. **Audit This Machine**
-audits that machine (the server, the WSL distribution, or the container), not the computer in front
+scans the remote's files, and cleaning and the clone and pull checks act on the remote's git.
+**Check Before Changing Passwords** checks that machine (the server, the WSL distribution, or the container), not the computer in front
 of you.
 
 ## Privacy and safety
 
 - **Nothing is sent anywhere.** saw scans offline. The only download is installing saw from PyPI.
-- **Nothing changes without you.** Only **Fix…**, after you confirm, changes files. Nothing is ever
+- **Nothing changes without you.** Only **Clean this folder**, after you confirm, changes files. Nothing is ever
   pushed, and no pull request is opened.
 - **Nothing from the folder runs.** saw is started without a shell, from settings the folder can't
   change.

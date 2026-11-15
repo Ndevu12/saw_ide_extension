@@ -46,14 +46,14 @@ export interface VerdictPage {
 }
 
 const FIX_HINTS = [
-  "Fix the checkout removes what saw confirmed from this folder, including installed packages, build output, and the lockfile. The clean-up sits on a new local branch. Past commits stay as they are, and nothing is pushed.",
-  "Amending history is a different act. It rewrites the commits that still carry the malicious code and force-updates the branches those commits are on. Fix the checkout does not do that.",
+  "Clean this folder removes what saw confirmed as malicious, along with installed packages, build output, and the lockfile. The cleaned files go on a new local branch. Past commits are not changed, and nothing is pushed.",
+  "Cleaning past commits is a separate step. It rewrites the commits that still contain the malicious code, and the branches that hold them then need a force-push. Clean this folder does not do that.",
 ];
 
 export function verdictPage(folder: ChatFolderInput, index: string | number): VerdictPage {
   const notices: { text: string; tone: Tone }[] = [];
   if (folder.held) {
-    notices.push({ text: `An update was held (${VERDICT_BADGE[folder.held.verdict]}). The folder was not changed.`, tone: folder.held.verdict === "infected" ? "bad" : "warn" });
+    notices.push({ text: `saw stopped an update (${VERDICT_BADGE[folder.held.verdict]}). The folder was not changed.`, tone: folder.held.verdict === "infected" ? "bad" : "warn" });
   }
   if (folder.unheld) {
     notices.push({ text: unheldSentence(folder.unheldFrom), tone: folder.unheldFrom === "open" ? "warn" : "bad" });
@@ -68,9 +68,9 @@ export function verdictPage(folder: ChatFolderInput, index: string | number): Ve
   const actions: ChatButton[] = [];
   let primary: ChatButton | undefined;
   if (folder.phase === "deciding") {
-    primary = { act: `decide:${index}`, label: "Open the decision", tone: "primary" };
+    primary = { act: `decide:${index}`, label: "Choose what to keep", tone: "primary" };
   } else if (folder.verdict === "infected" && idle) {
-    primary = { act: `fix:${index}`, label: "Fix the checkout", tone: "danger" };
+    primary = { act: `fix:${index}`, label: "Clean this folder", tone: "danger" };
   } else if (!folder.verdict && idle) {
     primary = { act: `scan:${index}`, label: "Scan this folder", tone: "primary" };
   }
@@ -78,17 +78,17 @@ export function verdictPage(folder: ChatFolderInput, index: string | number): Ve
     actions.push({ act: `scan:${index}`, label: "Scan again", tone: "secondary" });
   }
   if (folder.verdict || folder.phase !== "idle") {
-    actions.push({ act: `report:${index}`, label: "Full report", tone: "secondary" });
+    actions.push({ act: `report:${index}`, label: "Full details", tone: "secondary" });
   }
   if (folder.cleanup) {
-    actions.push({ act: `fix-report:${index}`, label: "Fix report", tone: "secondary" });
+    actions.push({ act: `fix-report:${index}`, label: "Cleaning details", tone: "secondary" });
   }
   const groups = groupFindings(folder.findings, index, PAGE_PLACES);
   const live = folder.checking ? checkingSentence(folder.checkAbout, folder.checkStep) : liveLine(folder);
   const summary = summaryLine(folder.findings);
   const empty = !folder.verdict
     ? idle ? "This folder has not been scanned yet. A scan only reads it." : undefined
-    : !folder.findings.length ? "saw found nothing it knows in this folder." : undefined;
+    : !folder.findings.length ? "saw found nothing harmful that it knows of." : undefined;
   return {
     title: folder.name,
     ...(folder.path ? { path: folder.path } : {}),
@@ -110,13 +110,13 @@ export function verdictPage(folder: ChatFolderInput, index: string | number): Ve
 function cleanupLines(cleanup: ChatCleanup): { text: string; tone: Tone }[] {
   const lines: { text: string; tone: Tone }[] = [];
   if (cleanup.branch) {
-    lines.push({ text: `The clean-up is on the local branch ${cleanup.branch}.`, tone: "ok" });
+    lines.push({ text: `The cleaned files are on the local branch ${cleanup.branch}.`, tone: "ok" });
   }
   if (cleanup.historyHoldsPayload) {
-    lines.push({ text: "That clean-up left the malicious code in git history. Amending history is what rewrites those commits. The checkout fix does not.", tone: "bad" });
+    lines.push({ text: "Past commits still contain the malicious code. Cleaning past commits is what removes it from them. Clean this folder does not.", tone: "bad" });
   }
   if (cleanup.partial || cleanup.needsYou) {
-    lines.push({ text: "Part of the clean-up still needs you. The fix report says what.", tone: "warn" });
+    lines.push({ text: "Part of the cleaning still needs you. Cleaning details says what.", tone: "warn" });
   }
   return lines;
 }
@@ -131,13 +131,13 @@ export function renderVerdict(page: VerdictPage, nonce: string): string {
   const hints = page.hints.map((line) => `<p class="hint">${text(line)}</p>`).join("");
   const notices = page.notices.map((notice) => `<p class="notice ${notice.tone}">${text(notice.text)}</p>`).join("");
   const reasons = page.reasons.length
-    ? `<section class="block"><h2>Why</h2><ul class="why">${page.reasons.map((line) => `<li>${text(line)}</li>`).join("")}</ul></section>`
+    ? `<section class="block"><h2>Why saw says this</h2><ul class="why">${page.reasons.map((line) => `<li>${text(line)}</li>`).join("")}</ul></section>`
     : "";
   const findings = page.groups.length
-    ? `<section class="block"><h2>Findings</h2><ul class="findings">${page.groups.map(groupHtml).join("")}</ul></section>`
+    ? `<section class="block"><h2>What was found</h2><ul class="findings">${page.groups.map(groupHtml).join("")}</ul></section>`
     : page.empty ? `<p class="empty">${text(page.empty)}</p>` : "";
   const advisories = page.advisories
-    ? `<p class="hint">${page.advisories} ${page.advisories === 1 ? "advisory names a known-vulnerable package" : "advisories name known-vulnerable packages"}. The full report lists them.</p>`
+    ? `<p class="hint">${page.advisories} ${page.advisories === 1 ? "package has a known security problem" : "packages have known security problems"}. Full details lists them.</p>`
     : "";
   const body = `<main class="verdict ${page.tone}">
     <header class="hero">
@@ -151,7 +151,7 @@ export function renderVerdict(page: VerdictPage, nonce: string): string {
 
 function groupHtml(group: ChatFindingGroup): string {
   const count = group.count > 1 ? ` <span class="count">× ${group.count}</span>` : "";
-  const more = group.hidden > 0 ? `<span class="more">+${group.hidden} in the full report</span>` : "";
+  const more = group.hidden > 0 ? `<span class="more">+${group.hidden} more in Full details</span>` : "";
   return `<li>
     <div class="what"><span class="sev ${group.severity}">${group.severity}</span><span>${text(group.what, 300)}${count}</span></div>
     <div class="places">${group.places.map((place) => `<button type="button" class="place" title="${text(place.label, 300)}" data-act="${escapeHtml(place.act)}">${text(place.label, 160)}</button>`).join("")}${more}</div>
