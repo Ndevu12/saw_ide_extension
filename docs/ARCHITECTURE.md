@@ -10,11 +10,15 @@ it in the editor.
 src/
   extension.ts          composition root: builds the parts below and registers commands
   cursorHook.ts         Cursor's beforeShellExecution hook, bundled as dist/cursor-hook.js
+  governShim.ts         the git and gh stand-in, bundled as dist/govern-shim.js
   core/                 no `vscode` import (lint-enforced), unit-tested
     run · text · version · capabilities · docs · controls · openRun
     scan/               scan, contract, verdict, progress, schedule
     fix/                what `fix`, `audit`, `hook` and `watch status` reported; `--ask=jsonl` questions
-    install/            locate saw, find Python, pipx install, the packages that fit this machine, diagnose a failure
+    install/            locate saw, find Python, pipx install, the packages that fit this machine, diagnose a failure,
+                        keep the installed saw when moving to the pin fails
+    govern/             which git and gh commands bring files in (aliases, --git-dir, clones), the real git and gh
+                        behind the stand-in, the stand-in's wrappers, saw govern's answers
     report/             Markdown reports, with scanned text kept literal
     agent/              what agents are told, `saw mcp`, the Cursor hook's answer
     feedback/           when Chat may ask for a rating, and the links that ask opens
@@ -23,6 +27,7 @@ src/
     scan/               controller, triggers, diagnostics
     fix/                The files fix and the git history fix, the Your choice tab, diffs
     install/            find saw, install it, the install lock
+    govern/             place the stand-in, point the Git view at it, read its notices
     view/               the Chat sidebar, the Scan results tab, status bar, alerts, reports
     feedback/           opens the rating, star, and issue pages; stores the dismissal
     agent/              the language-model tool, MCP registration, the Cursor guard
@@ -80,7 +85,9 @@ This works without administrator rights on every platform, including PEP 668 sys
 - **Pinned:** the release installed is pinned in `package.json` (`"saw"`). A saw the extension
   installed is moved to the pin when it falls behind, and that binary is the one that runs once
   it meets the pin, even when an older saw appears earlier on `PATH`. One the operator installed
-  is not replaced. When that one already meets the pin, it is still the one that runs.
+  is not replaced. When that one already meets the pin, it is still the one that runs. When moving
+  to the pin fails, the saw already installed keeps scanning. Each verdict records which saw gave
+  it, and every place that shows a verdict says when that saw was older than the pin.
 - **One install at a time:** a lock directory in global storage keeps two windows from installing
   at once.
 - **Terminals:** integrated terminals get saw's folder on `PATH` through the extension's
@@ -187,6 +194,14 @@ verdict never comes from progress.
   (otherwise `~/.local/state/saw/govern/status`). The editor reads those with the same notice
   reader. Two notices for one phase a few seconds apart are one check. Git the stand-in did not
   run is still scanned by the scan-on-clone hooks.
+- **The stand-in never runs itself, and holds what git would change.** It runs the real git and gh
+  only by full path, outside every stand-in folder (matched on disk, so symlinks and other
+  spellings count) and never a file that carries the stand-in mark. When none is left, it runs
+  nothing. It finds the folder a command changes as git does: `--work-tree` or `GIT_WORK_TREE`,
+  otherwise the working directory, and also holds a command that changes an open folder's git
+  directory from outside. An alias is checked as the command it runs. A clone cannot be held, so
+  one that leaves files in an open folder is followed by a scan and a warning. When saw's own
+  stand-in cannot start, this window's saw check holds the update.
 - **A rating is asked for in Chat, after saw has done something the person can judge.** The decision
   of when to show the card lives in `core/feedback` and is unit-tested. The editor stores a
   dismissal and a rating in global state, and opens the review, star, and issue pages. The issue
