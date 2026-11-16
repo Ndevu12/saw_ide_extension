@@ -5,6 +5,7 @@ export const DOCS = {
   home: "https://saw-docs.ndevuspace.com/",
   verdicts: `${SAW_DOCS}explanation/verdicts/`,
   fix: `${SAW_DOCS}reference/cli/fix/`,
+  amend: `${SAW_DOCS}reference/cli/amend/`,
   audit: `${SAW_DOCS}how-to/audit-a-machine/`,
   hooks: `${SAW_DOCS}how-to/scan-on-clone/`,
   watch: `${SAW_DOCS}reference/cli/watch/`,

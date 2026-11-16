@@ -6,18 +6,10 @@ import type { FolderVerdict } from "../core/scan/verdict";
 
 export const VERDICT_LABEL: Record<FolderVerdict, string> = {
   clean: "clean",
-  residue: "residue",
+  residue: "traces left",
   suspicious: "suspicious",
   incomplete: "could not scan",
   infected: "infected",
-};
-
-export const VERDICT_ICON: Record<FolderVerdict, vscode.ThemeIcon> = {
-  clean: new vscode.ThemeIcon("pass", new vscode.ThemeColor("testing.iconPassed")),
-  residue: new vscode.ThemeIcon("info"),
-  suspicious: new vscode.ThemeIcon("warning", new vscode.ThemeColor("problemsWarningIcon.foreground")),
-  incomplete: new vscode.ThemeIcon("circle-slash", new vscode.ThemeColor("problemsWarningIcon.foreground")),
-  infected: new vscode.ThemeIcon("error", new vscode.ThemeColor("problemsErrorIcon.foreground")),
 };
 
 export const CONFIDENCE_SEVERITY: Record<Confidence, vscode.DiagnosticSeverity> = {

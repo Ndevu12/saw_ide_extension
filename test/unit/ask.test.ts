@@ -82,7 +82,7 @@ describe("questions saw asks during a fix", () => {
   });
 
   it("puts the choices into the fix report", () => {
-    const text = fixReport({ folderName: "web", folderPath: "/work/web", run: { startedAt: 0, said: "" }, outcome: { kind: "prepared", needsReview: false }, decisions: ["kept src/a.js", "will remove left-pad"], sawVersion: "0.14.0" }, "preview");
+    const text = fixReport({ folderName: "web", folderPath: "/work/web", run: { startedAt: 0, said: "" }, outcome: { kind: "prepared", needsReview: false }, decisions: ["kept src/a.js", "will remove left-pad"], sawVersion: "0.14.0" }, "shown");
     expect(text).toContain("## What you decided");
     expect(text).toContain("kept src\\/a\\.js");
     expect(text).toContain("will remove left\\-pad");

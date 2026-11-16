@@ -20,7 +20,6 @@ import { readSettings } from "./editor/settings";
 import { StrictMode } from "./editor/strictMode";
 import { StatusBar } from "./editor/view/statusBar";
 import { ChatView } from "./editor/view/chatView";
-import { FindingsTree } from "./editor/view/tree";
 import { registerTriggers } from "./editor/scan/triggers";
 
 export interface SawApi {
@@ -38,8 +37,8 @@ export function activate(context: vscode.ExtensionContext): SawApi {
   const diagnostics = new Diagnostics(log);
   const alerts = new Alerts();
   const controller = new Controller(model, engines, diagnostics, alerts, readSettings, log);
-  const tree = new FindingsTree(model);
-  const reports = new Reports(model, context.storageUri?.fsPath, context.globalStorageUri.fsPath, log);
+  const icon = { light: vscode.Uri.joinPath(context.extensionUri, "media", "verdict-light.svg"), dark: vscode.Uri.joinPath(context.extensionUri, "media", "verdict-dark.svg") };
+  const reports = new Reports(model, context.storageUri?.fsPath, context.globalStorageUri.fsPath, log, icon);
   const cursorGuard = new CursorAgentGuard(model, readSettings, context.globalStorageUri.fsPath, context.asAbsolutePath("dist/cursor-hook.js"), log);
   const decide = new Decide(model, log);
   const actions = new Actions(model, engines, controller, readSettings, log, context.globalState, reports, decide);
@@ -63,19 +62,21 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     new OpenGuard(log),
     new StrictMode(context, model, log),
     cursorGuard,
-    tree,
     new ChatView(
       model,
       controller,
       () => void actions.refreshHooks(),
-      (folder) => reports.lastFix(folder),
-      (folder) => void reports.open(reports.fixUri(folder)),
+      {
+        files: (folder) => reports.lastFix(folder),
+        history: (folder) => reports.lastAmend(folder),
+        open: (folder, treatment) => void reports.open(treatment === "history" ? reports.amendUri(folder) : reports.fixUri(folder)),
+      },
       decide,
       feedback,
+      icon,
     ),
     new StatusBar(model),
     new SawMcpRegistration(model, readSettings, log),
-    vscode.window.registerTreeDataProvider("saw.findings", tree),
     vscode.commands.registerCommand("saw.scanWorkspace", () => {
       engines.reset();
       alerts.resetEngineWarning();
@@ -99,6 +100,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
       }
     }),
     vscode.commands.registerCommand("saw.fixFolder", (arg?: unknown) => actions.fixFolder(folderOf(arg))),
+    vscode.commands.registerCommand("saw.amendHistory", (arg?: unknown) => actions.amendHistory(folderOf(arg))),
     vscode.commands.registerCommand("saw.auditMachine", () => actions.auditMachine()),
     vscode.commands.registerCommand("saw.openWatchReport", () => actions.openWatchReport()),
     vscode.commands.registerCommand("saw.installHooks", () => actions.hooks("install")),

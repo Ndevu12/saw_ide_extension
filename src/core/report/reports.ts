@@ -1,15 +1,15 @@
 import { DOCS } from "../docs";
-import type { AuditDetails, AuditVerdict, FixDetails, FixOutcome, HookStatus } from "../fix/actions";
+import type { AmendOutcome, AuditDetails, AuditVerdict, FixDetails, FixOutcome, HookStatus } from "../fix/actions";
 import type { Finding, TargetResult } from "../scan/contract";
 import { block, inline, prose, webLink } from "./markdown";
 import type { ScanOutcome } from "../scan/scan";
 import type { FolderVerdict } from "../scan/verdict";
 
-// The reports the editor shows in a Markdown preview, built from what saw reported. A report is
-// built twice: for the preview, with the evidence saw quoted, and for the copy the extension keeps
+// The reports the editor shows in a details tab, built from what saw reported. A report is
+// built twice: for the tab, with the evidence saw quoted, and for the copy the extension keeps
 // in its own storage, without it.
 
-export type Copy = "preview" | "saved";
+export type Copy = "shown" | "saved";
 export type SettledScan = Exclude<ScanOutcome, { kind: "cancelled" }>;
 
 /** A saw command the operator started, as it runs and once it has finished. */
@@ -24,7 +24,7 @@ export interface CommandRun {
 }
 
 const AUDIT_HINT =
-  "Before you change any password or token, run **saw: Audit This Machine**: changing them while something on the machine still watches them can set off code that deletes your files.";
+  "Before you change any password or token, use **Check** under **Before you change passwords** in Chat, or run **saw: Check Before Changing Passwords**: changing them while something on the machine still watches them can set off code that deletes your files.";
 
 export function when(ms: number): string {
   return `${new Date(ms).toISOString().slice(0, 19).replace("T", " ")} UTC`;
@@ -39,7 +39,7 @@ function sawVersion(version: string | undefined): string {
 }
 
 function footer(copy: Copy, source: string, learn: { title: string; url: string }): string {
-  const evidence = copy === "preview" ? " Evidence is shown here only: the copy the extension keeps withholds it." : " This is the copy the extension keeps: evidence is withheld.";
+  const evidence = copy === "shown" ? " Evidence is shown here only: the copy the extension keeps withholds it." : " This is the copy the extension keeps: evidence is withheld.";
   return `---\n\nLearn more in saw's documentation: [${learn.title}](${learn.url}).\n\n*Built by the saw extension from ${source}. Nothing from the folder ran to make it.${evidence}*`;
 }
 
@@ -68,7 +68,7 @@ function stoppedLine(run: CommandRun): string | undefined {
 
 const VERDICT_TITLE: Record<FolderVerdict, string> = {
   clean: "Clean",
-  residue: "Residue",
+  residue: "Traces left",
   suspicious: "Suspicious",
   incomplete: "Not verified",
   infected: "Infected",
@@ -95,7 +95,8 @@ const VERDICT_ADVICE: Record<FolderVerdict, string[]> = {
   ],
   infected: [
     "Do not trust this folder, install its dependencies, build or run it.",
-    "Use **Fix…** on the folder in the saw view, or **saw: Fix Folder…**: saw removes what it confirms and prepares the clean-up on a new local branch. Nothing from the folder runs while it does, and nothing is pushed.",
+    "**Fix infection in files** (`saw fix`) removes what saw confirms from the files now and puts the fix on a new local branch. Nothing from the folder runs while it does, and nothing is pushed. Past commits still hold the infection.",
+    "**Fix infection in git history** (`saw fix amend`) rewrites the past commits that hold it and force-pushes each branch that held them. Anyone with those branches must reset to the new ones.",
     AUDIT_HINT,
   ],
 };
@@ -104,7 +105,7 @@ const AUTOMATIC = new Set(["remove-file", "remove-foreign-vscode", "strip-gitign
 
 function remedy(finding: Finding): string {
   if (finding.confidence === "confirmed" && AUTOMATIC.has(finding.remediation)) {
-    return "**Fix…** removes this.";
+    return "**Fix infection in files** removes this.";
   }
   if (finding.remediation === "report") {
     return "Reported only: there is nothing to remove.";
@@ -148,7 +149,7 @@ function findingItem(finding: Finding, copy: Copy): string {
 const GROUPS: Array<{ title: string; pick: (result: TargetResult) => Finding[] }> = [
   { title: "Confirmed", pick: (r) => r.findings.filter((f) => f.confidence === "confirmed") },
   { title: "To review by hand", pick: (r) => r.findings.filter((f) => f.confidence === "heuristic") },
-  { title: "Residue", pick: (r) => r.findings.filter((f) => f.confidence === "residue") },
+  { title: "Traces left", pick: (r) => r.findings.filter((f) => f.confidence === "residue") },
   { title: "Dependency advisories", pick: (r) => r.advisories },
   { title: "For your information", pick: (r) => [...r.informational, ...r.findings.filter((f) => f.confidence === "informational")] },
 ];
@@ -165,7 +166,7 @@ export interface ScanReportInput {
 }
 
 export function scanReport(input: ScanReportInput, copy: Copy): string {
-  const out = [`# saw scan: ${prose(input.folderName, 120)}`, ""];
+  const out = [`# Full details: ${prose(input.folderName, 120)}`, ""];
   if (input.fixing) {
     out.push("> **saw is fixing this folder.** It is scanned again when the fix is done.", "");
   } else if (input.scanning) {
@@ -185,11 +186,11 @@ export function scanReport(input: ScanReportInput, copy: Copy): string {
   if (outcome.kind === "scanned") {
     const count = (confidence: string) => findings.filter((f) => f.confidence === confidence).length;
     const advisories = results.reduce((n, r) => n + r.advisories.length, 0);
-    out.push(`- ${findings.length} finding${findings.length === 1 ? "" : "s"}: ${count("confirmed")} confirmed, ${count("heuristic")} to review, ${count("residue")} residue; ${advisories} dependency advisor${advisories === 1 ? "y" : "ies"}`);
+    out.push(`- ${findings.length} finding${findings.length === 1 ? "" : "s"}: ${count("confirmed")} confirmed, ${count("heuristic")} to review, ${count("residue")} traces left; ${advisories} dependency advisor${advisories === 1 ? "y" : "ies"}`);
   }
   out.push("", "## What to do", "", ...VERDICT_ADVICE[outcome.verdict].map((line) => `- ${line}`), "");
   if (findings.length) {
-    out.push("To open a finding's file at its line, click it in the saw view or the Problems panel.", "");
+    out.push("To open a finding's file at its line, click it in the scan results tab or the Problems panel.", "");
   }
   if (outcome.reasons.length) {
     out.push("## Why it is not verified", "", ...outcome.reasons.map((reason) => `- ${prose(reason, 600)}`), "");
@@ -216,7 +217,7 @@ export function scanReport(input: ScanReportInput, copy: Copy): string {
   if (outcome.kind === "scanned" && !findings.length && !results.some((r) => r.advisories.length)) {
     out.push("*No findings.*", "");
   }
-  out.push(footer(copy, "`saw scan --json`", { title: "what each verdict means", url: DOCS.verdicts }));
+  out.push(footer(copy, "`saw scan --json`", { title: "what these results mean", url: DOCS.verdicts }));
   return out.join("\n");
 }
 
@@ -229,18 +230,18 @@ function listed(items: string[], render: (item: string) => string): string[] {
   return [...items.slice(0, MAX_LISTED).map((item) => `- ${render(item)}`), ...(more > 0 ? [`- *and ${more} more*`] : [])];
 }
 
-/** Where the clean-up is, what it removed, and what became of the operator's own work. */
+/** Where the fix is, what it removed, and what became of the operator's own work. */
 function fixDetails(details: FixDetails): string[] {
   const out: string[] = [];
   if (details.branch) {
     const base = details.base ? ` from ${inline(details.base, 120)}` : "";
-    out.push("## Where the clean-up is", "", `The local branch ${inline(details.branch, 120)}${base}. To review it: ${inline(`git diff ${details.base || "HEAD"}...${details.branch}`, 300)}`, "");
+    out.push("## Where the fixed files are", "", `The local branch ${inline(details.branch, 120)}${base}. To review it: ${inline(`git diff ${details.base || "HEAD"}...${details.branch}`, 300)}`, "");
   }
   if (details.partial) {
-    out.push("**saw could clean only part of what it found.** Read saw's report below for what is left.", "");
+    out.push("**saw could fix only part of what it found.** Read saw's report below for what is left.", "");
   }
   if (details.historyHoldsPayload) {
-    out.push("**git history still holds the malicious code.** Removing it from the checkout does not remove it from the history: do not push old commits, and consider a fresh clone once the clean-up is merged.", "");
+    out.push("## Git history still holds the infection", "", "This fixed the files only. Past commits still hold the malicious code: do not push or check out old commits.", "", "To remove it from the history, use **Fix infection in git history** (`saw fix amend`). It rewrites those commits and force-pushes each branch that held them.", "");
   }
   const work = details.uncommitted;
   if (work) {
@@ -276,20 +277,20 @@ export interface FixReportInput {
 
 export function fixReport(input: FixReportInput, copy: Copy): string {
   const { run, outcome } = input;
-  const out = [`# saw fix: ${prose(input.folderName, 120)}`, ""];
+  const out = [`# Files fix details: ${prose(input.folderName, 120)}`, ""];
   let title: string;
   let advice: string[];
   const stopped = stoppedLine(run);
   if (run.finishedAt === undefined) {
     title = "Fixing now";
-    advice = ["saw is cleaning this folder. Its report appears below as it works, and the folder is scanned again when it is done."];
+    advice = ["`saw fix` is fixing the infection in the files. Its report appears below as it works, and the folder is scanned again when it is done."];
   } else if (stopped) {
     title = "Stopped";
     advice = [stopped, "The folder is scanned again. Look in Source Control for anything saw had already changed."];
   } else if (outcome?.kind === "prepared") {
-    title = outcome.details?.partial ? "Clean-up prepared, in part" : "Clean-up prepared";
+    title = outcome.details?.partial ? "Files fixed, in part" : "Files fixed";
     advice = [
-      "saw removed what it confirmed from the checkout and prepared the clean-up on a new local branch. Nothing was pushed.",
+      "saw removed what it confirmed from the files and put the fix on a new local branch. Nothing was pushed, and past commits were not changed.",
       ...(outcome.needsReview ? ["Part of it needs you: saw's report below says what."] : []),
       "Review the branch in Source Control before you push it or open a pull request. saw's report below names the branches it made.",
     ];
@@ -298,18 +299,65 @@ export function fixReport(input: FixReportInput, copy: Copy): string {
     advice = ["saw confirmed nothing to remove, so it changed nothing."];
   } else {
     title = "Not fixed";
-    advice = [`saw could not fix this folder: ${prose(outcome?.kind === "failed" ? outcome.cause : "saw fix printed no result", 400)}`];
+    advice = [`saw could not fix the files: ${prose(outcome?.kind === "failed" ? outcome.cause : "saw fix printed no result", 400)}`];
   }
   out.push(`## ${title}`, "", ...advice.map((line) => `- ${line}`), `- ${AUDIT_HINT}`, "");
   if (input.decisions?.length) {
     out.push("## What you decided", "", ...input.decisions.map((line) => `- ${prose(line, 400)}`), "");
   }
+  const finished = run.finishedAt === undefined ? "" : `, took ${seconds(run.finishedAt - run.startedAt)}`;
+  out.push(`Folder ${inline(input.folderPath, 400)}. Started ${when(run.startedAt)}${finished}${sawVersion(input.sawVersion)}.`, "");
   if (outcome?.kind === "prepared" && outcome.details) {
     out.push(...fixDetails(outcome.details));
   }
-  const finished = run.finishedAt === undefined ? "" : `, took ${seconds(run.finishedAt - run.startedAt)}`;
-  out.push(`- Folder: ${inline(input.folderPath, 400)}`, `- Started ${when(run.startedAt)}${finished}${sawVersion(input.sawVersion)}`, "");
   out.push("## saw's report", "", said(run), "", footer(copy, "`saw fix --json` and saw's own report", { title: "saw fix", url: DOCS.fix }));
+  return out.join("\n");
+}
+
+// --- amend ----------------------------------------------------------------------------------------
+
+export interface AmendReportInput {
+  folderName: string;
+  folderPath: string;
+  run: CommandRun;
+  outcome: AmendOutcome | undefined;
+  sawVersion: string | undefined;
+  decisions?: string[];
+}
+
+export function amendReport(input: AmendReportInput, copy: Copy): string {
+  const { run, outcome } = input;
+  const out = [`# Git history fix details: ${prose(input.folderName, 120)}`, ""];
+  let title: string;
+  let advice: string[];
+  const stopped = stoppedLine(run);
+  if (run.finishedAt === undefined) {
+    title = "Fixing now";
+    advice = ["`saw fix amend` is rewriting the past commits that hold the infection. Its report appears below as it works, and the folder is scanned again when it is done."];
+  } else if (stopped) {
+    title = "Stopped";
+    advice = [stopped, "Read saw's report below for what it had already rewritten or pushed."];
+  } else if (outcome?.kind === "done") {
+    title = "Git history fixed";
+    advice = [
+      "saw rewrote the past commits that held the infection and force-pushed each branch that held them.",
+      "Tell everyone with a clone to reset those branches to the new ones. A clone that pushes the old commits brings the infection back.",
+      "Tags and forks are not rewritten: saw's report below names any it found.",
+    ];
+  } else if (outcome?.kind === "review") {
+    title = "Needs you";
+    advice = ["saw left part of this for you, or put the branches back. saw's report below says what and why."];
+  } else {
+    title = "Not fixed";
+    advice = ["saw could not fix the git history. saw's report below says why. Common causes: no admin rights on the repository, a clone that is not up to date, or no git name and email set."];
+  }
+  out.push(`## ${title}`, "", ...advice.map((line) => `- ${line}`), `- ${AUDIT_HINT}`, "");
+  if (input.decisions?.length) {
+    out.push("## What you decided", "", ...input.decisions.map((line) => `- ${prose(line, 400)}`), "");
+  }
+  const finished = run.finishedAt === undefined ? "" : `, took ${seconds(run.finishedAt - run.startedAt)}`;
+  out.push(`Folder ${inline(input.folderPath, 400)}. Started ${when(run.startedAt)}${finished}${sawVersion(input.sawVersion)}.`, "");
+  out.push("## saw's report", "", said(run), "", footer(copy, "`saw fix amend` and saw's own report", { title: "saw fix amend", url: DOCS.amend }));
   return out.join("\n");
 }
 
@@ -339,7 +387,7 @@ const AUDIT_ADVICE: Record<AuditVerdict, string> = {
   "to-confirm": "saw found nothing that makes changing credentials unsafe, provided the items below are yours. If any is not, treat this as an incident: do not change anything yet.",
   "rotation-unsafe": "Something on this machine still watches your credentials. Act on saw's report below first, then audit again before you change anything.",
   incomplete: "saw could not read all of this machine, so changing credentials is not known to be safe. saw's report below says what it could not read.",
-  failed: "This machine was not checked. saw's report below may say why; run **saw: Audit This Machine** again.",
+  failed: "This machine was not checked. saw's report below may say why; run **saw: Check Before Changing Passwords** again.",
 };
 
 function auditFinding(f: AuditDetails["findings"][number]): string[] {
@@ -377,10 +425,10 @@ function auditDetails(details: AuditDetails): string[] {
 }
 
 export function auditReport(input: AuditReportInput, copy: Copy): string {
-  const out = ["# saw audit: this machine", ""];
+  const out = ["# Before you change passwords", ""];
   const { run, verdict } = input;
   if (!run) {
-    out.push("This machine has not been audited from this editor yet. Run **saw: Audit This Machine**.", "", `- ${AUDIT_HINT}`, `- Learn more in saw's documentation: [auditing a machine](${DOCS.audit}).`);
+    out.push("This machine has not been checked from this editor yet. Use **Check** in Chat, or run **saw: Check Before Changing Passwords**.", "", `- ${AUDIT_HINT}`, `- Learn more in saw's documentation: [auditing a machine](${DOCS.audit}).`);
     return out.join("\n");
   }
   const stopped = stoppedLine(run);
@@ -414,18 +462,18 @@ export interface HooksReportInput {
 }
 
 export function hooksReport(input: HooksReportInput, copy: Copy): string {
-  const out = ["# saw scan-on-clone hooks", ""];
+  const out = ["# Checks on clone and pull", ""];
   const { status } = input;
   if (!status) {
-    out.push("## Checking", "", "saw has not said yet whether its hooks are in place.", "");
+    out.push("## Checking", "", "saw has not said yet whether the checks are on.", "");
   } else if (status.kind === "installed" && !status.problems.length) {
-    out.push("## In place", "", `Every clone, pull and branch switch is scanned before anything in it runs${status.events.length ? ` (${status.events.map((e) => inline(e, 40)).join(", ")})` : ""}.`, "");
+    out.push("## On", "", `Every clone, pull and branch switch is scanned before anything in it runs${status.events.length ? ` (${status.events.map((e) => inline(e, 40)).join(", ")})` : ""}.`, "");
   } else if (status.kind === "installed") {
-    out.push("## Need repair", "", "saw's hooks are installed but not fully working:", "", ...status.problems.map((p) => `- ${prose(p, 600)}`), "", "Run **saw: Repair Scan-on-Clone Hooks**.", "");
+    out.push("## Needs repair", "", "The checks are installed but not fully working:", "", ...status.problems.map((p) => `- ${prose(p, 600)}`), "", "Use **Repair** in Chat, or run **saw: Repair Checks on Clone and Pull**.", "");
   } else if (status.kind === "not-installed") {
-    out.push("## Not installed", "", "Clones, pulls and branch switches are not scanned. Run **saw: Install Scan-on-Clone Hooks** so saw checks every repository before anything in it runs.", "");
+    out.push("## Off", "", "Clones, pulls and branch switches are not scanned. Use **Turn on** in Chat, or run **saw: Turn On Checks on Clone and Pull**, so saw checks every repository before anything in it runs.", "");
   } else {
-    out.push("## Unknown", "", `saw could not say whether its hooks are in place: ${prose(status.detail, 600)}`, "");
+    out.push("## Unknown", "", `saw could not say whether the checks are on: ${prose(status.detail, 600)}`, "");
   }
   if (input.checkedAt !== undefined) {
     out.push(`- Checked ${when(input.checkedAt)}${sawVersion(input.sawVersion)}`, "");
@@ -435,7 +483,7 @@ export function hooksReport(input: HooksReportInput, copy: Copy): string {
     const state = change.finishedAt === undefined ? "running now" : (stoppedLine(change) ?? `finished in ${seconds(change.finishedAt - change.startedAt)}`);
     out.push(`## Last ${inline(`saw hook ${change.subcommand}`)}`, "", `Started ${when(change.startedAt)}; ${state}`, "", said(change), "");
   }
-  out.push(footer(copy, "`saw hook status`", { title: "scan-on-clone hooks", url: DOCS.hooks }));
+  out.push(footer(copy, "`saw hook status`", { title: "checks on clone and pull", url: DOCS.hooks }));
   return out.join("\n");
 }
 
@@ -448,11 +496,11 @@ export interface WatchReportInput {
 
 /** What `saw watch status` says. It names no paths and no process numbers. */
 export function watchReport(input: WatchReportInput, copy: Copy): string {
-  const out = ["# saw watch", ""];
+  const out = ["# Background checks", ""];
   const { run } = input;
   if (!run) {
     out.push(
-      "This machine's watcher has not been read from this editor yet. Run **saw: Open Watch Report**.",
+      "This machine's watcher has not been read from this editor yet. Run **saw: Open Background Checks**.",
       "",
       "That report says whether `saw watch` is in place, what is still open, and what happened since the last report.",
       "",

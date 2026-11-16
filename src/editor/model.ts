@@ -22,6 +22,8 @@ export interface FolderState {
   folder: vscode.WorkspaceFolder;
   scanning: boolean;
   fixing: boolean;
+  /** Which fix is running: `saw fix` on the files, or `saw fix amend` on git history. */
+  treating: "files" | "history" | undefined;
   /** A fix is waiting on a decision in the Decide view. */
   deciding: boolean;
   /** What saw says it is doing, while it scans; from a saw with `--progress=jsonl`. */
@@ -83,9 +85,10 @@ export class Model implements vscode.Disposable {
     this.changed.fire();
   }
 
-  setFixing(folder: vscode.WorkspaceFolder, fixing: boolean): void {
+  setFixing(folder: vscode.WorkspaceFolder, fixing: boolean, treating: "files" | "history" = "files"): void {
     const state = this.get(folder);
     state.fixing = fixing;
+    state.treating = fixing ? treating : undefined;
     if (!fixing) {
       state.deciding = false;
     }
@@ -114,7 +117,7 @@ export class Model implements vscode.Disposable {
     const key = folder.uri.toString();
     let state = this.folders.get(key);
     if (!state) {
-      state = { folder, scanning: false, fixing: false, deciding: false, progress: undefined, checking: false, checkStep: undefined, checkAbout: undefined, unheld: false, unheldFrom: undefined, held: undefined, last: undefined, scannedBy: undefined };
+      state = { folder, scanning: false, fixing: false, treating: undefined, deciding: false, progress: undefined, checking: false, checkStep: undefined, checkAbout: undefined, unheld: false, unheldFrom: undefined, held: undefined, last: undefined, scannedBy: undefined };
       this.folders.set(key, state);
     }
     return state;

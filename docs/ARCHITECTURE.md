@@ -10,20 +10,25 @@ it in the editor.
 src/
   extension.ts          composition root: builds the parts below and registers commands
   cursorHook.ts         Cursor's beforeShellExecution hook, bundled as dist/cursor-hook.js
+  governShim.ts         the git and gh stand-in, bundled as dist/govern-shim.js
   core/                 no `vscode` import (lint-enforced), unit-tested
     run · text · version · capabilities · docs · controls · openRun
     scan/               scan, contract, verdict, progress, schedule
     fix/                what `fix`, `audit`, `hook` and `watch status` reported; `--ask=jsonl` questions
-    install/            locate saw, find Python, pipx install, the packages that fit this machine, diagnose a failure
+    install/            locate saw, find Python, pipx install, the packages that fit this machine, diagnose a failure,
+                        keep the installed saw when moving to the pin fails
+    govern/             which git and gh commands bring files in (aliases, --git-dir, clones), the real git and gh
+                        behind the stand-in, the stand-in's wrappers, saw govern's answers
     report/             Markdown reports, with scanned text kept literal
     agent/              what agents are told, `saw mcp`, the Cursor hook's answer
     feedback/           when Chat may ask for a rating, and the links that ask opens
   editor/               VS Code adapters, grouped the same way
     model · settings · present
     scan/               controller, triggers, diagnostics
-    fix/                Fix…, the Decide view, diffs
+    fix/                The files fix and the git history fix, the Your choice tab, diffs
     install/            find saw, install it, the install lock
-    view/               the saw sidebar, the chat webview, the verdict and decide editor tabs, status bar, alerts, reports
+    govern/             place the stand-in, point the Git view at it, read its notices
+    view/               the Chat sidebar, the Scan results tab, status bar, alerts, reports
     feedback/           opens the rating, star, and issue pages; stores the dismissal
     agent/              the language-model tool, MCP registration, the Cursor guard
 test/
@@ -50,16 +55,19 @@ The whole folder is always scanned, because saw judges a file by where it sits:
 
 ## How an action runs
 
-**Fix…**, **Audit This Machine** and the hook commands run saw in the background behind a
+**Fix Infection in Files…**, **Fix Infection in Git History…**, **Check Before Changing Passwords** and the hook commands run saw in the background behind a
 cancellable progress notification. saw's output is collected as it arrives, and the action's
 report follows it live. When saw finishes, **actions** reads its result: the JSON where saw writes
 it, otherwise its exit status and its own words. A fix ends with a rescan of the folder.
 
-Installing saw never asks, because it changes nothing the operator owns. Fixing always asks: it
-deletes files from the checkout, so it runs only from an explicit **Fix…** and a modal that says
-what will change. The extension never passes `--pr`, so nothing is pushed or published. When saw
-announces `fix.ask.json`, the fix also passes `--ask=jsonl` and the Decide view answers what a
-terminal would ask. How that looks is specified in [FIX-DECISIONS.md](FIX-DECISIONS.md).
+Installing saw never asks, because it changes nothing the operator owns. Fixing always asks, and
+the two fixes are separate commands. **Fix Infection in Files…** runs `saw fix`: it deletes files
+from the checkout, so it runs only after a modal that says what will change. The extension never
+passes `--pr`, so it pushes and publishes nothing. **Fix Infection in Git History…** runs
+`saw fix amend`, which rewrites past commits and force-pushes their branches, so it runs only after
+a modal that lists what it changes and needs, and after the operator types the folder's name. When
+saw announces `fix.ask.json`, either fix also passes `--ask=jsonl` and the Your choice tab answers
+what a terminal would ask, naming the fix that asked. How that looks is specified in [FIX-DECISIONS.md](FIX-DECISIONS.md).
 
 ## Finding and installing saw
 
@@ -77,7 +85,9 @@ This works without administrator rights on every platform, including PEP 668 sys
 - **Pinned:** the release installed is pinned in `package.json` (`"saw"`). A saw the extension
   installed is moved to the pin when it falls behind, and that binary is the one that runs once
   it meets the pin, even when an older saw appears earlier on `PATH`. One the operator installed
-  is not replaced. When that one already meets the pin, it is still the one that runs.
+  is not replaced. When that one already meets the pin, it is still the one that runs. When moving
+  to the pin fails, the saw already installed keeps scanning. Each verdict records which saw gave
+  it, and every place that shows a verdict says when that saw was older than the pin.
 - **One install at a time:** a lock directory in global storage keeps two windows from installing
   at once.
 - **Terminals:** integrated terminals get saw's folder on `PATH` through the extension's
@@ -132,11 +142,13 @@ verdict never comes from progress.
 - **Scanned text stays literal.** File names, descriptions, evidence and saw's output can come from
   whoever wrote the scanned folder. They reach Markdown only as code spans, fenced blocks or fully
   escaped text, so they cannot form a link, an image or HTML. The only links are to plain https
-  pages.
+  pages. A report opens in the extension's own details tab, drawn by markdown-it with raw HTML off,
+  under a policy that loads nothing from outside the page; a click on a link opens it in the browser
+  only when it is https.
 - **Reports live in the extension's own storage, never in the project.** Folder reports go in
   workspace storage, keyed by a hash of the folder; machine reports (audit, hooks, watch) go in global
   storage. A cloned repository cannot plant or fake a report. The kept copies withhold evidence;
-  the preview shows it from memory.
+  the details tab shows it from memory.
 - **Agents get the verdict, not the evidence.** `saw_folderVerdict` answers from the model after
   any due scan has run, and fails closed: with no current answer, it says stop. It leaves out
   evidence and flattens file names, so a scanned file cannot put text into an agent's prompt. It is
@@ -182,6 +194,14 @@ verdict never comes from progress.
   (otherwise `~/.local/state/saw/govern/status`). The editor reads those with the same notice
   reader. Two notices for one phase a few seconds apart are one check. Git the stand-in did not
   run is still scanned by the scan-on-clone hooks.
+- **The stand-in never runs itself, and holds what git would change.** It runs the real git and gh
+  only by full path, outside every stand-in folder (matched on disk, so symlinks and other
+  spellings count) and never a file that carries the stand-in mark. When none is left, it runs
+  nothing. It finds the folder a command changes as git does: `--work-tree` or `GIT_WORK_TREE`,
+  otherwise the working directory, and also holds a command that changes an open folder's git
+  directory from outside. An alias is checked as the command it runs. A clone cannot be held, so
+  one that leaves files in an open folder is followed by a scan and a warning. When saw's own
+  stand-in cannot start, this window's saw check holds the update.
 - **A rating is asked for in Chat, after saw has done something the person can judge.** The decision
   of when to show the card lives in `core/feedback` and is unit-tested. The editor stores a
   dismissal and a rating in global state, and opens the review, star, and issue pages. The issue

@@ -22,14 +22,34 @@ export function fixArgs(folder: string, configPath: string, capabilities: Capabi
   return ["fix", folder, "--json", "--no-stream", ...ask, ...(configPath ? ["--config", configPath] : [])];
 }
 
+/**
+ * `saw fix amend` for one repository: it rewrites the past commits that hold the payload and
+ * force-updates each branch they sat on. It takes no `--json` and no `--progress`, so its outcome
+ * is its exit code and its own report.
+ */
+export function amendArgs(folder: string, configPath: string, capabilities: Capabilities = NO_CAPABILITIES): string[] {
+  const ask = supports(capabilities, FEATURES.fixAsk, "fix-ask") ? ["--ask=jsonl"] : [];
+  return ["fix", "amend", folder, "--no-stream", ...ask, ...(configPath ? ["--config", configPath] : [])];
+}
+
+/** done: the rewritten history no longer holds it. review: saw left something for you, or put the branches back. */
+export type AmendOutcome = { kind: "done" } | { kind: "review" } | { kind: "failed" };
+
+export function readAmend(exitCode: number | null): AmendOutcome {
+  if (exitCode === 0) {
+    return { kind: "done" };
+  }
+  return exitCode === 1 ? { kind: "review" } : { kind: "failed" };
+}
+
 export const REMEDIATIONS = ["prepared", "skipped", "failed", "pr", "fork-pr", "patch", "issue"] as const;
 export type Remediation = (typeof REMEDIATIONS)[number];
 
-/** What a saw with the fuller `fix --json` (stayawakebot#1813) says about a prepared clean-up. */
+/** What a saw with the fuller `fix --json` (stayawakebot#1813) says about a prepared files fix. */
 export interface FixDetails {
   /** saw could clean only part of what it found. */
   partial: boolean;
-  /** The local branch holding the clean-up, and the branch it was made from. */
+  /** The local branch holding the fixed files, and the branch it was made from. */
   branch: string;
   base: string;
   removed: string[];
@@ -52,7 +72,7 @@ export interface UncommittedWork {
 }
 
 export type FixOutcome =
-  /** saw changed the checkout and prepared the clean-up on a local branch. */
+  /** saw changed the files and put the fix on a local branch. */
   | { kind: "prepared"; needsReview: boolean; details?: FixDetails }
   /** Nothing confirmed, so nothing changed. */
   | { kind: "skipped" }

@@ -111,35 +111,41 @@
       },
       {
         "command": "saw.openReport",
-        "title": "Open Report",
+        "title": "Open Full Details…",
         "category": "saw",
         "icon": "$(book)"
       },
       {
         "command": "saw.fixFolder",
-        "title": "Fix Folder…",
+        "title": "Fix Infection in Files…",
         "category": "saw",
         "icon": "$(wand)"
       },
       {
+        "command": "saw.amendHistory",
+        "title": "Fix Infection in Git History…",
+        "category": "saw",
+        "icon": "$(history)"
+      },
+      {
         "command": "saw.auditMachine",
-        "title": "Audit This Machine",
+        "title": "Check Before Changing Passwords",
         "category": "saw"
       },
       {
         "command": "saw.openWatchReport",
-        "title": "Open Watch Report",
+        "title": "Open Background Checks",
         "category": "saw",
         "icon": "$(eye)"
       },
       {
         "command": "saw.installHooks",
-        "title": "Install Scan-on-Clone Hooks",
+        "title": "Turn On Checks on Clone and Pull",
         "category": "saw"
       },
       {
         "command": "saw.repairHooks",
-        "title": "Repair Scan-on-Clone Hooks",
+        "title": "Repair Checks on Clone and Pull",
         "category": "saw"
       },
       {
@@ -156,13 +162,13 @@
       },
       {
         "command": "saw.openVerdict",
-        "title": "Open Verdict",
+        "title": "See Scan Results",
         "category": "saw",
         "icon": "$(open-preview)"
       },
       {
         "command": "saw.decideShow",
-        "title": "Open the Decision",
+        "title": "Choose What to Keep",
         "category": "saw",
         "icon": "$(open-preview)"
       },
@@ -211,7 +217,7 @@
     "languageModelTools": [
       {
         "name": "saw_folderVerdict",
-        "displayName": "saw folder verdict",
+        "displayName": "saw folder safety check",
         "toolReferenceName": "sawVerdict",
         "canBeReferencedInPrompt": true,
         "icon": "$(shield)",
@@ -247,70 +253,25 @@
           "id": "saw.chat",
           "name": "Chat",
           "type": "webview"
-        },
-        {
-          "id": "saw.findings",
-          "name": "Verdict"
-        },
-        {
-          "id": "saw.decide",
-          "name": "Decide",
-          "type": "webview"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "saw.findings",
-        "contents": "No scan has run yet.\n[Scan Workspace](command:saw.scanWorkspace)\nNew to saw? Read [what each verdict means](https://saw-docs.ndevuspace.com/latest/explanation/verdicts/) or the [saw documentation](https://saw-docs.ndevuspace.com/)."
-      }
-    ],
     "menus": {
       "view/title": [
         {
           "command": "saw.scanWorkspace",
-          "when": "view == saw.findings || view == saw.chat",
+          "when": "view == saw.chat",
           "group": "navigation"
         },
         {
           "command": "saw.openVerdict",
-          "when": "view == saw.findings || view == saw.chat",
+          "when": "view == saw.chat",
           "group": "navigation@2"
         },
         {
-          "command": "saw.openDocumentation",
-          "when": "view == saw.findings",
-          "group": "navigation@9"
-        },
-        {
           "command": "saw.shareFeedback",
-          "when": "view == saw.findings || view == saw.chat",
+          "when": "view == saw.chat",
           "group": "navigation@10"
-        },
-        {
-          "command": "saw.decideShow",
-          "when": "view == saw.decide && saw.deciding",
-          "group": "navigation"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "saw.openReport",
-          "when": "view == saw.findings && viewItem =~ /^(folder|audit|hooks|watch)/",
-          "group": "inline"
-        },
-        {
-          "command": "saw.openReport",
-          "when": "view == saw.findings && viewItem =~ /^(folder|audit|hooks|watch)/"
-        },
-        {
-          "command": "saw.fixFolder",
-          "when": "view == saw.findings && viewItem == folder.infected",
-          "group": "inline"
-        },
-        {
-          "command": "saw.fixFolder",
-          "when": "view == saw.findings && viewItem == folder.infected"
         }
       ],
       "editor/title": [
@@ -396,13 +357,13 @@
           "type": "boolean",
           "default": true,
           "scope": "machine",
-          "markdownDescription": "In Cursor, check saw's verdict before the agent runs a command that installs or runs a folder's code (a package manager, build tool, interpreter, `./script`, or a git command that runs the repository's hooks). It refuses the command in a folder saw found infected, and asks you first when saw found it suspicious or could not check it."
+          "markdownDescription": "In Cursor, check saw's scan result before the agent runs a command that installs or runs a folder's code (a package manager, build tool, interpreter, `./script`, or a git command that runs the repository's hooks). It refuses the command in a folder saw found infected, and asks you first when saw found it suspicious or could not check it."
         },
         "saw.governUpdates": {
           "type": "boolean",
           "default": true,
           "scope": "machine",
-          "markdownDescription": "When the installed saw can check an incoming update, wait for that check before a pull, checkout, or similar command changes an open folder. Clean and residue are applied. Anything else leaves the folder as it was. Covers the editor's integrated terminal and, except on Windows, its Git view."
+          "markdownDescription": "When the installed saw can check an incoming update, wait for that check before a pull, checkout, or similar command changes an open folder. Clean updates, and those with only traces left, are applied. Anything else leaves the folder as it was. Covers the editor's integrated terminal and, except on Windows, its Git view."
         },
         "saw.configPath": {
           "type": "string",
@@ -447,6 +408,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/markdown-it": "^14.2.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "~20.19.0",
     "@types/vscode": "~1.96.0",
@@ -457,6 +419,7 @@
     "esbuild": "^0.28.2",
     "eslint": "^10.13.0",
     "globals": "^17.13.0",
+    "markdown-it": "^14.3.3",
     "ovsx": "^1.3.0",
     "typescript": "npm:@typescript/typescript6@~6.0.2",
     "typescript-eslint": "^8.72.0",
