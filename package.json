@@ -408,7 +408,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/markdown-it": "^14.2.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "~20.19.0",
     "@types/vscode": "~1.96.0",
