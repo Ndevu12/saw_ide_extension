@@ -24,6 +24,7 @@
 
 ### Fixed
 
+- saw installs on Linux again. saw 0.17.1 has ready-built packages for Linux x86_64 and arm64, which 0.17.0 did not. Windows still has none in 0.17.1, so a Windows machine keeps the saw it has, and the notification names the platforms the release has.
 - When `gh` runs through saw's own stand-in and no real git is left, saw's stand-in no longer finds this extension's `git` on PATH and runs it once more.
 - The notification for a failed install of saw is no longer lost when a scan starts while the installed saw is being listed again.
 - A `git pull`, `fetch`, `merge`, `rebase`, `checkout` or `switch` aimed at an open folder with `--git-dir`, `--work-tree`, `GIT_DIR` or `GIT_WORK_TREE` from outside it now waits for saw, as one run inside the folder does.
