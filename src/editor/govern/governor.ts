@@ -8,6 +8,7 @@ import { FEATURES, supports } from "../../core/capabilities";
 import { configOutsideFolders } from "../../core/controls";
 import { offersGovernRestore, offersGovernVerdict, openAdmission, readGoverned, readNotice, readRestore, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig, type Governed, type GovernedReading, type GovernNotice } from "../../core/govern/contract";
 import { quietGit, type Tool } from "../../core/govern/command";
+import { answerFileName, ASK_EDITOR_MS, askFileName, commandText, readUpdateAsk, type UpdateAsk } from "../../core/govern/decision";
 import { folderKey, governStatusDir, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
 import { diskFiles, findRealProgram, isRealProgram, isStandin } from "../../core/govern/realProgram";
 import { behindVersion } from "../../core/install/upgrade";
@@ -38,6 +39,10 @@ export class Governor implements vscode.Disposable {
   private readonly holdingRoot: string;
   private readonly markerDir: string;
   private readonly resultDir: string;
+  private readonly askDir: string;
+  /** Questions from the stand-in this window is showing, so a second change to the file does not show one again. */
+  private readonly asking = new Set<string>();
+  private askWatcher: FSWatcher | undefined;
   private readonly seen = new Map<string, string>();
   /** First time a phase was shown for a folder, so the other writer of that check is skipped. */
   private readonly shownAt = new Map<string, number>();
@@ -74,6 +79,7 @@ export class Governor implements vscode.Disposable {
     this.holdingRoot = nodePath.join(this.root, "holding");
     this.markerDir = nodePath.join(this.root, "markers");
     this.resultDir = nodePath.join(this.root, "results");
+    this.askDir = nodePath.join(this.root, "asks");
     context.subscriptions.push(
       model.onDidChange(() => this.refresh()),
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
@@ -186,7 +192,7 @@ export class Governor implements vscode.Disposable {
       return;
     }
     this.starting = true;
-    void this.enable(ready.binary, ready.capabilities.features.has("govern.progress.jsonl")).finally(() => {
+    void this.enable(ready.binary, ready.capabilities.features.has("govern.progress.jsonl"), ready.capabilities.features.has("govern.decision")).finally(() => {
       this.starting = false;
       if (this.pending) {
         this.pending = false;
@@ -195,7 +201,7 @@ export class Governor implements vscode.Disposable {
     });
   }
 
-  private async enable(saw: string, progress: boolean): Promise<void> {
+  private async enable(saw: string, progress: boolean, decides: boolean): Promise<void> {
     const systemBin = this.systemPlacement();
     this.systemBin = systemBin;
     const realGit = await this.realBinary("git");
@@ -212,7 +218,7 @@ export class Governor implements vscode.Disposable {
       return;
     }
     const quietHooks = await this.quietHooks(realGit);
-    const signature = JSON.stringify({ saw, realGit, realGh, progress, standin, systemBin, verdict: this.verdictReady, restore: this.restoreReady, quietHooks, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
+    const signature = JSON.stringify({ saw, realGit, realGh, progress, decides, standin, systemBin, verdict: this.verdictReady, restore: this.restoreReady, quietHooks, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
     if (signature === this.signature && this.active) {
       return;
     }
@@ -220,6 +226,7 @@ export class Governor implements vscode.Disposable {
     mkdirSync(this.holdingRoot, { recursive: true });
     mkdirSync(this.markerDir, { recursive: true });
     mkdirSync(this.resultDir, { recursive: true });
+    mkdirSync(this.askDir, { recursive: true });
     const shim = this.context.asAbsolutePath("dist/govern-shim.js");
     this.writeWrapper("git", realGit, shim);
     if (realGh) {
@@ -239,12 +246,16 @@ export class Governor implements vscode.Disposable {
       ...(standin ? { standin } : {}),
       quietHooks,
       standinDirs: this.standinDirs(),
+      ...(decides ? { decides, askDir: this.askDir } : {}),
     };
     this.writeConfig(config);
     this.coverTerminals(systemBin);
     this.signature = signature;
     this.active = true;
     this.watchResults();
+    if (decides) {
+      this.watchAsks();
+    }
     if (this.verdictReady) {
       this.watchStatus();
       await this.askOpenFolders();
@@ -537,6 +548,70 @@ export class Governor implements vscode.Disposable {
     this.readNotices(this.resultDir);
   }
 
+  /** Questions the stand-in leaves when saw could not check an update and no terminal can answer, as from the Git view. */
+  private watchAsks(): void {
+    if (this.askWatcher) {
+      return;
+    }
+    try {
+      this.askWatcher = watch(this.askDir, () => this.readAsks());
+    } catch (error) {
+      this.log.warn(`saw could not watch for questions about updates it could not check: ${String(error)}`);
+    }
+    this.readAsks();
+  }
+
+  private readAsks(): void {
+    let names: string[];
+    try {
+      names = readdirSync(this.askDir);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      if (!name.endsWith(".ask.json")) {
+        continue;
+      }
+      let ask: UpdateAsk | undefined;
+      try {
+        ask = readUpdateAsk(readFileSync(nodePath.join(this.askDir, name), "utf8"));
+      } catch {
+        continue;
+      }
+      const repo = ask && nodePath.resolve(ask.repo);
+      const folder = repo && (vscode.workspace.workspaceFolders ?? []).find((item) => nodePath.resolve(item.uri.fsPath) === repo);
+      if (!ask || !folder || this.asking.has(ask.id) || Date.now() - ask.at > ASK_EDITOR_MS) {
+        continue;
+      }
+      this.asking.add(ask.id);
+      void this.askUpdate(ask, folder.name).finally(() => this.asking.delete(ask.id));
+    }
+  }
+
+  private async askUpdate(ask: UpdateAsk, name: string): Promise<void> {
+    const run = "Run As Typed";
+    const picked = await vscode.window.showWarningMessage(
+      `saw can't check this update to ${name}: ${ask.reason}.`,
+      { modal: true, detail: `Run \`${commandText(ask.tool, ask.args)}\` as typed? saw scans the folder straight after. Otherwise the folder stays as it is.` },
+      run,
+      "Leave Unchanged",
+    );
+    const decision = picked === run ? "run-as-typed" : "leave-unchanged";
+    const answer = nodePath.join(this.askDir, answerFileName(ask.id));
+    try {
+      // The first window to answer decides. The stand-in removes the question once it reads one.
+      writeFileSync(answer, decision, { flag: "wx" });
+    } catch {
+      // Answered already.
+    }
+    if (!existsSync(nodePath.join(this.askDir, askFileName(ask.id)))) {
+      // The stand-in stopped waiting, and left the folder unchanged.
+      rmSync(answer, { force: true });
+      return;
+    }
+    this.log.info(`${name}: saw could not check \`${commandText(ask.tool, ask.args)}\`; ${decision === "run-as-typed" ? "run as typed" : "left unchanged"}.`);
+  }
+
   /** Records saw writes for a check this window did not start. They outlive the holding directory. */
   private watchStatus(): void {
     if (this.statusWatcher || !this.statusDir) {
@@ -636,6 +711,7 @@ export class Governor implements vscode.Disposable {
   dispose(): void {
     this.watcher?.close();
     this.statusWatcher?.close();
+    this.askWatcher?.close();
     this.writeEnabled(false);
   }
 

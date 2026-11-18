@@ -49,7 +49,7 @@ export function plan(config: GovernConfig, tool: Tool, args: readonly string[], 
   }
   const { directory, gitDirFolder } = expanded.command;
   // The work tree, or the open folder whose git directory the command changes from outside it.
-  const repo = gitBringsFiles(expanded.command)
+  const repo = gitBringsFiles(expanded.command, config.decides === true)
     ? enclosingFolder(config.folders, directory) ?? (gitDirFolder ? enclosingFolder(config.folders, gitDirFolder) : undefined)
     : undefined;
   return repo ? hold(repo, expanded.args) : through();

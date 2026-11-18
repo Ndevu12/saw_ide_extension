@@ -1,8 +1,11 @@
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
+import { createInterface } from "node:readline";
 
 import { applyArgs, prepareArgs, readApply, readPrepare, UNCHECKED_CLONE, UNCHECKED_UPDATE, type GovernConfig, type GovernPhase } from "./core/govern/contract";
+import { answerFileName, ASK_EDITOR_MS, askFileName, DECISION_ENV, decisionFromEnv, readAnswer, terminalAnswer, terminalQuestion, type Decision, type UpdateAsk } from "./core/govern/decision";
 import { activationEnv, folderKey, plan, type Hold } from "./core/govern/plan";
 import { checkRealProgram, diskFiles, pathWithoutStandins } from "./core/govern/realProgram";
 import { enclosingFolder, parseGit, quietGit, repoConfigText, silencedRepoConfig, type Tool } from "./core/govern/command";
@@ -219,7 +222,9 @@ async function main(): Promise<void> {
     });
     return;
   }
-  if (config.standin && action.kind === "hold") {
+  // saw's stand-in leaves an update it cannot check unchanged when no terminal can answer, so then this one asks the editor instead.
+  const editorDecides = config.decides === true && !!config.askDir && !terminalAnswers();
+  if (config.standin && action.kind === "hold" && !editorDecides) {
     const steps = new ProgressLines((progress) => {
       if (progress) {
         notice(config, action.repo, "checking", [], undefined, describeProgress(progress));
@@ -259,6 +264,98 @@ async function main(): Promise<void> {
   await holdWithSaw(config, action, args);
 }
 
+/** Stopped while waiting for a decision: nothing ran, so the folder is as it was. */
+function exitOnStop(cleanup: () => void): void {
+  for (const name of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+    process.on(name, () => {
+      cleanup();
+      process.exit(130);
+    });
+  }
+}
+
+/** Whether a person at this terminal can answer a question. */
+function terminalAnswers(): boolean {
+  return process.stdin.isTTY === true && process.stderr.isTTY === true;
+}
+
+/** The operator's decision about an update saw could not check. With no one to ask, the folder is left as it is. */
+async function decide(config: GovernConfig, action: Hold, typed: readonly string[], reason: string): Promise<Decision> {
+  const ahead = decisionFromEnv(process.env);
+  if (ahead) {
+    return ahead;
+  }
+  if (terminalAnswers()) {
+    return askTerminal(terminalQuestion(action.tool, typed, reason));
+  }
+  if (config.askDir) {
+    return askEditor(config.askDir, { id: randomUUID(), repo: action.repo, tool: action.tool, args: [...typed], reason, at: Date.now() });
+  }
+  process.stderr.write(`saw cannot check this update: ${reason}.\n`);
+  return "leave-unchanged";
+}
+
+function askTerminal(question: string): Promise<Decision> {
+  return new Promise((resolve) => {
+    const lines = createInterface({ input: process.stdin, output: process.stderr });
+    let answered = false;
+    const answer = (decision: Decision) => {
+      if (!answered) {
+        answered = true;
+        lines.close();
+        resolve(decision);
+      }
+    };
+    lines.on("SIGINT", () => {
+      process.stderr.write("\n");
+      answer("leave-unchanged");
+    });
+    exitOnStop(() => undefined);
+    lines.on("close", () => answer("leave-unchanged"));
+    lines.question(question, (line) => answer(terminalAnswer(line)));
+  });
+}
+
+/** Leave the question for the editor, which shows it to the person, and wait for the answer. */
+async function askEditor(dir: string, ask: UpdateAsk): Promise<Decision> {
+  const file = path.join(dir, askFileName(ask.id));
+  const answerFile = path.join(dir, answerFileName(ask.id));
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(`${file}.tmp`, JSON.stringify(ask));
+    renameSync(`${file}.tmp`, file);
+  } catch {
+    process.stderr.write(`saw cannot check this update: ${ask.reason}.\n`);
+    return "leave-unchanged";
+  }
+  process.stderr.write(`saw cannot check this update: ${ask.reason}. The editor asks whether to run it as typed.\n`);
+  exitOnStop(() => {
+    rmSync(file, { force: true });
+    rmSync(answerFile, { force: true });
+  });
+  const end = Date.now() + ASK_EDITOR_MS;
+  try {
+    while (Date.now() < end) {
+      let text: string | undefined;
+      try {
+        text = readFileSync(answerFile, "utf8");
+      } catch {
+        text = undefined;
+      }
+      const decision = text === undefined ? undefined : readAnswer(text);
+      if (decision) {
+        return decision;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    process.stderr.write("saw: no answer came from the editor.\n");
+    return "leave-unchanged";
+  } finally {
+    rmSync(file, { force: true });
+    rmSync(answerFile, { force: true });
+  }
+}
+
 /** Ask saw to check the update into a holding folder, and let it into the open folder only when saw says so. `typed` is the command as the operator typed it. */
 async function holdWithSaw(config: GovernConfig, action: Hold, typed: readonly string[]): Promise<void> {
   const steps = new ProgressLines((progress) => {
@@ -288,11 +385,23 @@ async function holdWithSaw(config: GovernConfig, action: Hold, typed: readonly s
     process.exit(130);
   }
   const reading = readPrepare(prepared.stdout, prepared.exitCode);
-  if (reading.unchecked && !prepared.timedOut && !prepared.spawnError) {
-    // saw judged nothing, so holding would only stop the operator. The folder is scanned once the command has run.
-    const reason = reading.reasons[0] ?? "";
+  const reason = reading.reasons[0] ?? "";
+  const runUnchecked = () => runRealOrExit(config, action.tool, typed, () => notice(config, action.repo, "finished", [UNCHECKED_UPDATE, reason]));
+  if (reading.decision && !prepared.timedOut && !prepared.spawnError) {
+    const decision = await decide(config, action, typed, reason);
+    if (decision === "run-as-typed") {
+      process.stderr.write("saw: running it as typed. The folder is scanned straight after.\n");
+      runUnchecked();
+      return;
+    }
+    notice(config, action.repo, "finished", []);
+    process.stderr.write(`saw left the folder unchanged; ${action.tool} did not run. To run it as typed, answer yes, or set ${DECISION_ENV}=run-as-typed.\n`);
+    process.exit(1);
+  }
+  if (reading.unchecked && !config.decides && !prepared.timedOut && !prepared.spawnError) {
+    // An older saw cannot check most updates and offers no decision, so holding would only stop the operator.
     process.stderr.write(`saw could not check this update first (${reason}), so it ran unchecked. saw scans the folder now.\n`);
-    runRealOrExit(config, action.tool, typed, () => notice(config, action.repo, "finished", [UNCHECKED_UPDATE, reason]));
+    runUnchecked();
     return;
   }
   if (!reading.release || prepared.timedOut || prepared.spawnError) {
