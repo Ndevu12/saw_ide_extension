@@ -103,7 +103,7 @@ export interface ChatFolderInput {
   /** A git command this window did not run already changed the folder, or the open folder was not let in. */
   unheld?: boolean;
   /** Which of those two the line should name. */
-  unheldFrom?: "command" | "open";
+  unheldFrom?: "command" | "open" | "let-in";
   /** Set while a fix is waiting, naming which act the question belongs to. */
   decision?: string;
   cleanup?: ChatCleanup;
@@ -188,6 +188,7 @@ export function chatPage(folders: ChatFolderInput[], machine: ChatMachineInput, 
 }
 
 const OPEN_UNHELD = "saw didn't check this version of the folder before it arrived. Nothing was changed.";
+const LET_IN = "You let in an update saw had held. The scan is of the folder as it is now.";
 
 /** Chat names the git command saw missed. An agent hears that a change arrived without a check. */
 const MISSED_COMMAND = {
@@ -196,9 +197,12 @@ const MISSED_COMMAND = {
 } as const;
 
 /** What the verdict tab or an agent says when a folder changed without a check, or was already not a commit saw let in. */
-export function unheldSentence(from: "command" | "open" | undefined, audience: keyof typeof MISSED_COMMAND = "chat"): string {
+export function unheldSentence(from: "command" | "open" | "let-in" | undefined, audience: keyof typeof MISSED_COMMAND = "chat"): string {
   if (from === "open") {
     return OPEN_UNHELD;
+  }
+  if (from === "let-in") {
+    return LET_IN;
   }
   return MISSED_COMMAND[audience];
 }
@@ -304,7 +308,9 @@ function folderNotice(folder: ChatFolderInput): { text: string; tone: Tone } | u
     notices.push({ text: `An update was stopped (${VERDICT_BADGE[folder.held.verdict]}). The folder is unchanged.`, tone: folder.held.verdict === "infected" ? "bad" : "warn" });
   }
   const settled = folder.verdict === "clean" || folder.verdict === "infected";
-  if (folder.unheld && folder.unheldFrom !== "open") {
+  if (folder.unheld && folder.unheldFrom === "let-in") {
+    notices.push({ text: "You let in an update saw had held.", tone: "warn" });
+  } else if (folder.unheld && folder.unheldFrom !== "open") {
     notices.push({ text: "A git command changed this folder without a check.", tone: "bad" });
   } else if (folder.unheld && !settled) {
     notices.push({ text: "This version arrived without a check.", tone: "warn" });
@@ -377,6 +383,9 @@ function folderSteps(folder: ChatFolderInput, index: string | number): Pick<Chat
     if (!busy) {
       links.push(RESCAN(index));
     }
+  }
+  if (folder.held) {
+    links.unshift({ act: `held-report:${index}`, label: "Held update details", tone: "secondary" });
   }
   if (folder.cleanup) {
     links.push({ act: `fix-report:${index}`, label: "Files fix details", tone: "secondary" });

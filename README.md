@@ -127,7 +127,12 @@ terminal is covered, and so is the Git view, except on Windows. Clean and residu
 While the check runs, the status bar, the saw view, and Chat say saw is checking the update, and
 the step saw names when it names one. The folder is unchanged until the check finishes. Suspicious,
 infected, and a check that could not finish leave the folder as it was, and the saw view says the
-update was held. When saw cannot check an update at all, it tells you why, and you decide: run the
+update was held. The terminal lists what saw found and what to do, and **Held update details**
+shows the update's findings in full. That scan is of the files the update brings, not of the
+folder's history. You can still let it in: answer yes in the terminal, or choose **Let In Anyway**
+when the editor asks. For an infected update you type the folder's name. `SAW_GOVERN_DECISION`
+never lets a held update in. Once it is in, the folder is scanned and Chat says you let it in.
+When saw cannot check an update at all, it tells you why, and you decide: run the
 command as you typed it, or leave the folder as it is. The terminal asks you. The Git view asks in a
 dialog. If you run it, the folder is scanned straight after, and Chat says the change was not
 checked first. With no one to ask, the folder is left as it is. To decide ahead, set

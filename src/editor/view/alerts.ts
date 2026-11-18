@@ -80,17 +80,21 @@ export class Alerts {
     void vscode.window.showWarningMessage(`saw did not check a git command in ${name} before it changed the folder. The scan is of the folder as it is now.`);
   }
 
+  letIn(name: string): void {
+    void vscode.window.showWarningMessage(`You let the held update into ${name}. saw is scanning the folder as it is now.`);
+  }
+
   /** The folder was already open, and it is not a commit saw let in. Nothing was put back. */
   notAdmitted(name: string): void {
     void vscode.window.showWarningMessage(`saw didn't check this version of ${name} before it arrived, and could not undo it. saw scanned the folder as it is now.`);
   }
 
-  held(name: string, verdict: FolderVerdict): void {
-    const message = `saw stopped an update to ${name} (${VERDICT_LABEL[verdict]}). The folder was not changed.`;
+  held(folder: vscode.WorkspaceFolder, verdict: FolderVerdict): void {
+    const message = `saw stopped an update to ${folder.name} (${VERDICT_LABEL[verdict]}). The folder was not changed. See what was found and what to do.`;
     const show = verdict === "infected" ? vscode.window.showErrorMessage : vscode.window.showWarningMessage;
-    void show(message, "Full Details").then((choice) => {
-      if (choice === "Full Details") {
-        void vscode.commands.executeCommand("saw.openReport");
+    void show(message, "See What Was Found").then((choice) => {
+      if (choice === "See What Was Found") {
+        void vscode.commands.executeCommand("saw.openReport", { kind: "held", state: { folder } });
       }
     });
   }

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import type { AuditDetails, AuditVerdict, HookStatus } from "../core/fix/actions";
+import type { ScanPayload } from "../core/scan/contract";
 import type { ScanOutcome } from "../core/scan/scan";
 import { strongest, type FolderVerdict } from "../core/scan/verdict";
 import type { Engine } from "./install/engine";
@@ -12,6 +13,14 @@ export interface HeldUpdate {
   reasons: string[];
   released: boolean;
   at: number;
+  /** What the stand-in kept about the update: the command, what to do, and saw's scan of it. */
+  details?: HeldDetails;
+}
+
+export interface HeldDetails {
+  command: string;
+  nextSteps: string[];
+  scan: ScanPayload;
 }
 
 export type Settled = Exclude<ScanOutcome, { kind: "cancelled" }>;
@@ -37,7 +46,7 @@ export interface FolderState {
   /** A git command this window did not run changed the folder, or the open folder is not a commit saw let in. */
   unheld: boolean;
   /** Which of those two the line should name. Unset when nothing is unheld. */
-  unheldFrom: "command" | "open" | undefined;
+  unheldFrom: "command" | "open" | "let-in" | undefined;
   /** Set while an incoming update is held. Cleared once that update is applied. */
   held: HeldUpdate | undefined;
   last: Settled | undefined;
@@ -162,7 +171,7 @@ export class Model implements vscode.Disposable {
     this.changed.fire();
   }
 
-  setUnheld(folder: vscode.WorkspaceFolder, unheld: boolean, from: "command" | "open" = "command"): void {
+  setUnheld(folder: vscode.WorkspaceFolder, unheld: boolean, from: "command" | "open" | "let-in" = "command"): void {
     const state = this.get(folder);
     const next = unheld ? from : undefined;
     if (state.unheld === unheld && state.unheldFrom === next) {

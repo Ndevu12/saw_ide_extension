@@ -7,9 +7,10 @@ import { build } from "esbuild";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { UNCHECKED_UPDATE, readNotice } from "../../src/core/govern/contract";
-import { decisionFromEnv, readAnswer, readUpdateAsk, terminalAnswer } from "../../src/core/govern/decision";
+import { decisionFromEnv, heldTerminalAnswer, heldTerminalQuestion, readAnswer, readUpdateAsk, terminalAnswer } from "../../src/core/govern/decision";
+import { heldFileName, heldNextSteps, LET_IN_UPDATE, readHeldRecord, sawNextSteps } from "../../src/core/govern/held";
 import { folderKey, plan } from "../../src/core/govern/plan";
-import { onWindows } from "./helpers";
+import { finding, onWindows, report, target } from "./helpers";
 
 describe("deciding about an update saw could not check", () => {
   it("reads saw's own setting for deciding ahead, and nothing else", () => {
@@ -114,12 +115,91 @@ describe.skipIf(onWindows)("the stand-in, when saw leaves the decision to the op
     }
   }, 30_000);
 
-  it("holds a reason with no decision when this saw offers decisions, instead of running it unchecked", () => {
+  it("asks about a reason with no decision too, instead of holding the folder for good", () => {
     const { repo, ran, configPath } = setup("no-decision");
     writeFileSync(path.join(path.dirname(configPath), "saw"), `#!/bin/sh\necho '{"schema_version":1,"reason":"the check could not finish"}'\nexit 2\n`, { mode: 0o755 });
-    const run = spawnSync(process.execPath, [shim, "--config", configPath, "--tool", "git", "--", "pull"], { cwd: repo, encoding: "utf8", timeout: 15_000 });
+    const run = spawnSync(process.execPath, [shim, "--config", configPath, "--tool", "git", "--", "pull"], { cwd: repo, encoding: "utf8", timeout: 15_000, env: { ...process.env, SAW_GOVERN_DECISION: "" } });
     expect(run.status).toBe(1);
     expect(existsSync(ran)).toBe(false);
-    expect(run.stderr).toContain("saw held this update");
+    expect(run.stderr).toContain("saw cannot check this update: the check could not finish.");
+    expect(run.stderr).toContain("left the folder unchanged");
   }, 20_000);
+
+  /** A saw that checked the update and found something in it. */
+  function holding(name: string, verdict: "suspicious" | "infected", extra: Record<string, unknown> = {}) {
+    const made = setup(name, extra);
+    const dir = path.dirname(made.configPath);
+    const confirmed = verdict === "infected";
+    const answer = { schema_version: 1, scan: JSON.parse(report([target({ verdict, findings: [finding(confirmed ? {} : { confidence: "heuristic", severity: "medium" })] })])) };
+    writeFileSync(path.join(dir, "answer.json"), JSON.stringify(answer));
+    writeFileSync(path.join(dir, "saw"), `#!/bin/sh\ncat '${path.join(dir, "answer.json")}'\nexit ${confirmed ? 1 : 0}\n`, { mode: 0o755 });
+    const record = () => readHeldRecord(readFileSync(path.join(dir, "res", heldFileName(folderKey(made.repo))), "utf8"));
+    return { ...made, record };
+  }
+
+  it("keeps what saw found in a held update, says what to do, and lets it in when the editor says so", async () => {
+    const askDir = path.join(root, "held-editor", "asks");
+    const { repo, ran, configPath, notice, record } = holding("held-editor", "suspicious", { askDir });
+    const child = spawn(process.execPath, [shim, "--config", configPath, "--tool", "git", "--", "pull"], { cwd: repo, env: { ...process.env, SAW_GOVERN_DECISION: "" } });
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
+    const exited = new Promise<number | null>((resolve) => child.on("exit", resolve));
+    let asked: string | undefined;
+    for (let i = 0; i < 100 && !asked; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      asked = existsSync(askDir) ? readdirSync(askDir).find((name) => name.endsWith(".ask.json")) : undefined;
+    }
+    if (!asked) {
+      throw new Error("the stand-in did not ask the editor");
+    }
+    expect(readUpdateAsk(readFileSync(path.join(askDir, asked), "utf8"))).toMatchObject({ repo, held: "suspicious" });
+    expect(notice()).toMatchObject({ phase: "held", verdict: "suspicious" });
+    const kept = record();
+    expect(kept).toMatchObject({ repo, tool: "git", args: ["pull"], verdict: "suspicious" });
+    expect(kept?.scan.results[0]?.findings).toHaveLength(1);
+    expect(kept?.nextSteps.join(" ")).toContain("git pull");
+    writeFileSync(path.join(askDir, asked.replace(".ask.json", ".answer")), "run-as-typed");
+    expect(await exited).toBe(0);
+    expect(readFileSync(ran, "utf8").trim()).toBe("pull");
+    expect(notice()).toMatchObject({ phase: "finished", reasons: [LET_IN_UPDATE, expect.stringContaining("suspicious")] });
+    expect(stderr).toContain("What to do:");
+    expect(stderr).toContain("letting it in as you asked");
+  }, 30_000);
+
+  it("never lets a held update in because of SAW_GOVERN_DECISION", () => {
+    const { repo, ran, configPath, notice } = holding("held-ahead", "infected");
+    const run = spawnSync(process.execPath, [shim, "--config", configPath, "--tool", "git", "--", "pull"], { cwd: repo, encoding: "utf8", timeout: 15_000, env: { ...process.env, SAW_GOVERN_DECISION: "run-as-typed" } });
+    expect(run.status).toBe(1);
+    expect(existsSync(ran)).toBe(false);
+    expect(notice()).toMatchObject({ phase: "held", verdict: "infected" });
+    expect(run.stderr).toContain("saw held this update (infected)");
+    expect(run.stderr).toMatch(/• critical: .*\.vscode\/tasks\.json/);
+    expect(run.stderr).toContain("Do not bring this update in");
+  }, 20_000);
+});
+
+describe("letting in an update saw held", () => {
+  it("takes the folder's name for an infected update, and a yes for the rest", () => {
+    expect(heldTerminalAnswer("y", "infected", "/work/app")).toBe("leave-unchanged");
+    expect(heldTerminalAnswer(" app ", "infected", "/work/app")).toBe("run-as-typed");
+    expect(heldTerminalAnswer("y", "suspicious", "/work/app")).toBe("run-as-typed");
+    expect(heldTerminalAnswer("app", "suspicious", "/work/app")).toBe("leave-unchanged");
+    expect(heldTerminalQuestion("infected", "/work/app")).toContain("type the folder name (app)");
+  });
+
+  it("uses saw's next steps when it gives them, and its own otherwise", () => {
+    expect(sawNextSteps({ next_steps: ["Ask the author.", 3, ""] })).toEqual(["Ask the author."]);
+    expect(sawNextSteps({ scan: {} })).toEqual([]);
+    expect(heldNextSteps("infected", "git", ["pull"]).join(" ")).toContain("type the folder's name");
+    expect(heldNextSteps("suspicious", "git", ["pull"])[0]).toContain("`git pull`");
+  });
+
+  it("reads only a well-formed held record", () => {
+    const record = { repo: "/work/app", at: 1, tool: "git", args: ["pull"], verdict: "infected", reasons: ["x"], scan: JSON.parse(report([target()])), nextSteps: ["a"] };
+    expect(readHeldRecord(JSON.stringify(record))).toMatchObject({ repo: "/work/app", verdict: "infected", nextSteps: ["a"] });
+    expect(readHeldRecord(JSON.stringify({ ...record, verdict: "clean" }))).toBeUndefined();
+    expect(readHeldRecord(JSON.stringify({ ...record, scan: { nope: 1 } }))).toBeUndefined();
+    expect(readUpdateAsk(JSON.stringify({ id: "a", repo: "/r", tool: "git", args: [], reason: "x", at: 1, held: "infected" }))?.held).toBe("infected");
+    expect(readUpdateAsk(JSON.stringify({ id: "a", repo: "/r", tool: "git", args: [], reason: "x", at: 1, held: "clean" }))?.held).toBeUndefined();
+  });
 });
