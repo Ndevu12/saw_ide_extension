@@ -9,6 +9,7 @@ import type { FolderVerdict } from "./scan/verdict";
 export const SAW_KEYS = [
   "path",
   "autoInstall",
+  "autoUpdate",
   "registerMcpServer",
   "guardAgentCommands",
   "governUpdates",

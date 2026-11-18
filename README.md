@@ -218,6 +218,33 @@ scanning, and a release that has nothing for this machine is tried again after a
 saw yourself instead, see
 [saw's first scan tutorial](https://saw-docs.ndevuspace.com/latest/tutorial/first-scan/).
 
+### How saw stays up to date
+
+The saw the extension installed moves to newer saw releases without waiting for an extension
+release. A release qualifies only once this extension approves it. The approval records the hash
+of saw and of every package it needs, for each supported Python and platform, and checks that the
+files came from saw's own release workflow. A stolen saw release or a changed PyPI file alone
+therefore reaches no one.
+
+When an approved release is out, a notification says so, with **Update Now** and
+**Release Notes**. If you leave it, it installs on its own 3 days after its release. A release
+that fixes a security problem, or one that replaces a withdrawn saw, installs straight away. The
+update:
+
+1. Installs the new saw in a separate place, beside the one that runs. Every file is checked
+   against its approved hash, and only ready-built packages are used, so no build script runs.
+2. Checks that the new saw reports the approved version, that it finds a known infection in a
+   small sample, and that it finds nothing in a plain folder. If any check fails, the new saw is
+   removed and the current one keeps scanning.
+3. Waits until no scan, fix or update check is running, then switches to the new saw and scans
+   every folder again.
+
+The notification after an update offers **Use Previous Version**, and so does
+**saw: Go Back to the Previous saw**. A release you went back from is not installed on its own
+again, but **saw: Check for saw Updates** still offers it. A saw you installed yourself, or one
+`saw.path` names, is never changed. Set `saw.autoUpdate` to `notify` to install only when you
+choose, or to `off` to stop looking.
+
 ## Commands
 
 All commands are in the Command Palette under **saw:**.
@@ -234,7 +261,9 @@ All commands are in the Command Palette under **saw:**.
 | **Check Before Changing Passwords** | Check whether changing passwords and tokens is safe yet. |
 | **Turn On Checks on Clone and Pull** | Scan every clone, pull and branch switch. |
 | **Repair Checks on Clone and Pull** | Put saw's hooks back when something changed them. |
-| **Install or Repair saw** | Reinstall saw at the tested release. |
+| **Install or Repair saw** | Reinstall saw at the tested release. A newer approved release is then offered again. |
+| **Check for saw Updates** | Look for a newer approved saw release now, and offer it even during its 3-day wait. |
+| **Go Back to the Previous saw** | Switch back to the saw that ran before the last update. |
 | **Copy Install Diagnostics** | Copy the last install's details for an issue report. |
 | **Show Log** | Open the extension's log. |
 | **Open saw Documentation** | Open [saw-docs.ndevuspace.com](https://saw-docs.ndevuspace.com/). |
@@ -246,6 +275,7 @@ All commands are in the Command Palette under **saw:**.
 | --- | --- | --- |
 | `saw.path` | empty | Absolute path to `saw`. Empty: find it on `PATH` or in `~/.local/bin`, or use the one the extension installs. |
 | `saw.autoInstall` | `true` | Install saw with pipx when it is missing or too old. Turn off where only an administrator installs software. |
+| `saw.autoUpdate` | `auto` | `auto`: install a newer approved saw 3 days after its release, or at once for a security fix. You can install it sooner. `notify`: say when one is out and install it only when you choose. `off`: don't look. |
 | `saw.configPath` | empty | Your own saw config (allowlist), passed as `saw scan -c`. See [configuration](https://saw-docs.ndevuspace.com/latest/reference/configuration/). |
 | `saw.scanOnStartup` | `true` | Scan every folder when the window opens. |
 | `saw.scanOnChange` | `true` | Scan again on save, and when a file that can run code changes. |

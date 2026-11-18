@@ -90,6 +90,27 @@ This works without administrator rights on every platform, including PEP 668 sys
   is not replaced. When that one already meets the pin, it is still the one that runs. When moving
   to the pin fails, the saw already installed keeps scanning. Each verdict records which saw gave
   it, and every place that shows a verdict says when that saw was older than the pin.
+- **Updated without an extension release:** `channel/saw.json` on this repository's default
+  branch lists the saw releases the extension accepts. Each entry names a lock in `channel/locks/`
+  by sha256: saw and every dependency, hash-pinned for each supported Python and platform. The
+  `approve-saw` workflow writes that entry. It verifies PyPI's PEP 740 provenance for every file
+  against saw's repository, and refuses a file without it unless the approver says otherwise. It
+  installs the lock on Linux x64, Linux arm64 and macOS with Python 3.11 and 3.14, checks that
+  saw finds a known infection there, and opens a pull request. Merging it is the approval. So an
+  update needs saw's release, its provenance, and this repository to agree. The updater
+  (`editor/install/updater.ts`) reads the channel at most once a day, and only for the saw this
+  extension installed. A release waits 3 days after it was published unless it is marked
+  `security` or the running saw is on the channel's `blocked` list. Until then the person can
+  install it with **Update Now**. The updater never moves to an older release, or to one that
+  needs a newer extension. It fetches the lock, checks its hash, and installs it into
+  `saw/versions/<version>` in global storage with `pip --require-hashes --no-deps
+  --only-binary=:all:`. pip's own index settings are honoured, because the hashes, not the index,
+  decide what is installed. The new saw must report the approved version, call a generated
+  infected sample infected, and call a plain one clean. Only then, while nothing is scanning,
+  fixing or checking, does `installed.json` point at it and the previous saw stay as the way back.
+  Terminals get `saw/bin`, which holds only a link to `saw`. Going back records the release as
+  declined, so it is not installed on its own again. **Install or Repair saw** reinstalls the pin
+  with pipx, then lets the updater move on again.
 - **One install at a time:** a lock directory in global storage keeps two windows from installing
   at once.
 - **Terminals:** integrated terminals get saw's folder on `PATH` through the extension's

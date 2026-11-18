@@ -107,7 +107,8 @@ export class EngineResolver {
   private moveOrKeep(why: string): Promise<Found> {
     // Held here, not on the resolver, so a reset while the installed saw is listed again cannot lose it.
     let failure: Diagnosis | undefined;
-    return moveOrKeep<Extract<Found, { kind: "ready" }>, Extract<Found, { kind: "unavailable" }>>(this.installer.pinnedSaw, {
+    // pipx installs the release this extension pins; the updater moves on from there.
+    return moveOrKeep<Extract<Found, { kind: "ready" }>, Extract<Found, { kind: "unavailable" }>>(this.installer.packagedSaw, {
       install: async () => {
         const found = await this.installThenFind(why);
         failure = this.takeFailure();

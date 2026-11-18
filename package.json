@@ -78,6 +78,7 @@
         "saw.path",
         "saw.configPath",
         "saw.autoInstall",
+        "saw.autoUpdate",
         "saw.registerMcpServer"
       ]
     },
@@ -102,6 +103,16 @@
       {
         "command": "saw.install",
         "title": "Install or Repair saw",
+        "category": "saw"
+      },
+      {
+        "command": "saw.checkForUpdates",
+        "title": "Check for saw Updates",
+        "category": "saw"
+      },
+      {
+        "command": "saw.usePreviousSaw",
+        "title": "Go Back to the Previous saw",
         "category": "saw"
       },
       {
@@ -346,6 +357,18 @@
           "default": true,
           "scope": "machine",
           "markdownDescription": "Install saw with pipx when it is missing or too old, installing pipx first when the machine has none. Needs Python 3.11 or later and access to PyPI. Turn it off where software is installed only by an administrator."
+        },
+        "saw.autoUpdate": {
+          "type": "string",
+          "enum": ["auto", "notify", "off"],
+          "enumDescriptions": [
+            "Install a newer approved saw on its own once it is 3 days old, or at once when it fixes a security problem. You can install it sooner.",
+            "Say when a newer approved saw is available, and install it only when you choose Update Now.",
+            "Do not look for newer saw releases. Run saw: Check for saw Updates to look."
+          ],
+          "default": "auto",
+          "scope": "machine",
+          "markdownDescription": "Update the saw this extension installed to a newer release without waiting for an extension release. A release must be approved in this extension's channel, which records the hash of every file. Each file is checked against it, and the new saw must find a known infection before it replaces the one that runs. A saw you installed yourself, or one `saw.path` names, is never changed."
         },
         "saw.registerMcpServer": {
           "type": "boolean",
