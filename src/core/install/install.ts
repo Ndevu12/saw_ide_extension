@@ -1,8 +1,8 @@
 import * as path from "node:path";
 
 import type { LocateEnv } from "./locate";
-import { findPython, type Launcher, type Python, type Runner } from "./python";
-import type { RunResult } from "../run";
+import { findPython, inVenv, type Launcher, type Python, type Runner } from "./python";
+import { lastSaid, succeeded, type RunResult } from "../run";
 
 export interface Pins {
   /** The stayawakebot release this extension was tested against. */
@@ -41,10 +41,6 @@ export interface InstallDeps {
 }
 
 const WHEELS_ONLY = "--only-binary=:all:";
-
-function tail(text: string, lines = 25): string {
-  return text.trim().split(/\r?\n/).slice(-lines).join("\n");
-}
 
 function quote(arg: string): string {
   return /^[\w@%+=:,./\\-]+$/.test(arg) ? arg : JSON.stringify(arg);
@@ -85,12 +81,12 @@ export async function installSaw(deps: InstallDeps): Promise<InstallResult> {
     if (result.cancelled) {
       throw new Cancelled();
     }
-    const ok = result.exitCode === 0 && !result.spawnError && !result.timedOut;
+    const ok = succeeded(result);
     steps.push({
       name,
       command: [launcher.binary, ...launcher.args, ...args].map(quote).join(" "),
       exitCode: result.exitCode,
-      output: tail(result.spawnError ?? (result.timedOut ? "timed out" : `${result.stdout}\n${result.stderr}`)),
+      output: lastSaid(result),
       ok,
       probe: options.mayFail === true,
     });
@@ -120,10 +116,7 @@ export async function installSaw(deps: InstallDeps): Promise<InstallResult> {
       temp = deps.makeTempDir();
       const venv = p.join(temp, "venv");
       await step("create-venv", system, ["-m", "venv", venv]);
-      const bootstrap: Launcher = {
-        binary: deps.env.platform === "win32" ? p.join(venv, "Scripts", "python.exe") : p.join(venv, "bin", "python"),
-        args: [],
-      };
+      const bootstrap: Launcher = { binary: inVenv(venv, "python", deps.env.platform), args: [] };
       await step("bootstrap-pipx", bootstrap, ["-m", "pip", "install", "--disable-pip-version-check", WHEELS_ONLY, `pipx==${deps.pins.pipx}`]);
       await step("install-pipx", bootstrap, ["-m", "pipx", "install", "--force", ...onto, `pipx==${deps.pins.pipx}`]);
       const binDir = (await step("install-pipx", bootstrap, ["-m", "pipx", "environment", "--value", "PIPX_BIN_DIR"])).stdout.trim();

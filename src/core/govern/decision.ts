@@ -1,5 +1,9 @@
-// What the operator decides about an update saw could not check: run the command as typed and
-// scan the folder after, or leave the folder as it is.
+import * as path from "node:path";
+
+import type { FolderVerdict } from "../scan/verdict";
+
+// What the operator decides about an update saw could not check, or checked and held: run the
+// command as typed and scan the folder after, or leave the folder as it is.
 
 export type Decision = "run-as-typed" | "leave-unchanged";
 
@@ -27,7 +31,21 @@ export function terminalQuestion(tool: string, args: readonly string[], reason: 
   return `saw cannot check this update: ${reason}.\nRun \`${commandText(tool, args)}\` as typed anyway? The folder is scanned straight after. [y/N] `;
 }
 
-/** The question the stand-in leaves for the editor. */
+/** Letting in an infected update takes typing the folder's name, so it is never one keypress. */
+export function heldTerminalAnswer(line: string, verdict: FolderVerdict, repo: string): Decision {
+  if (verdict === "infected") {
+    return line.trim() === path.basename(repo) ? "run-as-typed" : "leave-unchanged";
+  }
+  return terminalAnswer(line);
+}
+
+export function heldTerminalQuestion(verdict: FolderVerdict, repo: string): string {
+  return verdict === "infected"
+    ? `To let this infected update in anyway, type the folder name (${path.basename(repo)}). Anything else leaves the folder unchanged: `
+    : "Let it in anyway? The folder is scanned straight after. [y/N] ";
+}
+
+/** The question the stand-in leaves for the editor. `held` is set when saw checked the update and held it. */
 export interface UpdateAsk {
   id: string;
   repo: string;
@@ -35,6 +53,7 @@ export interface UpdateAsk {
   args: string[];
   reason: string;
   at: number;
+  held?: FolderVerdict;
 }
 
 export function askFileName(id: string): string {
@@ -56,12 +75,13 @@ export function readUpdateAsk(text: string): UpdateAsk | undefined {
     return undefined;
   }
   const record = parsed as Record<string, unknown>;
-  const { id, repo, tool, args, reason, at } = record;
+  const { id, repo, tool, args, reason, at, held } = record;
   if (typeof id !== "string" || !/^[a-z0-9-]+$/i.test(id) || typeof repo !== "string" || repo === "" || typeof tool !== "string"
     || !Array.isArray(args) || !args.every((arg) => typeof arg === "string") || typeof reason !== "string" || typeof at !== "number") {
     return undefined;
   }
-  return { id, repo, tool, args: args as string[], reason, at };
+  const heldVerdict = held === "suspicious" || held === "infected" || held === "incomplete" ? held : undefined;
+  return { id, repo, tool, args: args as string[], reason, at, ...(heldVerdict ? { held: heldVerdict } : {}) };
 }
 
 export function readAnswer(text: string): Decision | undefined {

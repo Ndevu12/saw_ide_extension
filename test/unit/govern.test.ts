@@ -7,7 +7,7 @@ import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit, quietGit, repoConfigText, silencedRepoConfig } from "../../src/core/govern/command";
-import { mayRelease, offersGovernRestore, offersGovernVerdict, openAdmission, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, UNCHECKED_UPDATE, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
+import { governFeatures, mayRelease, offersGovernRestore, offersGovernVerdict, openAdmission, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, UNCHECKED_UPDATE, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
 import { activationEnv, folderKey, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
@@ -123,6 +123,7 @@ describe("what the stand-in does", () => {
   it("asks saw for progress events only when that saw reports them", () => {
     expect(prepareArgs("/work/app", "/tmp/holding/abc", "git", ["pull"], true)).toContain("--progress=jsonl");
     expect(prepareArgs("/work/app", "/tmp/holding/abc", "git", ["pull"])).not.toContain("--progress=jsonl");
+    expect(prepareArgs("/work/app", "/tmp/holding/abc", "git", ["pull"], false, ["--deadline", "120"]).slice(-4)).toEqual(["--deadline", "120", "--", "pull"]);
   });
 
   it("asks saw to prepare that folder, and nothing else", () => {
@@ -537,5 +538,13 @@ describe("saw govern's report", () => {
     expect(readApply(JSON.stringify({ schema_version: 1, applied: true }))).toEqual({ applied: true, reason: undefined });
     expect(readApply(JSON.stringify({ schema_version: 1, applied: false, reason: "left unchanged" })).applied).toBe(false);
     expect(readApply("").applied).toBe(false);
+  });
+});
+
+describe("govern features", () => {
+  it("reads what this saw's govern offers from its capabilities", () => {
+    const saw0173 = new Set(["govern.json", "govern.progress.jsonl", "govern.decision", "govern.held.decision", "govern.deadline", "govern.verdict", "govern.restore"]);
+    expect(governFeatures({ features: saw0173, schemas: {} })).toEqual({ progress: true, decides: true, deadline: true });
+    expect(governFeatures({ features: new Set(["govern.json"]), schemas: {} })).toEqual({ progress: false, decides: false, deadline: false });
   });
 });

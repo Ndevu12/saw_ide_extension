@@ -38,10 +38,10 @@ const SCENARIOS = [
       ["No hazard found", "Do not change your passwords or tokens yet", "Not known to be safe"].includes(r.actions?.audit?.title) &&
       // saw 0.14.0 reports git before 2.54 as a problem: the hooks are installed, and repositories
       // that already exist are not scanned until git is newer. Debian's git is that older git.
-      ["In place", "Need repair"].includes(r.actions?.hooks?.title ?? "") &&
+      ["On", "Needs repair"].includes(r.actions?.hooks?.title ?? "") &&
       /^scan-on-clone: INSTALLED/.test(r.actions.hooks?.sawSays ?? "") &&
       r.actions.fixConfirmed === true &&
-      r.actions.fix?.title === "Clean-up prepared" &&
+      r.actions.fix?.title === "Files fixed" &&
       r.actions.fix.branches.length > 1 &&
       r.actions.fix.rescanned === "clean" &&
       r.actions.fix.taskOnDisk === false,

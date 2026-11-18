@@ -1,4 +1,4 @@
-import { schemaProblem } from "../capabilities";
+import { FEATURES, schemaProblem, supports, type Capabilities } from "../capabilities";
 import { ContractError, parsePayload } from "../scan/contract";
 import { judge, type FolderVerdict } from "../scan/verdict";
 import type { Tool } from "./command";
@@ -17,6 +17,8 @@ export interface GovernConfig {
   resultDir: string;
   /** Ask `saw govern prepare` for the same progress events a scan reports. */
   progress: boolean;
+  /** `saw govern prepare` takes `--deadline`, so a check that runs out of time is left to the operator. */
+  deadline?: boolean;
   /** saw's git/gh stand-in, when this saw ships one beside its own program. */
   standin?: string;
   /**
@@ -46,8 +48,23 @@ export function mayRelease(verdict: FolderVerdict): boolean {
   return verdict === "clean" || verdict === "residue";
 }
 
-export function prepareArgs(repo: string, into: string, tool: Tool, args: readonly string[], progress = false): string[] {
-  return ["govern", "prepare", "--json", "--repo", repo, "--into", into, "--tool", tool, ...(progress ? ["--progress=jsonl"] : []), "--", ...args];
+/** The parts of `saw govern` that differ between saw releases. */
+export interface GovernFeatures {
+  progress: boolean;
+  decides: boolean;
+  deadline: boolean;
+}
+
+export function governFeatures(capabilities: Capabilities): GovernFeatures {
+  return {
+    progress: supports(capabilities, FEATURES.governProgress),
+    decides: supports(capabilities, FEATURES.governDecision),
+    deadline: supports(capabilities, FEATURES.governDeadline),
+  };
+}
+
+export function prepareArgs(repo: string, into: string, tool: Tool, args: readonly string[], progress = false, extra: readonly string[] = []): string[] {
+  return ["govern", "prepare", "--json", "--repo", repo, "--into", into, "--tool", tool, ...(progress ? ["--progress=jsonl"] : []), ...extra, "--", ...args];
 }
 
 export function applyArgs(repo: string, into: string): string[] {
@@ -81,6 +98,8 @@ export interface PrepareReading {
   unchecked: boolean;
   /** saw could not check the update and left running it as typed to the operator (`govern.decision`). */
   decision: boolean;
+  /** The verdict is saw's scan of the update, not a check that could not run or be read. */
+  scanned: boolean;
 }
 
 type Json = Record<string, unknown>;
@@ -103,7 +122,7 @@ function object(stdout: string): Json | string {
 export function readPrepare(stdout: string, exitCode: number | null): PrepareReading {
   const parsed = object(stdout);
   if (typeof parsed === "string") {
-    return { verdict: "incomplete", reasons: [parsed], release: false, unchecked: false, decision: false };
+    return { verdict: "incomplete", reasons: [parsed], release: false, unchecked: false, decision: false, scanned: false };
   }
   const scan = parsed["scan"];
   if (scan === undefined) {
@@ -114,15 +133,16 @@ export function readPrepare(stdout: string, exitCode: number | null): PrepareRea
       release: false,
       unchecked: reason !== undefined,
       decision: reason !== undefined && offersRunAsTyped(parsed["decision"]),
+      scanned: false,
     };
   }
   try {
     const payload = parsePayload(JSON.stringify(scan));
     const judged = judge(payload, exitCode);
-    return { verdict: judged.verdict, reasons: judged.reasons, release: mayRelease(judged.verdict), unchecked: false, decision: false };
+    return { verdict: judged.verdict, reasons: judged.reasons, release: mayRelease(judged.verdict), unchecked: false, decision: false, scanned: true };
   } catch (error) {
     const why = error instanceof ContractError ? error.message : "saw's scan of the update could not be read";
-    return { verdict: "incomplete", reasons: [why], release: false, unchecked: false, decision: false };
+    return { verdict: "incomplete", reasons: [why], release: false, unchecked: false, decision: false, scanned: false };
   }
 }
 

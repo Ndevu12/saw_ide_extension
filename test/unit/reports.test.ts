@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parsePayload } from "../../src/core/scan/contract";
 import { DOCS } from "../../src/core/docs";
 import { block, inline, prose, webLink } from "../../src/core/report/markdown";
-import { amendReport, auditReport, fixReport, hooksReport, scanReport, watchReport, type SettledScan } from "../../src/core/report/reports";
+import { amendReport, auditReport, fixReport, heldReport, hooksReport, scanReport, watchReport, type SettledScan } from "../../src/core/report/reports";
 import { judge } from "../../src/core/scan/verdict";
 import { finding, report, target } from "./helpers";
 
@@ -41,6 +41,28 @@ describe("Markdown from scanned data", () => {
     expect(webLink("https://osv.dev/vulnerability/GHSA-1")).toBe("[`osv.dev`](https://osv.dev/vulnerability/GHSA-1)");
     expect(webLink("javascript:alert(1)")).toBe("`javascript:alert(1)`");
     expect(webLink("http://plain.example/")).toBe("`http://plain.example/`");
+  });
+});
+
+describe("the held update report", () => {
+  const scan = parsePayload(report([target({ verdict: "infected", findings: [finding()] })]));
+  const held = { verdict: "infected" as const, reasons: ["a task runs on open"], at: Date.UTC(2026, 10, 18) };
+
+  it("says the folder was not changed, what to do, and what the update would bring", () => {
+    const text = heldReport({ folderName: "web", folderPath: "/work/web", held, details: { command: "git pull", nextSteps: ["Do not bring this update in."], scan } }, "shown");
+    expect(text).toMatch(/^# Held update: web\n/);
+    expect(text).toContain("The folder was not changed. Malicious code is in what it would bring.");
+    expect(text).toContain("- Command: `git pull`");
+    expect(text).toContain("not the folder's history");
+    expect(text).toContain("- Do not bring this update in\\.");
+    expect(text).toContain("**Let In Anyway**");
+    expect(text).toContain("## Why it was held\n\n- a task runs on open");
+    expect(text).toContain("### Confirmed (1)");
+  });
+
+  it("still says what to do when the findings were not kept, or nothing is held", () => {
+    expect(heldReport({ folderName: "web", folderPath: "/work/web", held, details: undefined }, "shown")).toContain("The findings were not kept.");
+    expect(heldReport({ folderName: "web", folderPath: "/work/web", held: undefined, details: undefined }, "shown")).toContain("No update to this folder is held now.");
   });
 });
 

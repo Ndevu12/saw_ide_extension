@@ -90,6 +90,19 @@ This works without administrator rights on every platform, including PEP 668 sys
   is not replaced. When that one already meets the pin, it is still the one that runs. When moving
   to the pin fails, the saw already installed keeps scanning. Each verdict records which saw gave
   it, and every place that shows a verdict says when that saw was older than the pin.
+- **Updated without an extension release:** the updater (`editor/install/updater.ts`) reads saw's
+  latest GitHub release at most once every 20 hours, only for the saw this extension installed.
+  Drafts and pre-releases are never latest, so marking a release pre-release withdraws it. A
+  release waits 3 days after publishing unless its title says `security`; **Update Now** skips the
+  wait. `core/install/download.ts` checks `SHA256SUMS` against the signer pinned in
+  `package.json` (`core/install/sshsig.ts`), then the wheel against it. Dependencies come from a
+  signed `requirements.lock` when the release has one (`pip --require-hashes --no-deps`), otherwise
+  as exact versions from the signed SBOM. `core/install/update.ts` installs into
+  `saw/versions/<version>` with `--only-binary=:all:`, and the new saw must report that version,
+  call a generated infected sample infected and a plain one clean. Only then, while nothing is
+  scanning or fixing, does `installed.json` point at it, keeping the previous saw as the way back.
+  The updater never goes below the newest release this machine ran, and a release someone went
+  back from is not installed on its own again. Changing the signing key needs an extension release.
 - **One install at a time:** a lock directory in global storage keeps two windows from installing
   at once.
 - **Terminals:** integrated terminals get saw's folder on `PATH` through the extension's
@@ -211,8 +224,18 @@ verdict never comes from progress.
   the extension's `govern/asks` that this window answers with a modal. The stand-in waits two
   minutes for the answer. No answer leaves the folder unchanged. Running it is followed by the
   same scan and warning. A saw without `govern.decision` that answers with a reason and no scan
-  judged nothing, so the command runs as typed. A timeout, an unreadable report, or a reason with
-  no decision from a saw that offers decisions still holds.
+  judged nothing, so the command runs as typed. A timeout, an unreadable report, saw failing to
+  start, or a reason with no decision from a saw that offers decisions is asked about the same
+  way: saw judged nothing, and holding for good would stop the operator working on their project.
+  When saw scans the update and finds it suspicious, infected, or not verified, the stand-in keeps
+  that scan, the command, and the next steps (saw's `next_steps` when it gives them) in
+  `govern/results/<folder>.held`, writes the held notice, and prints the strongest findings and
+  next steps. It then asks whether to let it in: yes for suspicious or not verified, the folder's
+  name for infected, in the terminal or, with none, through an ask with `held` set, which this
+  window answers by opening **Held update details** and a modal. `SAW_GOVERN_DECISION` never
+  answers this. A let-in update runs as typed, and its finished notice starts with the let-in
+  reason, so the folder is marked as let in rather than missed. With an editor to ask, holds no
+  longer go through saw's own stand-in, which cannot offer this.
 - **A rating is asked for in Chat, after saw has done something the person can judge.** The decision
   of when to show the card lives in `core/feedback` and is unit-tested. The editor stores a
   dismissal and a rating in global state, and opens the review, star, and issue pages. The issue

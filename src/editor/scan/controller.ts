@@ -91,6 +91,7 @@ export class Controller implements vscode.Disposable {
       folder: folder.uri.fsPath,
       configPath: settings.configPath,
       timeoutMs: settings.timeoutMs,
+      deadline: supports(engine.capabilities, FEATURES.scanDeadline),
       signal,
       ...(supports(engine.capabilities, FEATURES.progress) ? { onProgress: (p) => this.model.setProgress(folder, p ? describeProgress(p) : undefined) } : {}),
     });

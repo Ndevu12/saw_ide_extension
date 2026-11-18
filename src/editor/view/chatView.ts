@@ -192,6 +192,11 @@ export class ChatView implements vscode.Disposable {
           this.fixes.open(folder, "files");
         }
         return;
+      case "held-report":
+        if (folder) {
+          void vscode.commands.executeCommand("saw.openReport", { kind: "held", state: { folder } });
+        }
+        return;
       case "amend-report":
         if (folder) {
           this.fixes.open(folder, "history");

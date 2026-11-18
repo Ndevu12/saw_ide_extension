@@ -3,7 +3,7 @@ import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { runProgram } from "../../src/core/run";
+import { programEnv, runProgram } from "../../src/core/run";
 import { onWindows, tempDir } from "./helpers";
 
 function alive(pid: number): boolean {
@@ -53,4 +53,12 @@ describe.skipIf(onWindows)("running saw", () => {
     const pid = Number(readFileSync(worker, "utf8"));
     expect(await until(() => !alive(pid), 8_000)).toBe(true);
   }, 20_000);
+});
+
+describe("the environment saw runs in", () => {
+  it("drops what would make Python load other code, whatever its case", () => {
+    const env = programEnv({ PATH: "/usr/bin", PYTHONPATH: "/tmp/other", PythonHome: "/tmp/py", PYTHONSTARTUP: "/tmp/s.py", HOME: "/home/a" });
+    expect(env).toMatchObject({ PATH: "/usr/bin", HOME: "/home/a", NO_COLOR: "1", PYTHONIOENCODING: "utf-8" });
+    expect(Object.keys(env).filter((name) => name.toUpperCase().startsWith("PYTHON") && name !== "PYTHONIOENCODING")).toEqual([]);
+  });
 });

@@ -4,8 +4,10 @@ import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync
 import * as path from "node:path";
 import { createInterface } from "node:readline";
 
+import { withDeadline } from "./core/deadline";
 import { applyArgs, prepareArgs, readApply, readPrepare, UNCHECKED_CLONE, UNCHECKED_UPDATE, type GovernConfig, type GovernPhase } from "./core/govern/contract";
-import { answerFileName, ASK_EDITOR_MS, askFileName, DECISION_ENV, decisionFromEnv, readAnswer, terminalAnswer, terminalQuestion, type Decision, type UpdateAsk } from "./core/govern/decision";
+import { answerFileName, ASK_EDITOR_MS, askFileName, DECISION_ENV, decisionFromEnv, heldTerminalAnswer, heldTerminalQuestion, readAnswer, terminalAnswer, terminalQuestion, type Decision, type UpdateAsk } from "./core/govern/decision";
+import { findingLines, foundSomething, heldFileName, heldNextSteps, LET_IN_UPDATE, readHeldRecord, sawNextSteps } from "./core/govern/held";
 import { activationEnv, folderKey, plan, type Hold } from "./core/govern/plan";
 import { checkRealProgram, diskFiles, pathWithoutStandins } from "./core/govern/realProgram";
 import { enclosingFolder, parseGit, quietGit, repoConfigText, silencedRepoConfig, type Tool } from "./core/govern/command";
@@ -222,9 +224,8 @@ async function main(): Promise<void> {
     });
     return;
   }
-  // saw's stand-in leaves an update it cannot check unchanged when no terminal can answer, so then this one asks the editor instead.
-  const editorDecides = config.decides === true && !!config.askDir && !terminalAnswers();
-  if (config.standin && action.kind === "hold" && !editorDecides) {
+  // saw's stand-in holds an update with no way to let it in from the editor, so with an editor to ask this one checks it.
+  if (config.standin && action.kind === "hold" && !config.askDir) {
     const steps = new ProgressLines((progress) => {
       if (progress) {
         notice(config, action.repo, "checking", [], undefined, describeProgress(progress));
@@ -286,16 +287,32 @@ async function decide(config: GovernConfig, action: Hold, typed: readonly string
     return ahead;
   }
   if (terminalAnswers()) {
-    return askTerminal(terminalQuestion(action.tool, typed, reason));
+    return askTerminal(terminalQuestion(action.tool, typed, reason), terminalAnswer);
   }
   if (config.askDir) {
-    return askEditor(config.askDir, { id: randomUUID(), repo: action.repo, tool: action.tool, args: [...typed], reason, at: Date.now() });
+    const ask = { id: randomUUID(), repo: action.repo, tool: action.tool, args: [...typed], reason, at: Date.now() };
+    return askEditor(config.askDir, ask, `saw cannot check this update: ${reason}.`, "The editor asks whether to run it as typed.");
   }
   process.stderr.write(`saw cannot check this update: ${reason}.\n`);
   return "leave-unchanged";
 }
 
-function askTerminal(question: string): Promise<Decision> {
+/**
+ * Whether the operator lets in an update saw held for what it found. Deciding ahead with
+ * SAW_GOVERN_DECISION does not count here: that is for updates saw could not check.
+ */
+async function decideHeld(config: GovernConfig, action: Hold, typed: readonly string[], verdict: FolderVerdict, reason: string): Promise<boolean> {
+  if (terminalAnswers()) {
+    return (await askTerminal(heldTerminalQuestion(verdict, action.repo), (line) => heldTerminalAnswer(line, verdict, action.repo))) === "run-as-typed";
+  }
+  if (config.askDir) {
+    const ask = { id: randomUUID(), repo: action.repo, tool: action.tool, args: [...typed], reason, at: Date.now(), held: verdict };
+    return (await askEditor(config.askDir, ask, "", "The editor shows what was found and asks whether to let it in.")) === "run-as-typed";
+  }
+  return false;
+}
+
+function askTerminal(question: string, read: (line: string) => Decision): Promise<Decision> {
   return new Promise((resolve) => {
     const lines = createInterface({ input: process.stdin, output: process.stderr });
     let answered = false;
@@ -312,12 +329,12 @@ function askTerminal(question: string): Promise<Decision> {
     });
     exitOnStop(() => undefined);
     lines.on("close", () => answer("leave-unchanged"));
-    lines.question(question, (line) => answer(terminalAnswer(line)));
+    lines.question(question, (line) => answer(read(line)));
   });
 }
 
 /** Leave the question for the editor, which shows it to the person, and wait for the answer. */
-async function askEditor(dir: string, ask: UpdateAsk): Promise<Decision> {
+async function askEditor(dir: string, ask: UpdateAsk, why: string, waiting: string): Promise<Decision> {
   const file = path.join(dir, askFileName(ask.id));
   const answerFile = path.join(dir, answerFileName(ask.id));
   try {
@@ -325,10 +342,12 @@ async function askEditor(dir: string, ask: UpdateAsk): Promise<Decision> {
     writeFileSync(`${file}.tmp`, JSON.stringify(ask));
     renameSync(`${file}.tmp`, file);
   } catch {
-    process.stderr.write(`saw cannot check this update: ${ask.reason}.\n`);
+    if (why) {
+      process.stderr.write(`${why}\n`);
+    }
     return "leave-unchanged";
   }
-  process.stderr.write(`saw cannot check this update: ${ask.reason}. The editor asks whether to run it as typed.\n`);
+  process.stderr.write(`${why ? `${why} ` : ""}${waiting}\n`);
   exitOnStop(() => {
     rmSync(file, { force: true });
     rmSync(answerFile, { force: true });
@@ -369,8 +388,9 @@ async function holdWithSaw(config: GovernConfig, action: Hold, typed: readonly s
   for (const name of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
     process.on(name, () => interrupted.abort());
   }
-  const prepared = await runProgram(config.saw, prepareArgs(action.repo, action.holding, action.tool, action.args, config.progress), {
-    timeoutMs: config.timeoutMs,
+  const limit = withDeadline(config.timeoutMs, config.deadline === true);
+  const prepared = await runProgram(config.saw, prepareArgs(action.repo, action.holding, action.tool, action.args, config.progress, limit.args), {
+    timeoutMs: limit.timeoutMs,
     signal: interrupted.signal,
     onOutput: (text, stream) => {
       if (stream === "stderr") {
@@ -385,46 +405,89 @@ async function holdWithSaw(config: GovernConfig, action: Hold, typed: readonly s
     process.exit(130);
   }
   const reading = readPrepare(prepared.stdout, prepared.exitCode);
-  const reason = reading.reasons[0] ?? "";
-  const runUnchecked = () => runRealOrExit(config, action.tool, typed, () => notice(config, action.repo, "finished", [UNCHECKED_UPDATE, reason]));
-  if (reading.decision && !prepared.timedOut && !prepared.spawnError) {
-    const decision = await decide(config, action, typed, reason);
-    if (decision === "run-as-typed") {
-      process.stderr.write("saw: running it as typed. The folder is scanned straight after.\n");
-      runUnchecked();
-      return;
-    }
-    notice(config, action.repo, "finished", []);
-    process.stderr.write(`saw left the folder unchanged; ${action.tool} did not run. To run it as typed, answer yes, or set ${DECISION_ENV}=run-as-typed.\n`);
-    process.exit(1);
+  const checked = !prepared.timedOut && !prepared.spawnError;
+  if (checked && reading.release) {
+    await applyChecked(config, action, reading.verdict, reading.reasons);
+    return;
   }
-  if (reading.unchecked && !config.decides && !prepared.timedOut && !prepared.spawnError) {
+  if (checked && reading.scanned && foundSomething(reading.verdict)) {
+    await holdFound(config, action, typed, reading.verdict, reading.reasons, prepared.stdout);
+    return;
+  }
+  const reason = prepared.spawnError
+    ? `saw could not be started: ${prepared.spawnError}`
+    : prepared.timedOut
+      ? "the check did not finish in time"
+      : reading.reasons[0] ?? reading.verdict;
+  const runUnchecked = () => runRealOrExit(config, action.tool, typed, () => notice(config, action.repo, "finished", [UNCHECKED_UPDATE, reason]));
+  if (checked && reading.unchecked && !config.decides) {
     // An older saw cannot check most updates and offers no decision, so holding would only stop the operator.
     process.stderr.write(`saw could not check this update first (${reason}), so it ran unchecked. saw scans the folder now.\n`);
     runUnchecked();
     return;
   }
-  if (!reading.release || prepared.timedOut || prepared.spawnError) {
-    const reason = prepared.spawnError
-      ? `saw could not be started: ${prepared.spawnError}`
-      : prepared.timedOut
-        ? "the check did not finish in time"
-        : reading.reasons[0] ?? reading.verdict;
-    notice(config, action.repo, "held", reading.reasons, reading.verdict);
-    process.stderr.write(`saw held this update (${reading.verdict}). The folder was not changed. ${reason}\n`);
+  // saw judged nothing, so the operator decides: holding for good would stop them working on their own project.
+  const decision = await decide(config, action, typed, reason);
+  if (decision === "run-as-typed") {
+    process.stderr.write("saw: running it as typed. The folder is scanned straight after.\n");
+    runUnchecked();
+    return;
+  }
+  notice(config, action.repo, "finished", []);
+  process.stderr.write(`saw left the folder unchanged; ${action.tool} did not run. To run it as typed, answer yes, or set ${DECISION_ENV}=run-as-typed.\n`);
+  process.exit(1);
+}
+
+/** saw found something in the update. Keep what it found, say what to do, and let the operator bring it in anyway. */
+async function holdFound(config: GovernConfig, action: Hold, typed: readonly string[], verdict: FolderVerdict, reasons: string[], answerText: string): Promise<void> {
+  let answer: unknown;
+  try {
+    answer = JSON.parse(answerText);
+  } catch {
+    answer = undefined;
+  }
+  const scan = (answer as { scan?: unknown } | undefined)?.scan;
+  const fromSaw = sawNextSteps(answer);
+  const nextSteps = fromSaw.length ? fromSaw : heldNextSteps(verdict, action.tool, typed);
+  const record = { repo: action.repo, at: Date.now(), tool: action.tool, args: [...typed], verdict, reasons, scan, nextSteps };
+  const kept = readHeldRecord(JSON.stringify(record));
+  try {
+    mkdirSync(config.resultDir, { recursive: true });
+    const file = path.join(config.resultDir, heldFileName(folderKey(action.repo)));
+    writeFileSync(`${file}.tmp`, JSON.stringify(record));
+    renameSync(`${file}.tmp`, file);
+  } catch {
+    // The editor then shows the verdict and reasons without the findings.
+  }
+  notice(config, action.repo, "held", reasons, verdict);
+  const lines = [
+    `saw held this update (${verdict}). The folder was not changed.${reasons[0] ? ` ${reasons[0]}` : ""}`,
+    ...(kept ? findingLines(kept.scan) : []),
+    "What to do:",
+    ...nextSteps.map((step) => `  - ${step}`),
+  ];
+  process.stderr.write(`${lines.join("\n")}\n`);
+  const letIn = await decideHeld(config, action, typed, verdict, reasons[0] ?? verdict);
+  if (!letIn) {
+    process.stderr.write(`saw left the folder unchanged; ${action.tool} did not run.\n`);
     process.exit(1);
   }
+  process.stderr.write(`saw: letting it in as you asked (${verdict}). The folder is scanned straight after.\n`);
+  runRealOrExit(config, action.tool, typed, () => notice(config, action.repo, "finished", [LET_IN_UPDATE, `${verdict}: ${reasons[0] ?? "held"}`]));
+}
+
+async function applyChecked(config: GovernConfig, action: Hold, verdict: FolderVerdict, reasons: string[]): Promise<void> {
   mkdirSync(config.markerDir, { recursive: true });
   writeFileSync(path.join(config.markerDir, folderKey(action.repo)), String(Date.now()));
   const applied = await runProgram(config.saw, applyArgs(action.repo, action.holding), { timeoutMs: config.timeoutMs });
   const result = readApply(applied.stdout);
   if (!result.applied || applied.timedOut || applied.spawnError) {
     const reason = result.reason ?? (applied.timedOut ? "the update did not finish in time" : "saw did not update the folder");
-    notice(config, action.repo, "held", [reason], reading.verdict);
-    process.stderr.write(`saw checked this update (${reading.verdict}) but did not change the folder. ${reason}\n`);
+    notice(config, action.repo, "held", [reason], verdict);
+    process.stderr.write(`saw checked this update (${verdict}) but did not change the folder. ${reason}\n`);
     process.exit(1);
   }
-  notice(config, action.repo, "applied", reading.reasons, reading.verdict);
+  notice(config, action.repo, "applied", reasons, verdict);
   process.exit(0);
 }
 

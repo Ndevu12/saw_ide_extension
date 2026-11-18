@@ -7,13 +7,13 @@ import * as vscode from "vscode";
 import type { AmendOutcome, FixOutcome } from "../../core/fix/actions";
 import { prose } from "../../core/report/markdown";
 import { detailsPage, linkTarget } from "../../core/report/page";
-import { amendReport, auditReport, fixReport, hooksReport, scanReport, watchReport, when, type CommandRun, type Copy } from "../../core/report/reports";
+import { amendReport, auditReport, fixReport, heldReport, hooksReport, scanReport, watchReport, when, type CommandRun, type Copy } from "../../core/report/reports";
 import { behindVersion } from "../../core/install/upgrade";
 import type { Model, Settled } from "../model";
 
 export const REPORT_SCHEME = "saw-report";
 
-type Kind = "scan" | "fix" | "amend" | "audit" | "hooks" | "watch";
+type Kind = "scan" | "fix" | "amend" | "held" | "audit" | "hooks" | "watch";
 
 /** The two ways saw fixes an infection: `saw fix` for the files, `saw fix amend` for git history. */
 export type Treatment = "files" | "history";
@@ -21,7 +21,7 @@ export type Treatment = "files" | "history";
 const FIXES_KEPT = 5;
 
 const MACHINE_TITLE = { audit: "Before you change passwords", hooks: "Checks on clone and pull", watch: "Background checks" } as const;
-const FOLDER_TITLE = { scan: "Full details", fix: "Files fix details", amend: "Git history fix details" } as const;
+const FOLDER_TITLE = { scan: "Full details", fix: "Files fix details", amend: "Git history fix details", held: "Held update details" } as const;
 const REFRESH_MS = 300;
 
 interface FixRecord {
@@ -112,6 +112,11 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
 
   amendUri(folder: vscode.WorkspaceFolder): vscode.Uri {
     return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/amend/${folderKey(folder)}/Git history fix details - ${label(folder.name)}.md` });
+  }
+
+  /** What saw found in an update it held for the folder, and what to do about it. */
+  heldUri(folder: vscode.WorkspaceFolder): vscode.Uri {
+    return vscode.Uri.from({ scheme: REPORT_SCHEME, path: `/held/${folderKey(folder)}/Held update details - ${label(folder.name)}.md` });
   }
 
   machineUri(kind: "audit" | "hooks" | "watch"): vscode.Uri {
@@ -254,7 +259,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
 
   stat(uri: vscode.Uri): vscode.FileStat {
     const kind = uri.path.split("/")[1];
-    if (!["scan", "fix", "amend", "audit", "hooks", "watch"].includes(kind ?? "") || !uri.path.endsWith(".md")) {
+    if (!["scan", "fix", "amend", "held", "audit", "hooks", "watch"].includes(kind ?? "") || !uri.path.endsWith(".md")) {
       throw vscode.FileSystemError.FileNotFound(uri);
     }
     const mtime = this.watched.get(uri.toString())?.mtime ?? Date.now();
@@ -321,6 +326,9 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
       case "amend":
         if (!folder) return "# saw fix amend\n\nThis folder is no longer open in this window.";
         return this.amends.has(folderKey(folder)) ? this.render(kind, folder, "shown") : undefined;
+      case "held":
+        if (!folder) return "# Held update\n\nThis folder is no longer open in this window.";
+        return this.render(kind, folder, "shown");
       case "audit":
         return this.auditRun ? this.render(kind, undefined, "shown") : undefined;
       case "hooks":
@@ -348,6 +356,12 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
         const record = folder && this.amends.get(folderKey(folder));
         if (!folder || !record) return "# saw fix amend\n\nsaw has not fixed the git history of this folder from this window. Use **Fix infection in git history** in the folder's scan results.";
         return amendReport(this.fixInput(folder, record), copy);
+      }
+      case "held": {
+        if (!folder) return "# Held update";
+        const held = this.model.get(folder).held;
+        const shown = held && !held.released ? held : undefined;
+        return heldReport({ folderName: folder.name, folderPath: folder.uri.fsPath, held: shown, details: shown?.details }, copy);
       }
       case "audit": {
         const audit = this.model.machine.audit;

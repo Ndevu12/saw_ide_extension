@@ -77,7 +77,7 @@ const logOf = () => files(path.join(DATA, "data", "logs")).find((file) => file.e
 const reportOf = () => files(path.join(DATA, "data", "User", "workspaceStorage")).find((file) => file.endsWith("scan.md"));
 const VERDICT = /^## (Clean|Residue|Suspicious|Not verified|Infected)$/m;
 
-const INSTALL_FAILED = "saw could not be installed.";
+const INSTALL_FAILED = /saw (\d+\.\d+\.\d+ )?could not be installed\./;
 
 let log;
 let report;
@@ -89,7 +89,7 @@ while (Date.now() < deadline) {
     break;
   }
   // After a failed install, give whatever the extension does next a few seconds to show.
-  failedAt ??= log && readFileSync(log, "utf8").includes(INSTALL_FAILED) ? Date.now() : undefined;
+  failedAt ??= log && INSTALL_FAILED.test(readFileSync(log, "utf8")) ? Date.now() : undefined;
   if (failedAt && Date.now() - failedAt > 10_000) {
     break;
   }
@@ -195,7 +195,7 @@ const sawPath = /Using saw \S+ at (\S+) \(found via ([\w-]+)\)/.exec(logText);
 console.log(JSON.stringify({
   verdict,
   saw: sawPath ? { binary: sawPath[1], foundVia: sawPath[2], onServer: existsSync(sawPath[1]) } : null,
-  installFailed: logText.includes(INSTALL_FAILED),
+  installFailed: INSTALL_FAILED.test(logText),
   report: report ? path.relative(homedir(), report) : null,
   evidenceInReport: reportText.includes("a.woff2"),
   projectChanged,

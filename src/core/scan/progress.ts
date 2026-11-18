@@ -18,9 +18,15 @@ export interface Progress {
   label: string;
   index: number | undefined;
   of: number | undefined;
+  /** saw's estimate, from its plan for a target (`scan.plan`). */
+  estimateSeconds?: number;
+  /** When saw expects to finish, carried from its plan to the events after it. */
+  dueAt?: number;
 }
 
 const position = (value: unknown): number | undefined => (Number.isInteger(value) && (value as number) >= 0 ? (value as number) : undefined);
+
+const targetName = (target: string) => plain(path.basename(target) || target, 80);
 
 /** The progress an event moves saw to, `null` when saw is done, or undefined for an event that says nothing. */
 export function readEvent(line: string): Progress | null | undefined {
@@ -38,7 +44,19 @@ export function readEvent(line: string): Progress | null | undefined {
     case "step":
       return typeof e["label"] === "string" && e["label"] ? { label: plain(e["label"], 80), index: position(e["index"]), of: position(e["of"]) } : undefined;
     case "target":
-      return typeof e["path"] === "string" && e["path"] ? { label: plain(path.basename(e["path"]) || e["path"], 80), index: position(e["index"]), of: position(e["of"]) } : undefined;
+      return typeof e["path"] === "string" && e["path"] ? { label: targetName(e["path"]), index: position(e["index"]), of: position(e["of"]) } : undefined;
+    case "plan": {
+      const files = position(e["files"]);
+      const estimate = position(e["estimate_seconds"]);
+      if (typeof e["target"] !== "string" || !e["target"] || files === undefined) {
+        return undefined;
+      }
+      return { label: `${targetName(e["target"])}: ${files.toLocaleString("en")} files`, index: undefined, of: undefined, ...(estimate !== undefined ? { estimateSeconds: estimate } : {}) };
+    }
+    case "progress":
+      return typeof e["target"] === "string" && e["target"] && typeof e["phase"] === "string" && e["phase"]
+        ? { label: `${targetName(e["target"])}: ${plain(e["phase"], 40)}`, index: position(e["done"]), of: position(e["total"]) }
+        : undefined;
     case "done":
       return null;
     default:
@@ -46,10 +64,12 @@ export function readEvent(line: string): Progress | null | undefined {
   }
 }
 
-/** "checking running processes (3/9)", or the label alone when saw gives no count. */
-export function describeProgress(progress: Progress): string {
-  const { label, index, of } = progress;
-  return index !== undefined && of !== undefined && of > 0 ? `${label} (${Math.min(index, of)}/${of})` : label;
+/** "checking running processes (3/9), about 12s left", or the label alone when saw gives no count or estimate. */
+export function describeProgress(progress: Progress, now = Date.now()): string {
+  const { label, index, of, dueAt } = progress;
+  const counted = index !== undefined && of !== undefined && of > 0 ? `${label} (${Math.min(index, of)}/${of})` : label;
+  const left = dueAt === undefined ? 0 : Math.round((dueAt - now) / 1000);
+  return left >= 1 ? `${counted}, about ${left}s left` : counted;
 }
 
 /**
@@ -58,10 +78,12 @@ export function describeProgress(progress: Progress): string {
  */
 export class ProgressLines {
   private partial = "";
+  private dueAt: number | undefined;
 
   constructor(
     private readonly onProgress: (progress: Progress | null) => void,
     private readonly onText: (text: string) => void = () => undefined,
+    private readonly now: () => number = Date.now,
   ) {}
 
   feed(chunk: string): void {
@@ -85,7 +107,7 @@ export class ProgressLines {
     if (trimmed.startsWith("{")) {
       const progress = readEvent(trimmed);
       if (progress !== undefined) {
-        this.onProgress(progress);
+        this.onProgress(this.timed(progress));
         return;
       }
       if (isJsonObject(trimmed)) {
@@ -93,6 +115,17 @@ export class ProgressLines {
       }
     }
     this.onText(line);
+  }
+
+  private timed(progress: Progress | null): Progress | null {
+    if (!progress) {
+      this.dueAt = undefined;
+      return null;
+    }
+    if (progress.estimateSeconds !== undefined) {
+      this.dueAt = this.now() + progress.estimateSeconds * 1000;
+    }
+    return this.dueAt === undefined ? progress : { ...progress, dueAt: this.dueAt };
   }
 }
 

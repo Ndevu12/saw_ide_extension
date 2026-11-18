@@ -1,7 +1,7 @@
-import { closeSync, openSync, readSync, realpathSync, statSync } from "node:fs";
+import { closeSync, openSync, readSync, statSync } from "node:fs";
 import * as path from "node:path";
 
-import { defaultIsExecutableFile } from "../install/locate";
+import { defaultIsExecutableFile, realPath } from "../install/locate";
 
 // The real git and gh sit behind saw's stand-in, which comes first on PATH. A program the stand-in
 // runs must be a full path outside every stand-in folder, or running it reaches the stand-in again.
@@ -26,13 +26,7 @@ export interface ProgramFiles {
 
 export const diskFiles: ProgramFiles = {
   isExecutableFile: defaultIsExecutableFile,
-  realpath: (file) => {
-    try {
-      return realpathSync(file);
-    } catch {
-      return undefined;
-    }
-  },
+  realpath: realPath,
   folderIdentity: (dir) => {
     try {
       const stats = statSync(dir, { bigint: true });

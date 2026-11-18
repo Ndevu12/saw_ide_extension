@@ -9,6 +9,12 @@ export const FEATURES = {
   auditJson: "audit.json",
   hookStatusJson: "hook.status.json",
   progress: "progress.jsonl",
+  /** `saw scan --deadline`: saw stops in time and marks what it did not finish. */
+  scanDeadline: "scan.deadline",
+  governProgress: "govern.progress.jsonl",
+  /** An update saw cannot check is left to the operator. */
+  governDecision: "govern.decision",
+  governDeadline: "govern.deadline",
   /** `saw fix --ask=jsonl` (stayAwakeBot#1847). Absent until saw can ask without a terminal. */
   fixAsk: "fix.ask.json",
   /** `saw govern`, which checks an incoming update before the open folder changes. */

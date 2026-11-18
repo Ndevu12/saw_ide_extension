@@ -108,16 +108,12 @@ suite("saw extension", () => {
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder);
     await vscode.commands.executeCommand("saw.openReport", folder);
-    const uri = api.reports.scanUri(folder);
-    const shown = await until(() => vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString()), 30_000);
-    const text = shown.getText();
-    const preview = vscode.window.tabGroups.all.flatMap((group) => group.tabs).find((tab) => tab.input instanceof vscode.TabInputWebview && /markdown\.preview/.test(tab.input.viewType));
-    assert.ok(preview, "the report opened in the Markdown preview");
-    const html = await vscode.commands.executeCommand<string>("markdown.api.render", text);
-    assert.doesNotMatch(html, /<img|<script|<iframe|\son\w+=/i, html);
-    for (const [, href] of html.matchAll(/href="([^"]*)"/g)) {
-      assert.match(href ?? "", /^https:/, `only https links: ${href}`);
-    }
+    const tab = await until(
+      () => vscode.window.tabGroups.all.flatMap((group) => group.tabs).find((t) => t.input instanceof vscode.TabInputWebview && /saw\.details/.test(t.input.viewType)),
+      30_000,
+    );
+    assert.equal(tab.label, `Full details · ${folder.name}`);
+    const text = new TextDecoder().decode(await vscode.workspace.fs.readFile(api.reports.scanUri(folder)));
     assert.match(text, /## Infected/, text);
     assert.match(text, /vscode-task-runs-font/, text);
     assert.match(text, /node \.vscode\/a\.woff2/, "the preview shows the evidence");
@@ -139,9 +135,9 @@ suite("saw extension", () => {
     const window = vscode.window as { showWarningMessage: (...args: unknown[]) => Thenable<unknown> };
     const original = window.showWarningMessage;
     window.showWarningMessage = (message: unknown, ...rest: unknown[]) => {
-      if (typeof message === "string" && message.startsWith("Fix ")) {
+      if (typeof message === "string" && message.startsWith("Fix the infection in the files of ")) {
         asked.push(message);
-        return Promise.resolve("Fix");
+        return Promise.resolve("Fix Files");
       }
       return original.call(vscode.window, message, ...rest);
     };
@@ -155,9 +151,9 @@ suite("saw extension", () => {
         const state = api.model.get(folder);
         throw new Error(`still ${JSON.stringify({ fixing: state.fixing, scanning: state.scanning, verdict: state.last?.verdict, asked })}`);
       });
-      assert.deepEqual(asked, [`Fix ${folder.name} with saw?`]);
+      assert.deepEqual(asked, [`Fix the infection in the files of ${folder.name}?`]);
       const fix = await vscode.workspace.openTextDocument(api.reports.fixUri(folder));
-      assert.match(fix.getText(), /## Clean-up prepared/, fix.getText());
+      assert.match(fix.getText(), /## Files fixed/, fix.getText());
       assert.match(fix.getText(), /## saw's report\n\n`{3,}text\nSecurity fix/, fix.getText());
       assert.notEqual(last?.verdict, "infected", JSON.stringify(last?.reasons));
       const tasks = vscode.Uri.joinPath(folder.uri, ".vscode", "tasks.json");

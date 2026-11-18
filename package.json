@@ -62,7 +62,10 @@
   "main": "./dist/extension.js",
   "saw": {
     "saw": "0.17.1",
-    "pipx": "1.18.4"
+    "pipx": "1.18.4",
+    "signers": [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFj6GX6lYd5XbveJQHEpMfbI7IYflSS5aFakvoWLtBeU"
+    ]
   },
   "extensionKind": [
     "workspace"
@@ -78,6 +81,7 @@
         "saw.path",
         "saw.configPath",
         "saw.autoInstall",
+        "saw.autoUpdate",
         "saw.registerMcpServer"
       ]
     },
@@ -102,6 +106,16 @@
       {
         "command": "saw.install",
         "title": "Install or Repair saw",
+        "category": "saw"
+      },
+      {
+        "command": "saw.checkForUpdates",
+        "title": "Check for saw Updates",
+        "category": "saw"
+      },
+      {
+        "command": "saw.usePreviousSaw",
+        "title": "Go Back to the Previous saw",
         "category": "saw"
       },
       {
@@ -347,6 +361,18 @@
           "scope": "machine",
           "markdownDescription": "Install saw with pipx when it is missing or too old, installing pipx first when the machine has none. Needs Python 3.11 or later and access to PyPI. Turn it off where software is installed only by an administrator."
         },
+        "saw.autoUpdate": {
+          "type": "string",
+          "enum": ["auto", "notify", "off"],
+          "enumDescriptions": [
+            "Install a new saw release 3 days after it is published, or at once for a security release. Update Now installs it sooner.",
+            "Say when a new saw release is out, and install it only on Update Now.",
+            "Do not look for newer saw releases. Run saw: Check for saw Updates to look."
+          ],
+          "default": "auto",
+          "scope": "machine",
+          "markdownDescription": "Update the saw this extension installed to saw's latest release, checked against the release's signed `SHA256SUMS`. A saw you installed yourself, or one `saw.path` names, is never changed."
+        },
         "saw.registerMcpServer": {
           "type": "boolean",
           "default": true,
@@ -414,14 +440,14 @@
     "@typescript/native": "npm:typescript@~7.0.2",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.1.0",
-    "@vscode/vsce": "^4.1.0",
+    "@vscode/vsce": "^4.1.1",
     "esbuild": "^0.28.2",
-    "eslint": "^10.14.0",
+    "eslint": "^10.15.0",
     "globals": "^17.14.0",
     "markdown-it": "^15.0.3",
-    "ovsx": "^1.3.0",
+    "ovsx": "^1.4.0",
     "typescript": "npm:@typescript/typescript6@~6.0.2",
-    "typescript-eslint": "^8.72.1",
+    "typescript-eslint": "^8.73.0",
     "vitest": "^5.1.0"
   },
   "packageManager": "pnpm@11.20.0"
