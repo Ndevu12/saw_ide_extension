@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 
 import { FEATURES, supports } from "../../core/capabilities";
 import { configOutsideFolders } from "../../core/controls";
-import { offersGovernRestore, offersGovernVerdict, openAdmission, readGoverned, readNotice, readRestore, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig, type Governed, type GovernedReading, type GovernNotice } from "../../core/govern/contract";
+import { governFeatures, offersGovernRestore, offersGovernVerdict, openAdmission, readGoverned, readNotice, readRestore, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig, type GovernFeatures, type Governed, type GovernedReading, type GovernNotice } from "../../core/govern/contract";
 import { quietGit, type Tool } from "../../core/govern/command";
 import { answerFileName, ASK_EDITOR_MS, askFileName, commandText, readUpdateAsk, type Decision, type UpdateAsk } from "../../core/govern/decision";
 import { heldFileName, LET_IN_UPDATE, readHeldRecord } from "../../core/govern/held";
@@ -195,7 +195,7 @@ export class Governor implements vscode.Disposable {
       return;
     }
     this.starting = true;
-    void this.enable(ready.binary, ready.capabilities.features.has("govern.progress.jsonl"), ready.capabilities.features.has("govern.decision")).finally(() => {
+    void this.enable(ready.binary, governFeatures(ready.capabilities)).finally(() => {
       this.starting = false;
       if (this.pending) {
         this.pending = false;
@@ -204,7 +204,7 @@ export class Governor implements vscode.Disposable {
     });
   }
 
-  private async enable(saw: string, progress: boolean, decides: boolean): Promise<void> {
+  private async enable(saw: string, features: GovernFeatures): Promise<void> {
     const systemBin = this.systemPlacement();
     this.systemBin = systemBin;
     const realGit = await this.realBinary("git");
@@ -221,7 +221,7 @@ export class Governor implements vscode.Disposable {
       return;
     }
     const quietHooks = await this.quietHooks(realGit);
-    const signature = JSON.stringify({ saw, realGit, realGh, progress, decides, standin, systemBin, verdict: this.verdictReady, restore: this.restoreReady, quietHooks, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
+    const signature = JSON.stringify({ saw, realGit, realGh, ...features, standin, systemBin, verdict: this.verdictReady, restore: this.restoreReady, quietHooks, timeoutMs: this.settings().timeoutMs, folders: this.folders() });
     if (signature === this.signature && this.active) {
       return;
     }
@@ -245,12 +245,13 @@ export class Governor implements vscode.Disposable {
       holdingRoot: this.holdingRoot,
       markerDir: this.markerDir,
       resultDir: this.resultDir,
-      progress,
+      progress: features.progress,
+      ...(features.deadline ? { deadline: true } : {}),
       ...(standin ? { standin } : {}),
       quietHooks,
       standinDirs: this.standinDirs(),
       askDir: this.askDir,
-      ...(decides ? { decides } : {}),
+      ...(features.decides ? { decides: true } : {}),
     };
     this.writeConfig(config);
     this.coverTerminals(systemBin);

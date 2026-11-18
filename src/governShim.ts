@@ -4,6 +4,7 @@ import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync
 import * as path from "node:path";
 import { createInterface } from "node:readline";
 
+import { withDeadline } from "./core/deadline";
 import { applyArgs, prepareArgs, readApply, readPrepare, UNCHECKED_CLONE, UNCHECKED_UPDATE, type GovernConfig, type GovernPhase } from "./core/govern/contract";
 import { answerFileName, ASK_EDITOR_MS, askFileName, DECISION_ENV, decisionFromEnv, heldTerminalAnswer, heldTerminalQuestion, readAnswer, terminalAnswer, terminalQuestion, type Decision, type UpdateAsk } from "./core/govern/decision";
 import { findingLines, foundSomething, heldFileName, heldNextSteps, LET_IN_UPDATE, readHeldRecord, sawNextSteps } from "./core/govern/held";
@@ -387,8 +388,9 @@ async function holdWithSaw(config: GovernConfig, action: Hold, typed: readonly s
   for (const name of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
     process.on(name, () => interrupted.abort());
   }
-  const prepared = await runProgram(config.saw, prepareArgs(action.repo, action.holding, action.tool, action.args, config.progress), {
-    timeoutMs: config.timeoutMs,
+  const limit = withDeadline(config.timeoutMs, config.deadline === true);
+  const prepared = await runProgram(config.saw, prepareArgs(action.repo, action.holding, action.tool, action.args, config.progress, limit.args), {
+    timeoutMs: limit.timeoutMs,
     signal: interrupted.signal,
     onOutput: (text, stream) => {
       if (stream === "stderr") {

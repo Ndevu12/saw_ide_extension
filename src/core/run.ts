@@ -60,6 +60,13 @@ const AS_GROUP = process.platform !== "win32";
 // workspace from supplying anything by sitting where the process starts.
 const NEUTRAL_CWD = tmpdir();
 
+/** Python reads these before anything else, so they could make a verified saw run other code. */
+const PYTHON_OVERRIDES = new Set(["PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONINSPECT"]);
+
+export function programEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return { ...Object.fromEntries(Object.entries(env).filter(([name]) => !PYTHON_OVERRIDES.has(name.toUpperCase()))), ...QUIET_ENV };
+}
+
 const QUIET_ENV = {
   NO_COLOR: "1",
   STAYAWAKE_NO_STREAM: "1",
@@ -81,7 +88,7 @@ export function runProgram(binary: string, args: readonly string[], options: Run
 
     const child = spawn(binary, [...args], {
       cwd: NEUTRAL_CWD,
-      env: { ...process.env, ...QUIET_ENV },
+      env: programEnv(process.env),
       stdio: [options.input ? "pipe" : "ignore", "pipe", "pipe"],
       shell: false,
       windowsHide: true,

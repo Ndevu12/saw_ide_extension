@@ -50,6 +50,26 @@ describe("saw's progress events", () => {
     expect(text).toBe("Traceback (most recent call last):\n{not json\n");
   });
 
+  it("say how much a target holds, and how far each phase has come", () => {
+    expect(readEvent(event({ event: "plan", target: "~/Dev/app", files: 2536, bytes: 1, commits: 3, workers: 5, estimate_seconds: 13, budget_seconds: 60 }))).toEqual({ label: "app: 2,536 files", index: undefined, of: undefined, estimateSeconds: 13 });
+    expect(readEvent(event({ event: "plan", target: "~/Dev/app" }))).toBeUndefined();
+    expect(readEvent(event({ event: "progress", target: "~/Dev/app", phase: "repository", total: 6, done: 3 }))).toEqual({ label: "app: repository", index: 3, of: 6 });
+    expect(readEvent(event({ event: "progress", target: "~/Dev/app", phase: "repository", total: 6 }))).toEqual({ label: "app: repository", index: undefined, of: 6 });
+  });
+
+  it("carry saw's estimate to the events after its plan, until it is done", () => {
+    let now = 1_000_000;
+    const seen: (string | null)[] = [];
+    const lines = new ProgressLines((p) => seen.push(p && describeProgress(p, now)), () => undefined, () => now);
+    lines.feed(`${event({ event: "step", label: "Discovering targets" })}\n`);
+    lines.feed(`${event({ event: "plan", target: "~/app", files: 747, estimate_seconds: 13 })}\n`);
+    now += 4000;
+    lines.feed(`${event({ event: "progress", target: "~/app", phase: "repository", total: 6, done: 3 })}\n`);
+    now += 20_000;
+    lines.feed(`${event({ event: "progress", target: "~/app", phase: "repository", total: 6, done: 6 })}\n${event({ event: "done", exit: 0 })}\n`);
+    expect(seen).toEqual(["Discovering targets", "app: 747 files, about 13s left", "app: repository (3/6), about 9s left", "app: repository (6/6)", null]);
+  });
+
   it("are left out when quoting what saw said", () => {
     expect(withoutEvents(`${event({ event: "step", label: "x" })}\nerror: boom\n`)).toBe("error: boom\n");
   });

@@ -3,6 +3,7 @@ import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { withDeadline } from "../../src/core/deadline";
 import { scanArgs, scanFolder } from "../../src/core/scan/scan";
 import { fakeSaw, finding, onWindows, report, target, tempDir } from "./helpers";
 
@@ -16,6 +17,13 @@ describe("scanArgs", () => {
 
   it("asks for progress events only when told to", () => {
     expect(scanArgs("/work/repo", "", true)).toEqual(["scan", "/work/repo", "--json", "--no-stream", "--progress=jsonl"]);
+  });
+
+  it("gives a saw that takes --deadline the scan's time, and stops it from outside only after a grace", () => {
+    expect(withDeadline(120_000, true)).toEqual({ args: ["--deadline", "120"], timeoutMs: 135_000 });
+    expect(withDeadline(500, true).args).toEqual(["--deadline", "1"]);
+    expect(withDeadline(120_000, false)).toEqual({ args: [], timeoutMs: 120_000 });
+    expect(scanArgs("/work/repo", "", false, ["--deadline", "120"])).toEqual(["scan", "/work/repo", "--json", "--no-stream", "--deadline", "120"]);
   });
 });
 
