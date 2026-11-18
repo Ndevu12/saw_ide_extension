@@ -62,7 +62,10 @@
   "main": "./dist/extension.js",
   "saw": {
     "saw": "0.17.1",
-    "pipx": "1.18.4"
+    "pipx": "1.18.4",
+    "signers": [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFj6GX6lYd5XbveJQHEpMfbI7IYflSS5aFakvoWLtBeU"
+    ]
   },
   "extensionKind": [
     "workspace"
@@ -362,13 +365,13 @@
           "type": "string",
           "enum": ["auto", "notify", "off"],
           "enumDescriptions": [
-            "Install a newer approved saw on its own once it is 3 days old, or at once when it fixes a security problem. You can install it sooner.",
-            "Say when a newer approved saw is available, and install it only when you choose Update Now.",
+            "Install a new saw release 3 days after it is published, or at once for a security release. Update Now installs it sooner.",
+            "Say when a new saw release is out, and install it only on Update Now.",
             "Do not look for newer saw releases. Run saw: Check for saw Updates to look."
           ],
           "default": "auto",
           "scope": "machine",
-          "markdownDescription": "Update the saw this extension installed to a newer release without waiting for an extension release. A release must be approved in this extension's channel, which records the hash of every file. Each file is checked against it, and the new saw must find a known infection before it replaces the one that runs. A saw you installed yourself, or one `saw.path` names, is never changed."
+          "markdownDescription": "Update the saw this extension installed to saw's latest release, checked against the release's signed `SHA256SUMS`. A saw you installed yourself, or one `saw.path` names, is never changed."
         },
         "saw.registerMcpServer": {
           "type": "boolean",

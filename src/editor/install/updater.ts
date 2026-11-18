@@ -1,17 +1,19 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import * as path from "node:path";
 
 import * as vscode from "vscode";
 
-import { CHANNEL_URL, checkLock, chooseUpdate, lockUrl, readChannel, UPDATE_WAIT_MS, type Channel, type ChannelRelease } from "../../core/install/channel";
-import { defaultIsExecutableFile, sameInstall } from "../../core/install/locate";
+import { downloadRelease } from "../../core/install/download";
+import { chooseUpdate, LATEST_RELEASE_URL, readRelease, UPDATE_WAIT_MS, wheelFor, type SawRelease } from "../../core/install/release";
 import { installUpdate, type UpdateStep } from "../../core/install/update";
 import { runProgram } from "../../core/run";
 import { scanFolder } from "../../core/scan/scan";
 import { parseRelease } from "../../core/version";
 import type { Model } from "../model";
-import type { Installer } from "./installer";
+import { withCancellableProgress, type Report } from "../progress";
+import { locateEnv, type Installer } from "./installer";
+import { UpdateState } from "./updateState";
 
 export type UpdateMode = "auto" | "notify" | "off";
 
@@ -20,29 +22,32 @@ const TICK_MS = 6 * 60 * 60_000;
 const CHECK_EVERY_MS = 20 * 60 * 60_000;
 const IDLE_POLL_MS = 30_000;
 const IDLE_WAIT_MS = 30 * 60_000;
-const FETCH_MS = 15_000;
+const FETCH_MS = 60_000;
 const SAMPLE_SCAN_MS = 60_000;
-
-const LAST_CHECK_KEY = "update.lastCheck";
-const OFFERED_KEY = "update.offered";
-const DECLINED_KEY = "update.declined";
 
 const STEP_TEXT: Record<UpdateStep, string> = {
   "find-python": "Finding Python…",
-  "create-venv": "Preparing a separate place for it…",
-  install: "Installing it, every file checked against its approved hash…",
+  "create-venv": "Preparing a separate environment…",
+  install: "Installing…",
   "check-version": "Checking its version…",
-  "check-detection": "Checking it still finds a known infection…",
+  "check-detection": "Checking it finds a known infection…",
 };
 
-/**
- * Moves the saw this extension installed to a newer release its channel approved, without a
- * release of the extension. A release installs on its own once it is three days old, or at once
- * when it fixes a security problem or the running saw is withdrawn. The person can install it
- * sooner. The saw that runs is replaced only once the new one has passed its checks, and only
- * while nothing is scanning or fixing. A failed update leaves the saw that runs as it is.
- */
+type Installed = { kind: "installed"; binary: string } | { kind: "failed"; detail: string };
+
+const removeDir = (dir: string) => rmSync(dir, { recursive: true, force: true });
+
+function tempFolder(prefix: string, files: Record<string, string> = {}): string {
+  const folder = mkdtempSync(path.join(tmpdir(), prefix));
+  for (const [name, text] of Object.entries(files)) {
+    mkdirSync(path.dirname(path.join(folder, name)), { recursive: true });
+    writeFileSync(path.join(folder, name), text);
+  }
+  return folder;
+}
+
 export class Updater implements vscode.Disposable {
+  private readonly state: UpdateState;
   private timer: ReturnType<typeof setInterval> | undefined;
   private first: ReturnType<typeof setTimeout> | undefined;
   private running: Promise<void> | undefined;
@@ -53,22 +58,22 @@ export class Updater implements vscode.Disposable {
     private readonly installer: Installer,
     private readonly model: Model,
     private readonly settings: () => { path: string; autoUpdate: UpdateMode },
-    /** Find saw again and scan every folder with it. */
     private readonly switched: () => Promise<void>,
-  ) {}
+  ) {
+    this.state = new UpdateState(context.globalState);
+  }
 
   start(): void {
     this.first = setTimeout(() => void this.check(false), FIRST_CHECK_MS);
     this.timer = setInterval(() => void this.check(false), TICK_MS);
   }
 
-  /** Check on the next tick whatever the last check found, as after saw was installed again. */
   async recheck(): Promise<void> {
-    await this.context.globalState.update(LAST_CHECK_KEY, undefined);
+    await this.state.checked(undefined);
     await this.check(false);
   }
 
-  /** `asked`: from the command, so every outcome is said, the wait is shown, and a declined release is offered again. */
+  /** `asked`: from the command, so every outcome is said and a declined release is offered again. */
   check(asked: boolean): Promise<void> {
     this.running ??= this.checkOnce(asked).finally(() => {
       this.running = undefined;
@@ -78,82 +83,56 @@ export class Updater implements vscode.Disposable {
 
   private async checkOnce(asked: boolean): Promise<void> {
     const mode = this.settings().autoUpdate;
-    if (!asked && (mode === "off" || Date.now() - (this.context.globalState.get<number>(LAST_CHECK_KEY) ?? 0) < CHECK_EVERY_MS)) {
+    if (!asked && (mode === "off" || this.state.checkedWithin(CHECK_EVERY_MS, Date.now()))) {
       return;
     }
     const engine = this.model.engine;
-    if (this.settings().path.trim()) {
-      this.tell(asked, "saw.path is set, so it decides which saw runs, and this extension does not update it.");
+    const skip = this.settings().path.trim()
+      ? "saw.path is set, so saw is not updated by this extension."
+      : engine?.kind !== "ready"
+        ? "saw is not running yet."
+        : !engine.ours
+          ? `saw at ${engine.binary} was not installed by this extension. Update it the way you installed it.`
+          : !wheelFor(process.platform, process.arch, engine.version)
+            ? `saw publishes no package for ${process.platform} ${process.arch}, so it is not updated here.`
+            : undefined;
+    const current = engine?.kind === "ready" ? parseRelease(engine.version) : undefined;
+    if (skip || !current) {
+      this.tell(asked, skip ?? "saw's version could not be read.");
       return;
     }
-    if (engine?.kind !== "ready") {
-      this.tell(asked, "saw is not running yet, so there is nothing to update.");
+    const text = await this.fetch(LATEST_RELEASE_URL);
+    await this.state.checked(Date.now());
+    const release = text && readRelease(Buffer.from(text).toString("utf8"));
+    if (!release) {
+      this.tell(asked, "Could not read saw's latest release. Trying again later.", "warn");
       return;
     }
-    if (!this.ours(engine.binary)) {
-      this.tell(asked, `The saw that runs (${engine.binary}) was not installed by this extension, so update it the way it was installed.`);
-      return;
-    }
-    const current = parseRelease(engine.version);
-    if (!current) {
-      return;
-    }
-    const channel = await this.fetchChannel();
-    void this.context.globalState.update(LAST_CHECK_KEY, Date.now());
-    if (!channel) {
-      this.tell(asked, "saw could not read which releases are approved. It tries again later.", "warn");
-      return;
-    }
-    const declined = asked ? [] : this.context.globalState.get<string[]>(DECLINED_KEY) ?? [];
-    const extension = (this.context.extension.packageJSON as { version?: string }).version ?? "0.0.0";
-    const choice = chooseUpdate(channel, { current, extension, now: Date.now(), declined });
-    switch (choice.kind) {
-      case "none":
-        this.tell(asked, `saw ${engine.version} is the newest release approved for this extension.`);
-        return;
-      case "blocked-stuck":
-        this.log.warn(`saw ${engine.version} has been withdrawn, and no release that replaces it is approved yet. It keeps running.`);
-        void vscode.window.showWarningMessage(`saw ${engine.version} has been withdrawn, and no release that replaces it is approved yet. It keeps scanning until one is.`);
-        return;
-      case "waiting":
-        if (asked || mode !== "off") {
-          await this.offer(choice.release, mode === "auto" && Number.isFinite(choice.dueAt) ? choice.dueAt : undefined, asked);
-        }
-        return;
-      case "due":
-        if (mode === "auto" || choice.why === "blocked") {
-          await this.update(choice.release, choice.why === "blocked" ? `saw ${engine.version} was withdrawn` : choice.why === "security" ? "it fixes a security problem" : undefined, false);
-        } else {
-          await this.offer(choice.release, undefined, asked);
-        }
-        return;
+    const choice = chooseUpdate(release, { current, highest: this.state.highest, now: Date.now(), declined: asked ? [] : this.state.declined });
+    if (choice.kind === "none") {
+      this.tell(asked, `saw ${current.join(".")} is up to date.`);
+    } else if (choice.kind === "due" && mode === "auto") {
+      await this.update(release, choice.why === "security" ? "it fixes a security problem" : undefined, false);
+    } else if (asked || (await this.state.offerOnce(release.version))) {
+      await this.offer(release, mode === "auto" && choice.kind === "waiting" && Number.isFinite(choice.dueAt) ? choice.dueAt : undefined);
     }
   }
 
-  /** Offer a release once, unless asked: the person can read about it and install it now. */
-  private async offer(release: ChannelRelease, dueAt: number | undefined, asked: boolean): Promise<void> {
-    if (!asked && this.context.globalState.get<string>(OFFERED_KEY) === release.version) {
-      return;
-    }
-    await this.context.globalState.update(OFFERED_KEY, release.version);
-    const when = dueAt ? ` It installs on its own on ${new Date(dueAt).toLocaleDateString()}, ${Math.round(UPDATE_WAIT_MS / 86_400_000)} days after its release.` : "";
-    const checked = release.provenance ? "Its files match the hashes this extension approved, and saw's release workflow signed them." : "Its files match the hashes this extension approved.";
-    const choice = await vscode.window.showInformationMessage(`saw ${release.version} is available.${when} ${checked} You can install it now once you have checked it.`, "Update Now", "Release Notes");
-    if (choice === "Release Notes") {
-      await vscode.env.openExternal(vscode.Uri.parse(release.notesUrl));
-    } else if (choice === "Update Now") {
+  private async offer(release: SawRelease, dueAt: number | undefined): Promise<void> {
+    const when = dueAt ? ` It installs on its own on ${new Date(dueAt).toLocaleDateString()}, ${Math.round(UPDATE_WAIT_MS / 86_400_000)} days after release.` : "";
+    const choice = await this.notesOr(release, `saw ${release.version} is available.${when}`, "Update Now");
+    if (choice === "Update Now") {
       await this.update(release, undefined, true);
     }
   }
 
-  private async update(release: ChannelRelease, why: string | undefined, asked: boolean): Promise<void> {
+  private async update(release: SawRelease, why: string | undefined, asked: boolean): Promise<void> {
     const outcome = await this.installer.exclusive(() => this.install(release, asked));
     if (outcome === "busy") {
-      this.log.info("Another editor window is installing saw; the update is tried again later.");
       return;
     }
     if (outcome.kind === "failed") {
-      const message = `saw ${release.version} was not installed: ${outcome.detail} The saw that runs keeps scanning.`;
+      const message = `saw ${release.version} was not installed: ${outcome.detail} The current saw keeps running.`;
       this.log.warn(message);
       if (asked || why) {
         void vscode.window.showWarningMessage(message, "Show Log").then((choice) => choice && vscode.commands.executeCommand("saw.showOutput"));
@@ -161,72 +140,62 @@ export class Updater implements vscode.Disposable {
       return;
     }
     if (!(await this.idle())) {
-      this.log.info(`saw ${release.version} is ready, but a scan or fix is still running; it is switched to on the next check.`);
+      this.log.info(`saw ${release.version} is installed but not switched to: a scan or fix is still running.`);
       return;
     }
     this.installer.adopt(outcome.binary, release.version);
-    await this.context.globalState.update(DECLINED_KEY, (this.context.globalState.get<string[]>(DECLINED_KEY) ?? []).filter((v) => v !== release.version));
-    this.log.info(`Updated saw to ${release.version} at ${outcome.binary}${why ? ` because ${why}` : ""}.`);
+    await this.state.adopted(release.version);
+    this.log.info(`Updated saw to ${release.version}.`);
     await this.switched();
-    const back = this.installer.previousVersion();
-    const choice = await vscode.window.showInformationMessage(
-      `saw is updated to ${release.version}${why ? ` because ${why}` : ""}. Every folder is scanned again with it.`,
-      "Release Notes",
-      ...(back ? ["Use Previous Version"] : []),
-    );
-    if (choice === "Release Notes") {
-      await vscode.env.openExternal(vscode.Uri.parse(release.notesUrl));
-    } else if (choice === "Use Previous Version") {
+    const back = this.installer.previousVersion() ? ["Use Previous Version"] : [];
+    const choice = await this.notesOr(release, `saw is updated to ${release.version}${why ? ` because ${why}` : ""}.`, ...back);
+    if (choice === "Use Previous Version") {
       await this.usePrevious();
     }
   }
 
-  private async install(release: ChannelRelease, asked: boolean): Promise<{ kind: "installed"; binary: string } | { kind: "failed"; detail: string }> {
-    const lock = await this.fetchText(lockUrl(release));
-    const checked = lock === undefined ? undefined : checkLock(lock, release);
-    if (!checked) {
-      return { kind: "failed", detail: lock === undefined ? "its approved requirements could not be downloaded." : "its requirements do not match the hash this extension approved." };
+  private async install(release: SawRelease, asked: boolean): Promise<Installed> {
+    const downloaded = await downloadRelease(release, { fetch: (url) => this.fetch(url), signers: this.signers(), platform: process.platform, arch: process.arch });
+    if (downloaded.kind === "failed") {
+      return downloaded;
     }
+    const work = tempFolder("saw-update-");
+    const wheel = path.join(work, downloaded.wheelName);
+    writeFileSync(wheel, downloaded.wheel);
     const dir = path.join(this.installer.updateRoot, "versions", release.version);
     mkdirSync(path.dirname(dir), { recursive: true });
-    const work = (progress: vscode.Progress<{ message?: string }>, signal?: AbortSignal) => installUpdate({
-      env: { platform: process.platform, homedir: homedir(), pathVariable: process.env["PATH"], isExecutableFile: defaultIsExecutableFile },
-      run: runProgram,
-      dir,
-      version: release.version,
-      lock: checked,
-      writeFile: (file, text) => writeFileSync(file, text),
-      removeDir: (target) => rmSync(target, { recursive: true, force: true }),
-      sample: (files) => {
-        const folder = mkdtempSync(path.join(tmpdir(), "saw-update-check-"));
-        for (const [name, text] of Object.entries(files)) {
-          mkdirSync(path.dirname(path.join(folder, name)), { recursive: true });
-          writeFileSync(path.join(folder, name), text);
-        }
-        return folder;
-      },
-      scan: async (binary, folder) => {
-        const outcome = await scanFolder({ binary, folder, configPath: "", timeoutMs: SAMPLE_SCAN_MS });
-        return outcome.kind === "cancelled" ? undefined : outcome.verdict;
-      },
-      onStep: (step) => {
-        progress.report({ message: STEP_TEXT[step] });
-        this.log.info(`Updating saw to ${release.version}: ${STEP_TEXT[step]}`);
-      },
-      ...(signal ? { signal } : {}),
-    });
+    const run = (progress: Report, signal?: AbortSignal) =>
+      installUpdate({
+        env: locateEnv(),
+        run: runProgram,
+        dir,
+        version: release.version,
+        wheel,
+        dependencies: downloaded.dependencies,
+        writeFile: (file, text) => writeFileSync(file, text),
+        removeDir,
+        sample: (files) => tempFolder("saw-update-check-", files),
+        scan: async (binary, folder) => {
+          const outcome = await scanFolder({ binary, folder, configPath: "", timeoutMs: SAMPLE_SCAN_MS });
+          return outcome.kind === "cancelled" ? undefined : outcome.verdict;
+        },
+        onStep: (step) => {
+          progress.report({ message: STEP_TEXT[step] });
+          this.log.info(`saw ${release.version}: ${STEP_TEXT[step]}`);
+        },
+        ...(signal ? { signal } : {}),
+      });
     const title = `Updating saw to ${release.version}`;
-    const result = asked
-      ? await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: true }, (progress, token) => {
-        const abort = new AbortController();
-        token.onCancellationRequested(() => abort.abort());
-        return work(progress, abort.signal);
-      })
-      : await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title }, (progress) => work(progress));
-    return result.kind === "installed" ? { kind: "installed", binary: result.binary } : { kind: "failed", detail: `${STEP_TEXT[result.step].replace(/…$/, "")} failed (${result.detail}).` };
+    try {
+      const result = asked
+        ? await withCancellableProgress(title, run)
+        : await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title }, (progress) => run(progress));
+      return result.kind === "installed" ? result : { kind: "failed", detail: `${STEP_TEXT[result.step].replace(/…$/, "")} failed: ${result.detail}` };
+    } finally {
+      removeDir(work);
+    }
   }
 
-  /** Go back to the saw that ran before the last update. That release is not installed on its own again. */
   async usePrevious(): Promise<void> {
     const engine = this.model.engine;
     const leaving = engine?.kind === "ready" ? engine.version : undefined;
@@ -236,26 +205,27 @@ export class Updater implements vscode.Disposable {
       return;
     }
     if (leaving) {
-      const declined = this.context.globalState.get<string[]>(DECLINED_KEY) ?? [];
-      await this.context.globalState.update(DECLINED_KEY, [...new Set([...declined, leaving])]);
+      await this.state.decline(leaving);
     }
-    this.log.info(`Went back to saw ${version}${leaving ? ` from ${leaving}` : ""}.`);
+    this.log.info(`Went back to saw ${version}.`);
     await this.switched();
-    void vscode.window.showInformationMessage(`saw ${version} runs again, and every folder is scanned with it.${leaving ? ` saw ${leaving} is not installed on its own again; saw: Check for saw Updates offers it.` : ""}`);
+    void vscode.window.showInformationMessage(`saw ${version} runs again.${leaving ? ` saw ${leaving} won't be installed on its own again.` : ""}`);
   }
 
-  private ours(binary: string): boolean {
-    const canonical = (file: string) => {
-      try {
-        return realpathSync(file);
-      } catch {
-        return undefined;
-      }
-    };
-    return sameInstall(binary, this.installer.installedBinary(), canonical);
+  private signers(): string[] {
+    return (this.context.extension.packageJSON as { saw?: { signers?: string[] } }).saw?.signers ?? [];
   }
 
-  /** Nothing is scanning, fixing, checking an update, or waiting on a choice, so switching saw interrupts nothing. */
+  /** Shows `message` with Release Notes, which opens them, beside `actions`; returns the action chosen. */
+  private async notesOr(release: SawRelease, message: string, ...actions: string[]): Promise<string | undefined> {
+    const choice = await vscode.window.showInformationMessage(message, ...actions, "Release Notes");
+    if (choice === "Release Notes") {
+      await vscode.env.openExternal(vscode.Uri.parse(release.notesUrl));
+      return undefined;
+    }
+    return choice;
+  }
+
   private async idle(): Promise<boolean> {
     const end = Date.now() + IDLE_WAIT_MS;
     for (;;) {
@@ -270,17 +240,13 @@ export class Updater implements vscode.Disposable {
     }
   }
 
-  private async fetchChannel(): Promise<Channel | undefined> {
-    const text = await this.fetchText(CHANNEL_URL);
-    return text === undefined ? undefined : readChannel(text);
-  }
-
-  private async fetchText(url: string): Promise<string | undefined> {
+  private async fetch(url: string): Promise<Uint8Array | undefined> {
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(FETCH_MS), redirect: "error" });
-      return response.ok ? await response.text() : undefined;
+      const accept = url === LATEST_RELEASE_URL ? "application/vnd.github+json" : "application/octet-stream";
+      const response = await fetch(url, { signal: AbortSignal.timeout(FETCH_MS), headers: { Accept: accept } });
+      return response.ok ? new Uint8Array(await response.arrayBuffer()) : undefined;
     } catch (error) {
-      this.log.warn(`Could not read ${url}: ${String(error)}`);
+      this.log.warn(`Could not download ${url}: ${String(error)}`);
       return undefined;
     }
   }
@@ -293,12 +259,8 @@ export class Updater implements vscode.Disposable {
   }
 
   dispose(): void {
-    if (this.first) {
-      clearTimeout(this.first);
-    }
-    if (this.timer) {
-      clearInterval(this.timer);
-    }
+    clearTimeout(this.first);
+    clearInterval(this.timer);
   }
 }
 

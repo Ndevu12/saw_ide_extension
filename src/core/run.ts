@@ -35,6 +35,16 @@ export interface RunResult {
   spawnError: string | null;
 }
 
+export function succeeded(result: RunResult): boolean {
+  return result.exitCode === 0 && !result.spawnError && !result.timedOut;
+}
+
+/** The last lines a run said, or why it did not run. */
+export function lastSaid(result: RunResult, lines = 25): string {
+  const text = result.spawnError ?? (result.timedOut ? "timed out" : `${result.stdout}\n${result.stderr}`);
+  return text.trim().split(/\r?\n/).slice(-lines).join("\n");
+}
+
 const DEFAULT_MAX_OUTPUT = 64 * 1024 * 1024;
 
 /** How long a stopped program has to exit before it and everything it started are killed. */

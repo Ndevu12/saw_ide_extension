@@ -10,6 +10,7 @@ import { defaultIsExecutableFile, type LocateEnv } from "../../core/install/loca
 import { machineName, readRelease, type Release } from "../../core/install/platform";
 import { runProgram } from "../../core/run";
 import { atLeast, parseRelease } from "../../core/version";
+import { withCancellableProgress } from "../progress";
 
 export type InstallOutcome =
   | { kind: "installed"; binary: string }
@@ -95,7 +96,7 @@ interface Unsupported {
   cause: string;
 }
 
-function locateEnv(): LocateEnv {
+export function locateEnv(): LocateEnv {
   return { platform: process.platform, homedir: homedir(), pathVariable: process.env["PATH"], isExecutableFile: defaultIsExecutableFile };
 }
 
@@ -254,24 +255,19 @@ export class Installer {
 
   private async installLocked(why: string): Promise<InstallOutcome> {
     this.log.info(`${why} Installing stayawakebot ${this.pins.saw} with pipx.`);
-    const result = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: "Setting up saw", cancellable: true },
-      (progress, token) => {
-        const abort = new AbortController();
-        token.onCancellationRequested(() => abort.abort());
-        return installSaw({
-          env: locateEnv(),
-          run: runProgram,
-          makeTempDir: () => mkdtempSync(path.join(tmpdir(), "saw-pipx-")),
-          removeDir: (dir) => rmSync(dir, { recursive: true, force: true }),
-          pins: this.pins,
-          signal: abort.signal,
-          onStep: (name) => {
-            progress.report({ message: PROGRESS[name](this.pins) });
-            this.log.info(PROGRESS[name](this.pins));
-          },
-        });
-      },
+    const result = await withCancellableProgress("Setting up saw", (progress, signal) =>
+      installSaw({
+        env: locateEnv(),
+        run: runProgram,
+        makeTempDir: () => mkdtempSync(path.join(tmpdir(), "saw-pipx-")),
+        removeDir: (dir) => rmSync(dir, { recursive: true, force: true }),
+        pins: this.pins,
+        signal,
+        onStep: (name) => {
+          progress.report({ message: PROGRESS[name](this.pins) });
+          this.log.info(PROGRESS[name](this.pins));
+        },
+      }),
     );
     for (const step of result.steps) {
       const line = `${step.ok ? "ok" : `failed (${step.exitCode ?? "did not run"})`}: ${step.command}`;

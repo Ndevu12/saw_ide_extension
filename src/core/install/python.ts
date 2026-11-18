@@ -23,6 +23,10 @@ function pathApi(platform: NodeJS.Platform): path.PlatformPath {
   return platform === "win32" ? path.win32 : path.posix;
 }
 
+export function inVenv(dir: string, program: "python" | "saw", platform: NodeJS.Platform): string {
+  return platform === "win32" ? path.win32.join(dir, "Scripts", `${program}.exe`) : path.posix.join(dir, "bin", program);
+}
+
 /** Interpreters worth asking, newest first. On Windows, the Store's `python.exe` stub opens the Store instead of running. */
 export function pythonLaunchers(env: LocateEnv): Launcher[] {
   const p = pathApi(env.platform);

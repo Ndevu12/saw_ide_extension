@@ -1,16 +1,12 @@
 import * as path from "node:path";
 
 import type { LocateEnv } from "./locate";
-import { findPython, type Runner } from "./python";
+import { findPython, inVenv, type Runner } from "./python";
+import { lastSaid, succeeded } from "../run";
 import type { FolderVerdict } from "../scan/verdict";
 import { parseVersion } from "../version";
 
-// Installing an approved saw release beside the one that runs. Every package, saw included, is
-// pinned by hash in the lock the channel approved, so neither PyPI nor the machine's pip settings
-// can swap one. Only wheels: no build script runs. The new saw must then name its version, find a
-// known infection, and find nothing in a plain folder, before anything is switched to it.
-
-/** A folder that opens a shell from a task the moment it is opened: every saw that works calls it infected. */
+/** Opens a shell from a task when the folder opens: any saw that works calls it infected. */
 export const INFECTED_SAMPLE: Record<string, string> = {
   ".vscode/tasks.json": JSON.stringify({
     version: "2.0.0",
@@ -26,13 +22,18 @@ export type UpdateResult =
   | { kind: "installed"; binary: string; dir: string }
   | { kind: "failed"; step: UpdateStep; detail: string };
 
+/** By hash when the release signs a lock, otherwise exact versions from its signed SBOM. */
+export type Dependencies = { lock: string } | { pins: string[] };
+
 export interface UpdateDeps {
   env: LocateEnv;
   run: Runner;
   /** Where this version goes; removed again when anything fails. */
   dir: string;
   version: string;
-  lock: string;
+  /** The wheel, already checked against the signed SHA256SUMS. */
+  wheel: string;
+  dependencies: Dependencies;
   writeFile: (file: string, text: string) => void;
   removeDir: (dir: string) => void;
   /** A temporary folder holding `files`, for the detection check. */
@@ -41,14 +42,6 @@ export interface UpdateDeps {
   onStep?: (step: UpdateStep) => void;
   signal?: AbortSignal;
   stepTimeoutMs?: number;
-}
-
-export function sawInVenv(dir: string, platform: NodeJS.Platform): string {
-  return platform === "win32" ? path.win32.join(dir, "Scripts", "saw.exe") : path.posix.join(dir, "bin", "saw");
-}
-
-function pythonInVenv(dir: string, platform: NodeJS.Platform): string {
-  return platform === "win32" ? path.win32.join(dir, "Scripts", "python.exe") : path.posix.join(dir, "bin", "python");
 }
 
 class Failed extends Error {
@@ -66,9 +59,8 @@ export async function installUpdate(deps: UpdateDeps): Promise<UpdateResult> {
     if (result.cancelled) {
       throw new Failed(step, "cancelled");
     }
-    if (result.exitCode !== 0 || result.spawnError || result.timedOut) {
-      const said = result.spawnError ?? (result.timedOut ? "timed out" : `${result.stderr}\n${result.stdout}`.trim().split(/\r?\n/).slice(-15).join("\n"));
-      throw new Failed(step, said || `status ${result.exitCode}`);
+    if (!succeeded(result)) {
+      throw new Failed(step, lastSaid(result, 15) || `status ${result.exitCode}`);
     }
     return result;
   };
@@ -80,13 +72,15 @@ export async function installUpdate(deps: UpdateDeps): Promise<UpdateResult> {
     }
     deps.removeDir(deps.dir);
     await run("create-venv", python.executable, ["-m", "venv", deps.dir]);
-    const lockFile = path.join(deps.dir, "saw.lock.txt");
-    deps.writeFile(lockFile, deps.lock);
-    await run("install", pythonInVenv(deps.dir, deps.env.platform), [
-      "-m", "pip", "install", "--disable-pip-version-check", "--no-input",
-      "--require-hashes", "--no-deps", "--only-binary=:all:", "-r", lockFile,
-    ]);
-    const binary = sawInVenv(deps.dir, deps.env.platform);
+    const pip = [inVenv(deps.dir, "python", deps.env.platform), "-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--only-binary=:all:"] as const;
+    if ("lock" in deps.dependencies) {
+      const lockFile = path.join(deps.dir, "saw.lock.txt");
+      deps.writeFile(lockFile, deps.dependencies.lock);
+      await run("install", pip[0], [...pip.slice(1), "--require-hashes", "--no-deps", "--find-links", path.dirname(deps.wheel), "-r", lockFile]);
+    } else {
+      await run("install", pip[0], [...pip.slice(1), deps.wheel, ...deps.dependencies.pins]);
+    }
+    const binary = inVenv(deps.dir, "saw", deps.env.platform);
     const said = await run("check-version", binary, ["--version"]);
     const version = parseVersion(said.stdout);
     if (!version || version.join(".") !== deps.version) {
