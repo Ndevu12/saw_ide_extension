@@ -129,7 +129,7 @@ export function verdictPage(folder: ChatFolderInput, index: string | number): Ve
     notices.push({ text: `saw stopped an update (${VERDICT_BADGE[folder.held.verdict]}). The folder was not changed.`, tone: folder.held.verdict === "infected" ? "bad" : "warn" });
   }
   if (folder.unheld) {
-    notices.push({ text: unheldSentence(folder.unheldFrom), tone: folder.unheldFrom === "open" ? "warn" : "bad" });
+    notices.push({ text: unheldSentence(folder.unheldFrom), tone: folder.unheldFrom === "command" ? "bad" : "warn" });
   }
   if (folder.olderSaw) {
     notices.push({ text: folder.olderSaw, tone: "warn" });

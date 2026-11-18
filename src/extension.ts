@@ -94,7 +94,9 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     vscode.commands.registerCommand("saw.openReport", async (arg?: unknown) => {
       const kind = (arg as { kind?: unknown } | undefined)?.kind;
       const folder = folderOf(arg);
-      const uri = kind === "audit" || kind === "hooks" || kind === "watch" ? reports.machineUri(kind) : folder ? reports.scanUri(folder) : await reports.choose();
+      const uri = kind === "audit" || kind === "hooks" || kind === "watch"
+        ? reports.machineUri(kind)
+        : folder ? (kind === "held" ? reports.heldUri(folder) : reports.scanUri(folder)) : await reports.choose();
       if (uri) {
         await reports.open(uri);
       }

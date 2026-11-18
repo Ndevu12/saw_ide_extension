@@ -211,8 +211,18 @@ verdict never comes from progress.
   the extension's `govern/asks` that this window answers with a modal. The stand-in waits two
   minutes for the answer. No answer leaves the folder unchanged. Running it is followed by the
   same scan and warning. A saw without `govern.decision` that answers with a reason and no scan
-  judged nothing, so the command runs as typed. A timeout, an unreadable report, or a reason with
-  no decision from a saw that offers decisions still holds.
+  judged nothing, so the command runs as typed. A timeout, an unreadable report, saw failing to
+  start, or a reason with no decision from a saw that offers decisions is asked about the same
+  way: saw judged nothing, and holding for good would stop the operator working on their project.
+  When saw scans the update and finds it suspicious, infected, or not verified, the stand-in keeps
+  that scan, the command, and the next steps (saw's `next_steps` when it gives them) in
+  `govern/results/<folder>.held`, writes the held notice, and prints the strongest findings and
+  next steps. It then asks whether to let it in: yes for suspicious or not verified, the folder's
+  name for infected, in the terminal or, with none, through an ask with `held` set, which this
+  window answers by opening **Held update details** and a modal. `SAW_GOVERN_DECISION` never
+  answers this. A let-in update runs as typed, and its finished notice starts with the let-in
+  reason, so the folder is marked as let in rather than missed. With an editor to ask, holds no
+  longer go through saw's own stand-in, which cannot offer this.
 - **A rating is asked for in Chat, after saw has done something the person can judge.** The decision
   of when to show the card lives in `core/feedback` and is unit-tested. The editor stores a
   dismissal and a rating in global state, and opens the review, star, and issue pages. The issue

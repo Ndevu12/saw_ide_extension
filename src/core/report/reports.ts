@@ -195,6 +195,16 @@ export function scanReport(input: ScanReportInput, copy: Copy): string {
   if (outcome.reasons.length) {
     out.push("## Why it is not verified", "", ...outcome.reasons.map((reason) => `- ${prose(reason, 600)}`), "");
   }
+  out.push(...resultSections(results, copy));
+  if (outcome.kind === "scanned" && !findings.length && !results.some((r) => r.advisories.length)) {
+    out.push("*No findings.*", "");
+  }
+  out.push(footer(copy, "`saw scan --json`", { title: "what these results mean", url: DOCS.verdicts }));
+  return out.join("\n");
+}
+
+function resultSections(results: readonly TargetResult[], copy: Copy): string[] {
+  const out: string[] = [];
   for (const result of results) {
     const heading = results.length > 1 ? `## ${inline(result.target, 300)}: ${prose(result.verdict, 20)}` : undefined;
     const sections: string[] = [];
@@ -214,10 +224,52 @@ export function scanReport(input: ScanReportInput, copy: Copy): string {
       out.push(...(heading ? [heading, ""] : []), ...sections);
     }
   }
-  if (outcome.kind === "scanned" && !findings.length && !results.some((r) => r.advisories.length)) {
-    out.push("*No findings.*", "");
+  return out;
+}
+
+// --- held update ----------------------------------------------------------------------------------
+
+const HELD_MEANING: Partial<Record<FolderVerdict, string>> = {
+  suspicious: "saw found something in it to review by hand. It does not report it as malware.",
+  incomplete: "saw could not finish checking it, so it is not known to be clean.",
+  infected: "Malicious code is in what it would bring.",
+};
+
+export interface HeldReportInput {
+  folderName: string;
+  folderPath: string;
+  /** The update held now, or undefined when none is. */
+  held: { verdict: FolderVerdict; reasons: string[]; at: number } | undefined;
+  /** What the stand-in kept about it, when it could. */
+  details: { command: string; nextSteps: string[]; scan: { generatedAt: string; results: TargetResult[] } } | undefined;
+}
+
+export function heldReport(input: HeldReportInput, copy: Copy): string {
+  const out = [`# Held update: ${prose(input.folderName, 120)}`, ""];
+  const { held, details } = input;
+  if (!held) {
+    out.push("No update to this folder is held now.", "", `Folder: ${inline(input.folderPath, 400)}`);
+    return out.join("\n");
   }
-  out.push(footer(copy, "`saw scan --json`", { title: "what these results mean", url: DOCS.verdicts }));
+  out.push(`## ${VERDICT_TITLE[held.verdict]}`, "", `saw checked an update before it landed and held it. The folder was not changed. ${HELD_MEANING[held.verdict] ?? ""}`.trim(), "");
+  out.push(`- Folder: ${inline(input.folderPath, 400)}`, `- Held at ${when(held.at)}`);
+  if (details) {
+    out.push(`- Command: ${inline(details.command, 400)}`);
+  }
+  out.push("", "This scan is of the files the update would bring, not the folder's history.", "");
+  const steps = details?.nextSteps.length ? details.nextSteps : ["Read why below, and run the command again when you are ready."];
+  out.push("## What to do", "", ...steps.map((step) => `- ${prose(step, 600)}`), "",
+    "To bring it in anyway, run the command again and answer the question, or choose **Let In Anyway** when the editor asks. saw scans the folder straight after.", "");
+  if (held.reasons.length) {
+    out.push("## Why it was held", "", ...held.reasons.map((reason) => `- ${prose(reason, 600)}`), "");
+  }
+  if (details) {
+    const sections = resultSections(details.scan.results, copy);
+    out.push(...(sections.length ? sections : ["*saw listed no findings for the update.*", ""]));
+  } else {
+    out.push("*The findings were not kept. Run the command again to see them.*", "");
+  }
+  out.push(footer(copy, "saw's check of the update", { title: "what these results mean", url: DOCS.verdicts }));
   return out.join("\n");
 }
 

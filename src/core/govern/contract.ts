@@ -81,6 +81,8 @@ export interface PrepareReading {
   unchecked: boolean;
   /** saw could not check the update and left running it as typed to the operator (`govern.decision`). */
   decision: boolean;
+  /** The verdict is saw's scan of the update, not a check that could not run or be read. */
+  scanned: boolean;
 }
 
 type Json = Record<string, unknown>;
@@ -103,7 +105,7 @@ function object(stdout: string): Json | string {
 export function readPrepare(stdout: string, exitCode: number | null): PrepareReading {
   const parsed = object(stdout);
   if (typeof parsed === "string") {
-    return { verdict: "incomplete", reasons: [parsed], release: false, unchecked: false, decision: false };
+    return { verdict: "incomplete", reasons: [parsed], release: false, unchecked: false, decision: false, scanned: false };
   }
   const scan = parsed["scan"];
   if (scan === undefined) {
@@ -114,15 +116,16 @@ export function readPrepare(stdout: string, exitCode: number | null): PrepareRea
       release: false,
       unchecked: reason !== undefined,
       decision: reason !== undefined && offersRunAsTyped(parsed["decision"]),
+      scanned: false,
     };
   }
   try {
     const payload = parsePayload(JSON.stringify(scan));
     const judged = judge(payload, exitCode);
-    return { verdict: judged.verdict, reasons: judged.reasons, release: mayRelease(judged.verdict), unchecked: false, decision: false };
+    return { verdict: judged.verdict, reasons: judged.reasons, release: mayRelease(judged.verdict), unchecked: false, decision: false, scanned: true };
   } catch (error) {
     const why = error instanceof ContractError ? error.message : "saw's scan of the update could not be read";
-    return { verdict: "incomplete", reasons: [why], release: false, unchecked: false, decision: false };
+    return { verdict: "incomplete", reasons: [why], release: false, unchecked: false, decision: false, scanned: false };
   }
 }
 

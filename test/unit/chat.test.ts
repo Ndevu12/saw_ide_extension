@@ -122,6 +122,9 @@ describe("the sidebar chat", () => {
     const held = chat([folder({ verdict: "clean", held: { verdict: "infected", reasons: ["a workflow arrived"] } })]);
     expect(held).toContain('<p class="notice bad">An update was stopped (infected). The folder is unchanged.</p>');
     expect(held).not.toContain("a workflow arrived");
+    expect(held).toContain('data-act="held-report:0">Held update details<');
+    const letIn = chat([folder({ verdict: "clean", unheld: true, unheldFrom: "let-in" })]);
+    expect(letIn).toContain('<p class="notice warn">You let in an update saw had held.</p>');
     for (const verdict of ["clean", "infected"] as const) {
       expect(chat([folder({ verdict, unheld: true, unheldFrom: "open" })])).not.toContain('class="notice');
     }

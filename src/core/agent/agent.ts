@@ -89,7 +89,7 @@ export interface AgentUpdateInput {
   held?: { verdict: string };
   unheld: boolean;
   /** A missed git command, or a folder that was already not a commit saw let in. */
-  unheldFrom?: "command" | "open";
+  unheldFrom?: "command" | "open" | "let-in";
 }
 
 export type AgentUpdate = { wait: string } | { notice: string };

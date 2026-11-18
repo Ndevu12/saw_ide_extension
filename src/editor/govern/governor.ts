@@ -8,16 +8,19 @@ import { FEATURES, supports } from "../../core/capabilities";
 import { configOutsideFolders } from "../../core/controls";
 import { offersGovernRestore, offersGovernVerdict, openAdmission, readGoverned, readNotice, readRestore, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig, type Governed, type GovernedReading, type GovernNotice } from "../../core/govern/contract";
 import { quietGit, type Tool } from "../../core/govern/command";
-import { answerFileName, ASK_EDITOR_MS, askFileName, commandText, readUpdateAsk, type UpdateAsk } from "../../core/govern/decision";
+import { answerFileName, ASK_EDITOR_MS, askFileName, commandText, readUpdateAsk, type Decision, type UpdateAsk } from "../../core/govern/decision";
+import { heldFileName, LET_IN_UPDATE, readHeldRecord } from "../../core/govern/held";
 import { folderKey, governStatusDir, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
 import { diskFiles, findRealProgram, isRealProgram, isStandin } from "../../core/govern/realProgram";
 import { behindVersion } from "../../core/install/upgrade";
 import { defaultIsExecutableFile } from "../../core/install/locate";
 import { runProgram } from "../../core/run";
+import type { FolderVerdict } from "../../core/scan/verdict";
 import type { Controller } from "../scan/controller";
 import type { Installer } from "../install/installer";
-import type { Model } from "../model";
+import type { HeldDetails, Model } from "../model";
 import type { Settings } from "../settings";
+import { VERDICT_LABEL } from "../present";
 import type { Alerts } from "../view/alerts";
 
 interface GitApi {
@@ -246,16 +249,15 @@ export class Governor implements vscode.Disposable {
       ...(standin ? { standin } : {}),
       quietHooks,
       standinDirs: this.standinDirs(),
-      ...(decides ? { decides, askDir: this.askDir } : {}),
+      askDir: this.askDir,
+      ...(decides ? { decides } : {}),
     };
     this.writeConfig(config);
     this.coverTerminals(systemBin);
     this.signature = signature;
     this.active = true;
     this.watchResults();
-    if (decides) {
-      this.watchAsks();
-    }
+    this.watchAsks();
     if (this.verdictReady) {
       this.watchStatus();
       await this.askOpenFolders();
@@ -548,7 +550,7 @@ export class Governor implements vscode.Disposable {
     this.readNotices(this.resultDir);
   }
 
-  /** Questions the stand-in leaves when saw could not check an update and no terminal can answer, as from the Git view. */
+  /** Questions the stand-in leaves when no terminal can answer, as from the Git view: about an update saw could not check, or one it held. */
   private watchAsks(): void {
     if (this.askWatcher) {
       return;
@@ -589,14 +591,7 @@ export class Governor implements vscode.Disposable {
   }
 
   private async askUpdate(ask: UpdateAsk, name: string): Promise<void> {
-    const run = "Run As Typed";
-    const picked = await vscode.window.showWarningMessage(
-      `saw can't check this update to ${name}: ${ask.reason}.`,
-      { modal: true, detail: `Run \`${commandText(ask.tool, ask.args)}\` as typed? saw scans the folder straight after. Otherwise the folder stays as it is.` },
-      run,
-      "Leave Unchanged",
-    );
-    const decision = picked === run ? "run-as-typed" : "leave-unchanged";
+    const decision = ask.held ? await this.askLetIn(ask, ask.held, name) : await this.askRun(ask, name);
     const answer = nodePath.join(this.askDir, answerFileName(ask.id));
     try {
       // The first window to answer decides. The stand-in removes the question once it reads one.
@@ -609,7 +604,75 @@ export class Governor implements vscode.Disposable {
       rmSync(answer, { force: true });
       return;
     }
-    this.log.info(`${name}: saw could not check \`${commandText(ask.tool, ask.args)}\`; ${decision === "run-as-typed" ? "run as typed" : "left unchanged"}.`);
+    const what = ask.held ? `saw held \`${commandText(ask.tool, ask.args)}\` (${ask.held})` : `saw could not check \`${commandText(ask.tool, ask.args)}\``;
+    this.log.info(`${name}: ${what}; ${decision === "run-as-typed" ? (ask.held ? "let in" : "run as typed") : "left unchanged"}.`);
+  }
+
+  private async askRun(ask: UpdateAsk, name: string): Promise<Decision> {
+    const run = "Run As Typed";
+    const picked = await vscode.window.showWarningMessage(
+      `saw can't check this update to ${name}: ${ask.reason}.`,
+      { modal: true, detail: `Run \`${commandText(ask.tool, ask.args)}\` as typed? saw scans the folder straight after. Otherwise the folder stays as it is.` },
+      run,
+      "Leave Unchanged",
+    );
+    return picked === run ? "run-as-typed" : "leave-unchanged";
+  }
+
+  /** The update's details open first, so the operator reads what was found before choosing. */
+  private async askLetIn(ask: UpdateAsk, verdict: FolderVerdict, name: string): Promise<Decision> {
+    const folder = this.folderOf(ask.repo);
+    if (folder) {
+      await vscode.commands.executeCommand("saw.openReport", { kind: "held", state: { folder } });
+    }
+    const letIn = "Let In Anyway";
+    const infected = verdict === "infected";
+    const picked = await (infected ? vscode.window.showErrorMessage : vscode.window.showWarningMessage)(
+      `saw held this update to ${name} (${VERDICT_LABEL[verdict]}): ${ask.reason}`,
+      {
+        modal: true,
+        detail: infected
+          ? `What it would bring is infected, so it is safest to leave it. To work on it anyway, for example to fix it, let it in: you are asked to type the folder's name. saw scans the folder straight after.`
+          : `The details tab shows what saw found. Let \`${commandText(ask.tool, ask.args)}\` in anyway? saw scans the folder straight after. Otherwise the folder stays as it is.`,
+      },
+      letIn,
+      "Leave Unchanged",
+    );
+    if (picked !== letIn) {
+      return "leave-unchanged";
+    }
+    if (!infected) {
+      return "run-as-typed";
+    }
+    const expected = nodePath.basename(ask.repo);
+    const typed = await vscode.window.showInputBox({
+      title: `Let an infected update into ${name}`,
+      prompt: `Type ${expected} to let it in. Nothing from it runs, but the files land in the folder.`,
+      placeHolder: expected,
+      ignoreFocusOut: true,
+      validateInput: (value) => value === "" || value === expected ? undefined : `Type ${expected} exactly, or press Escape to leave the folder unchanged.`,
+    });
+    return typed === expected ? "run-as-typed" : "leave-unchanged";
+  }
+
+  private folderOf(repo: string): vscode.WorkspaceFolder | undefined {
+    const resolved = nodePath.resolve(repo);
+    return (vscode.workspace.workspaceFolders ?? []).find((item) => nodePath.resolve(item.uri.fsPath) === resolved);
+  }
+
+  /** What the stand-in kept about the update it held for this notice, when it kept it. */
+  private heldDetails(notice: GovernNotice): HeldDetails | undefined {
+    let text: string;
+    try {
+      text = readFileSync(nodePath.join(this.resultDir, heldFileName(folderKey(notice.repo))), "utf8");
+    } catch {
+      return undefined;
+    }
+    const record = readHeldRecord(text);
+    if (!record || nodePath.resolve(record.repo) !== nodePath.resolve(notice.repo) || Math.abs(notice.at - record.at) > HELD_RECORD_MS) {
+      return undefined;
+    }
+    return { command: commandText(record.tool, record.args), nextSteps: record.nextSteps, scan: record.scan };
   }
 
   /** Records saw writes for a check this window did not start. They outlive the holding directory. */
@@ -671,9 +734,15 @@ export class Governor implements vscode.Disposable {
     this.model.clearChecking(folder);
     if (notice.phase === "finished") {
       if (notice.reasons.length) {
-        // A command saw could not hold, such as a clone, changed the folder: say so, and scan it now.
-        this.model.setUnheld(folder, true, "command");
-        this.alerts.unheld(folder.name);
+        // A command saw could not hold, such as a clone, or one let in as typed, changed the folder: say so, and scan it now.
+        const letIn = notice.reasons[0] === LET_IN_UPDATE;
+        this.model.setHeld(folder, undefined);
+        this.model.setUnheld(folder, true, letIn ? "let-in" : "command");
+        if (letIn) {
+          this.alerts.letIn(folder.name);
+        } else {
+          this.alerts.unheld(folder.name);
+        }
       }
       this.controller.request(folder, { immediate: true });
       return;
@@ -689,8 +758,9 @@ export class Governor implements vscode.Disposable {
         this.alerts.applied(folder.name, undefined, checkedBy);
       }
     } else {
-      this.model.setHeld(folder, { verdict: notice.verdict ?? "incomplete", reasons: notice.reasons, released: false, at: notice.at });
-      this.alerts.held(folder.name, notice.verdict ?? "incomplete");
+      const details = this.heldDetails(notice);
+      this.model.setHeld(folder, { verdict: notice.verdict ?? "incomplete", reasons: notice.reasons, released: false, at: notice.at, ...(details ? { details } : {}) });
+      this.alerts.held(folder, notice.verdict ?? "incomplete");
     }
     this.controller.request(folder, { immediate: true });
   }
@@ -732,6 +802,9 @@ export class Governor implements vscode.Disposable {
 
 /** Saw and this window write one check a few seconds apart. A later check is a new one. */
 const SAME_CHECK_MS = 5_000;
+
+/** The stand-in keeps a held update's details just before its notice; an older record is another update's. */
+const HELD_RECORD_MS = 60_000;
 
 async function gitBinary(): Promise<string | undefined> {
   const extension = vscode.extensions.getExtension<GitExtension>("vscode.git");
