@@ -118,14 +118,17 @@ click.
 
 ### Updates wait for a check
 
-When the installed saw can check an incoming update, a pull, fetch, checkout, merge, rebase, or a
-GitHub command that lands files waits before it changes an open folder. If that saw includes its
+When the installed saw can check an incoming update, a pull, checkout, merge, rebase, or a
+GitHub command that lands files waits before it changes an open folder. A fetch writes no files,
+so it runs at once, and what it brings waits when you merge or check it out. If that saw includes its
 git and gh stand-in, the editor places it in front of those commands. The editor's integrated
 terminal is covered, and so is the Git view, except on Windows. Clean and residue are applied.
 While the check runs, the status bar, the saw view, and Chat say saw is checking the update, and
 the step saw names when it names one. The folder is unchanged until the check finishes. Suspicious,
 infected, and a check that could not finish leave the folder as it was, and the saw view says the
-update was held. The open folder is scanned again after the check finishes. A git command this
+update was held. When saw cannot bring the update in to check it at all, the command runs as you
+typed it, the folder is scanned straight after, and Chat says the change was not checked first.
+The open folder is scanned again after the check finishes. A git command this
 window did not run can still change the folder first. When saw can say whether it let that tree
 in, Chat says the change was not held only when saw did not. A check that runs outside this window
 shows the same checking, applied, or held. When saw can put a folder back, a commit it did

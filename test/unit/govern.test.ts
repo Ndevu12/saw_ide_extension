@@ -7,7 +7,7 @@ import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit, quietGit, repoConfigText, silencedRepoConfig } from "../../src/core/govern/command";
-import { mayRelease, offersGovernRestore, offersGovernVerdict, openAdmission, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
+import { mayRelease, offersGovernRestore, offersGovernVerdict, openAdmission, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, UNCHECKED_UPDATE, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
 import { activationEnv, folderKey, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
@@ -31,10 +31,11 @@ function git(argv: string[], cwd = "/work/app") {
 }
 
 describe("which git commands bring files in", () => {
-  it("holds a pull, fetch, merge, rebase, checkout, switch, and submodule update", () => {
+  it("holds a pull, a fetch that may move the checked-out branch, merge, rebase, checkout, switch, and submodule update", () => {
     for (const argv of [
       ["pull"],
-      ["fetch", "origin"],
+      ["fetch", "--update-head-ok", "origin", "main:main"],
+      ["fetch", "-u", "origin", "main:main"],
       ["merge", "main"],
       ["rebase", "origin/main"],
       ["checkout", "main"],
@@ -46,7 +47,7 @@ describe("which git commands bring files in", () => {
     }
   });
 
-  it("leaves status, commit, push, a path checkout, a new branch, and an abort alone", () => {
+  it("leaves status, commit, push, a fetch, a path checkout, a new branch, and an abort alone", () => {
     for (const argv of [
       ["status"],
       ["diff"],
@@ -58,6 +59,9 @@ describe("which git commands bring files in", () => {
       ["switch", "-c", "feature"],
       ["merge", "--abort"],
       ["rebase", "--quit"],
+      ["fetch"],
+      ["fetch", "origin"],
+      ["fetch", "--all", "--prune"],
       ["fetch", "--dry-run"],
       ["submodule", "status"],
     ]) {
@@ -331,14 +335,42 @@ describe.runIf(process.platform !== "win32")("the stand-in and a recorded bare g
       const realGit = path.join(root, "git");
       writeFileSync(realGit, `#!/bin/sh\n: > '${ran}'\n`, { mode: 0o755 });
       // A saw whose check of the update does not let it in.
+      const prepared = path.join(root, "prepared.json");
+      writeFileSync(prepared, JSON.stringify({ schema_version: 1, scan: JSON.parse(report([target({ verdict: "infected" })])) }));
       const saw = path.join(root, "saw");
-      writeFileSync(saw, `#!/bin/sh\necho '{"schema_version":1,"reason":"the update could not be prepared"}'\nexit 2\n`, { mode: 0o755 });
+      writeFileSync(saw, `#!/bin/sh\ncat '${prepared}'\nexit 1\n`, { mode: 0o755 });
       const configPath = path.join(root, "config.json");
       writeFileSync(configPath, JSON.stringify({ enabled: true, saw, realGit, realGh: "", timeoutMs: 5000, folders: [repo], holdingRoot: path.join(root, "hold"), markerDir: path.join(root, "mark"), resultDir: path.join(root, "res"), progress: false, standin: path.join(root, "saw-git-standin-removed"), standinDirs: [] }));
       const run = spawnSync(process.execPath, [shim, "--config", configPath, "--tool", "git", "--", "pull"], { cwd: repo, encoding: "utf8", timeout: 15_000 });
       expect(run.status).toBe(1);
       expect(existsSync(ran)).toBe(false);
-      expect(run.stderr).toContain("saw held this update");
+      expect(run.stderr).toContain("saw held this update (infected)");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  it("runs the command as typed and scans after when saw could not produce the update to check", async () => {
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), "saw-standin-")));
+    try {
+      const repo = path.join(root, "app");
+      mkdirSync(repo);
+      const shim = path.join(root, "govern-shim.js");
+      await build({ entryPoints: [path.resolve(__dirname, "../../src/governShim.ts")], bundle: true, platform: "node", format: "cjs", outfile: shim, logLevel: "silent" });
+      const ran = path.join(root, "real-git-ran");
+      const realGit = path.join(root, "git");
+      writeFileSync(realGit, `#!/bin/sh\necho "$@" > '${ran}'\n`, { mode: 0o755 });
+      const saw = path.join(root, "saw");
+      writeFileSync(saw, `#!/bin/sh\necho '{"schema_version":1,"reason":"the update did not finish cleanly"}'\nexit 2\n`, { mode: 0o755 });
+      const results = path.join(root, "res");
+      const configPath = path.join(root, "config.json");
+      writeFileSync(configPath, JSON.stringify({ enabled: true, saw, realGit, realGh: "", timeoutMs: 5000, folders: [repo], holdingRoot: path.join(root, "hold"), markerDir: path.join(root, "mark"), resultDir: results, progress: false, standinDirs: [] }));
+      const run = spawnSync(process.execPath, [shim, "--config", configPath, "--tool", "git", "--", "pull"], { cwd: repo, encoding: "utf8", timeout: 15_000 });
+      expect(run.status).toBe(0);
+      expect(readFileSync(ran, "utf8")).toContain("pull");
+      expect(run.stderr).toContain("the update did not finish cleanly");
+      const noticed = readNotice(readFileSync(path.join(results, `${folderKey(repo)}.json`), "utf8"));
+      expect(noticed).toMatchObject({ phase: "finished", reasons: [UNCHECKED_UPDATE, "the update did not finish cleanly"] });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -397,9 +429,11 @@ describe("saw govern's report", () => {
   it("does not release a report it cannot read", () => {
     expect(readPrepare("not json", 0)).toMatchObject({ verdict: "incomplete", release: false });
     expect(readPrepare(JSON.stringify({ schema_version: 2, scan: {} }), 0).reasons.join(" ")).toMatch(/update the extension/);
+    expect(readPrepare("not json", 0).unchecked).toBe(false);
     expect(readPrepare(JSON.stringify({ schema_version: 1, reason: "the update could not be prepared" }), 2)).toMatchObject({
       verdict: "incomplete",
       release: false,
+      unchecked: true,
     });
   });
 

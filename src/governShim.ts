@@ -2,7 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 
-import { applyArgs, prepareArgs, readApply, readPrepare, UNCHECKED_CLONE, type GovernConfig, type GovernPhase } from "./core/govern/contract";
+import { applyArgs, prepareArgs, readApply, readPrepare, UNCHECKED_CLONE, UNCHECKED_UPDATE, type GovernConfig, type GovernPhase } from "./core/govern/contract";
 import { activationEnv, folderKey, plan, type Hold } from "./core/govern/plan";
 import { checkRealProgram, diskFiles, pathWithoutStandins } from "./core/govern/realProgram";
 import { enclosingFolder, parseGit, quietGit, repoConfigText, silencedRepoConfig, type Tool } from "./core/govern/command";
@@ -239,7 +239,7 @@ async function main(): Promise<void> {
       }
       if (spawnFailed) {
         // saw's stand-in did not start, so this window's own check holds the update instead.
-        void holdWithSaw(config, action);
+        void holdWithSaw(config, action, args);
         return;
       }
       notice(config, action.repo, "finished", []);
@@ -256,19 +256,25 @@ async function main(): Promise<void> {
     runReal(action.program, guarded.args, guarded.env, after);
     return;
   }
-  await holdWithSaw(config, action);
+  await holdWithSaw(config, action, args);
 }
 
-/** Ask saw to check the update into a holding folder, and let it into the open folder only when saw says so. */
-async function holdWithSaw(config: GovernConfig, action: Hold): Promise<void> {
+/** Ask saw to check the update into a holding folder, and let it into the open folder only when saw says so. `typed` is the command as the operator typed it. */
+async function holdWithSaw(config: GovernConfig, action: Hold, typed: readonly string[]): Promise<void> {
   const steps = new ProgressLines((progress) => {
     if (progress) {
       notice(config, action.repo, "checking", [], undefined, describeProgress(progress));
     }
   });
   notice(config, action.repo, "checking", []);
+  // saw runs in its own process group, so the terminal's Ctrl-C reaches it only through here. Apply is never interrupted, so the folder is not left half-written.
+  const interrupted = new AbortController();
+  for (const name of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+    process.on(name, () => interrupted.abort());
+  }
   const prepared = await runProgram(config.saw, prepareArgs(action.repo, action.holding, action.tool, action.args, config.progress), {
     timeoutMs: config.timeoutMs,
+    signal: interrupted.signal,
     onOutput: (text, stream) => {
       if (stream === "stderr") {
         steps.feed(text);
@@ -276,7 +282,19 @@ async function holdWithSaw(config: GovernConfig, action: Hold): Promise<void> {
     },
   });
   steps.end();
+  if (prepared.cancelled) {
+    notice(config, action.repo, "finished", []);
+    process.stderr.write("saw stopped checking this update. The folder was not changed.\n");
+    process.exit(130);
+  }
   const reading = readPrepare(prepared.stdout, prepared.exitCode);
+  if (reading.unchecked && !prepared.timedOut && !prepared.spawnError) {
+    // saw judged nothing, so holding would only stop the operator. The folder is scanned once the command has run.
+    const reason = reading.reasons[0] ?? "";
+    process.stderr.write(`saw could not check this update first (${reason}), so it ran unchecked. saw scans the folder now.\n`);
+    runRealOrExit(config, action.tool, typed, () => notice(config, action.repo, "finished", [UNCHECKED_UPDATE, reason]));
+    return;
+  }
   if (!reading.release || prepared.timedOut || prepared.spawnError) {
     const reason = prepared.spawnError
       ? `saw could not be started: ${prepared.spawnError}`

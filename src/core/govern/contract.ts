@@ -34,6 +34,9 @@ export interface GovernConfig {
 /** The reason a `finished` notice carries when a command saw could not hold changed an open folder. */
 export const UNCHECKED_CLONE = "saw did not check this clone before it landed. The folder is scanned now.";
 
+/** The same, for an update saw could not produce to check first. */
+export const UNCHECKED_UPDATE = "saw could not check this update before it landed. The folder is scanned now.";
+
 /** Clean and residue may change the open folder. Anything else waits. */
 export function mayRelease(verdict: FolderVerdict): boolean {
   return verdict === "clean" || verdict === "residue";
@@ -70,6 +73,8 @@ export interface PrepareReading {
   reasons: string[];
   /** Apply the prepared update. False when the verdict must wait, or the document could not be read. */
   release: boolean;
+  /** saw answered that it could not produce the update to check, so it judged nothing. */
+  unchecked: boolean;
 }
 
 type Json = Record<string, unknown>;
@@ -92,20 +97,20 @@ function object(stdout: string): Json | string {
 export function readPrepare(stdout: string, exitCode: number | null): PrepareReading {
   const parsed = object(stdout);
   if (typeof parsed === "string") {
-    return { verdict: "incomplete", reasons: [parsed], release: false };
+    return { verdict: "incomplete", reasons: [parsed], release: false, unchecked: false };
   }
   const scan = parsed["scan"];
   if (scan === undefined) {
-    const reason = typeof parsed["reason"] === "string" ? parsed["reason"] : "saw did not include a scan of the update";
-    return { verdict: "incomplete", reasons: [reason], release: false };
+    const reason = typeof parsed["reason"] === "string" ? parsed["reason"] : undefined;
+    return { verdict: "incomplete", reasons: [reason ?? "saw did not include a scan of the update"], release: false, unchecked: reason !== undefined };
   }
   try {
     const payload = parsePayload(JSON.stringify(scan));
     const judged = judge(payload, exitCode);
-    return { verdict: judged.verdict, reasons: judged.reasons, release: mayRelease(judged.verdict) };
+    return { verdict: judged.verdict, reasons: judged.reasons, release: mayRelease(judged.verdict), unchecked: false };
   } catch (error) {
     const why = error instanceof ContractError ? error.message : "saw's scan of the update could not be read";
-    return { verdict: "incomplete", reasons: [why], release: false };
+    return { verdict: "incomplete", reasons: [why], release: false, unchecked: false };
   }
 }
 

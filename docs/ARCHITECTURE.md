@@ -46,7 +46,9 @@ test/
 3. The **engine** resolves saw to an absolute path, installing it first when it is missing.
 4. **scan** runs `saw scan <folder> --json` without a shell. **contract** validates the JSON, and
    **verdict** combines it with the exit status. Anything that could not answer, such as a failed
-   start, a timeout or unreadable output, is `incomplete`, never clean.
+   start, a timeout or unreadable output, is `incomplete`, never clean. On POSIX, saw leads its
+   own process group, so a stop reaches the workers it started, and a forced stop follows. A run
+   ends once saw has exited, even if something it left behind still holds its output.
 5. The outcome goes into the **model**. The status bar, the saw view, the Problems panel, alerts
    and reports all render from the model.
 
@@ -199,9 +201,12 @@ verdict never comes from progress.
   spellings count) and never a file that carries the stand-in mark. When none is left, it runs
   nothing. It finds the folder a command changes as git does: `--work-tree` or `GIT_WORK_TREE`,
   otherwise the working directory, and also holds a command that changes an open folder's git
-  directory from outside. An alias is checked as the command it runs. A clone cannot be held, so
+  directory from outside. A fetch writes refs, not files, so only one with `--update-head-ok`
+  is held. An alias is checked as the command it runs. A clone cannot be held, so
   one that leaves files in an open folder is followed by a scan and a warning. When saw's own
-  stand-in cannot start, this window's saw check holds the update.
+  stand-in cannot start, this window's saw check holds the update. When `saw govern prepare`
+  answers with a reason and no scan, it judged nothing, so the command runs as typed and is
+  followed by the same scan and warning. A timeout or an unreadable report still holds.
 - **A rating is asked for in Chat, after saw has done something the person can judge.** The decision
   of when to show the card lives in `core/feedback` and is unit-tested. The editor stores a
   dismissal and a rating in global state, and opens the review, star, and issue pages. The issue
