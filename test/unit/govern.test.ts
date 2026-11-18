@@ -69,6 +69,15 @@ describe("which git commands bring files in", () => {
     }
   });
 
+  it("holds every fetch once saw checks one from a tracking checkout", () => {
+    for (const argv of [["fetch"], ["fetch", "origin"], ["fetch", "--all", "--prune"]]) {
+      const command = parseGit(argv, "/work/app");
+      expect(command && gitBringsFiles(command, true), argv.join(" ")).toBe(true);
+    }
+    const dryRun = parseGit(["fetch", "--dry-run"], "/work/app");
+    expect(dryRun && gitBringsFiles(dryRun, true)).toBe(false);
+  });
+
   it("uses -C as the directory, including the attached form", () => {
     expect(parseGit(["-C", "/other", "pull"], "/work/app")?.directory).toBe(path.resolve("/other"));
     expect(parseGit(["-C/other", "status"], "/work/app")?.directory).toBe(path.resolve("/other"));
@@ -430,6 +439,15 @@ describe("saw govern's report", () => {
     expect(readPrepare("not json", 0)).toMatchObject({ verdict: "incomplete", release: false });
     expect(readPrepare(JSON.stringify({ schema_version: 2, scan: {} }), 0).reasons.join(" ")).toMatch(/update the extension/);
     expect(readPrepare("not json", 0).unchecked).toBe(false);
+    expect(readPrepare(JSON.stringify({ schema_version: 1, reason: "no remote", decision: { choices: ["run-as-typed", "leave-unchanged"], scan_after: ["saw", "scan", "/w"] } }), 2)).toMatchObject({
+      verdict: "incomplete",
+      release: false,
+      unchecked: true,
+      decision: true,
+    });
+    expect(readPrepare(JSON.stringify({ schema_version: 1, reason: "no remote", decision: { choices: ["leave-unchanged"] } }), 2).decision).toBe(false);
+    expect(readPrepare(JSON.stringify({ schema_version: 1, decision: { choices: ["run-as-typed"] } }), 2).decision).toBe(false);
+    expect(readPrepare(JSON.stringify({ schema_version: 1, scan: JSON.parse(report([target({ verdict: "infected" })])), decision: { choices: ["run-as-typed"] } }), 1).decision).toBe(false);
     expect(readPrepare(JSON.stringify({ schema_version: 1, reason: "the update could not be prepared" }), 2)).toMatchObject({
       verdict: "incomplete",
       release: false,

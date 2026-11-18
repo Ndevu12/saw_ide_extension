@@ -29,6 +29,10 @@ export interface GovernConfig {
    * looks past them when the recorded program is not a full path. Older configurations lack it.
    */
   standinDirs?: string[];
+  /** This saw checks updates from a tracking checkout, and leaves one it cannot check to the operator (`govern.decision`). */
+  decides?: boolean;
+  /** Where the stand-in asks this editor whether to run an update saw could not check, when no terminal can answer. */
+  askDir?: string;
 }
 
 /** The reason a `finished` notice carries when a command saw could not hold changed an open folder. */
@@ -75,6 +79,8 @@ export interface PrepareReading {
   release: boolean;
   /** saw answered that it could not produce the update to check, so it judged nothing. */
   unchecked: boolean;
+  /** saw could not check the update and left running it as typed to the operator (`govern.decision`). */
+  decision: boolean;
 }
 
 type Json = Record<string, unknown>;
@@ -97,21 +103,35 @@ function object(stdout: string): Json | string {
 export function readPrepare(stdout: string, exitCode: number | null): PrepareReading {
   const parsed = object(stdout);
   if (typeof parsed === "string") {
-    return { verdict: "incomplete", reasons: [parsed], release: false, unchecked: false };
+    return { verdict: "incomplete", reasons: [parsed], release: false, unchecked: false, decision: false };
   }
   const scan = parsed["scan"];
   if (scan === undefined) {
     const reason = typeof parsed["reason"] === "string" ? parsed["reason"] : undefined;
-    return { verdict: "incomplete", reasons: [reason ?? "saw did not include a scan of the update"], release: false, unchecked: reason !== undefined };
+    return {
+      verdict: "incomplete",
+      reasons: [reason ?? "saw did not include a scan of the update"],
+      release: false,
+      unchecked: reason !== undefined,
+      decision: reason !== undefined && offersRunAsTyped(parsed["decision"]),
+    };
   }
   try {
     const payload = parsePayload(JSON.stringify(scan));
     const judged = judge(payload, exitCode);
-    return { verdict: judged.verdict, reasons: judged.reasons, release: mayRelease(judged.verdict), unchecked: false };
+    return { verdict: judged.verdict, reasons: judged.reasons, release: mayRelease(judged.verdict), unchecked: false, decision: false };
   } catch (error) {
     const why = error instanceof ContractError ? error.message : "saw's scan of the update could not be read";
-    return { verdict: "incomplete", reasons: [why], release: false, unchecked: false };
+    return { verdict: "incomplete", reasons: [why], release: false, unchecked: false, decision: false };
   }
+}
+
+function offersRunAsTyped(decision: unknown): boolean {
+  if (!decision || typeof decision !== "object" || Array.isArray(decision)) {
+    return false;
+  }
+  const choices = (decision as Json)["choices"];
+  return Array.isArray(choices) && choices.includes("run-as-typed");
 }
 
 export interface ApplyReading {

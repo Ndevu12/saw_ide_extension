@@ -201,12 +201,18 @@ verdict never comes from progress.
   spellings count) and never a file that carries the stand-in mark. When none is left, it runs
   nothing. It finds the folder a command changes as git does: `--work-tree` or `GIT_WORK_TREE`,
   otherwise the working directory, and also holds a command that changes an open folder's git
-  directory from outside. A fetch writes refs, not files, so only one with `--update-head-ok`
-  is held. An alias is checked as the command it runs. A clone cannot be held, so
+  directory from outside. A fetch is held when saw offers `govern.decision`, the release that
+  checks a fetch from a tracking checkout. With an older saw, which fetches nothing, only a fetch
+  with `--update-head-ok` is held. An alias is checked as the command it runs. A clone cannot be held, so
   one that leaves files in an open folder is followed by a scan and a warning. When saw's own
   stand-in cannot start, this window's saw check holds the update. When `saw govern prepare`
-  answers with a reason and no scan, it judged nothing, so the command runs as typed and is
-  followed by the same scan and warning. A timeout or an unreadable report still holds.
+  answers with a reason and a `decision` (`govern.decision`), the operator decides: in that order,
+  `SAW_GOVERN_DECISION`, a question in the terminal, or, with no terminal, a question file under
+  the extension's `govern/asks` that this window answers with a modal. The stand-in waits two
+  minutes for the answer. No answer leaves the folder unchanged. Running it is followed by the
+  same scan and warning. A saw without `govern.decision` that answers with a reason and no scan
+  judged nothing, so the command runs as typed. A timeout, an unreadable report, or a reason with
+  no decision from a saw that offers decisions still holds.
 - **A rating is asked for in Chat, after saw has done something the person can judge.** The decision
   of when to show the card lives in `core/feedback` and is unit-tested. The editor stores a
   dismissal and a rating in global state, and opens the review, star, and issue pages. The issue

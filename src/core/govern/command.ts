@@ -103,8 +103,11 @@ function attachedOption(arg: string): { name: string; value: string } | undefine
   return undefined;
 }
 
-/** Whether this git command brings files in from somewhere other than the open folder's current checkout. */
-export function gitBringsFiles(command: GitInvocation): boolean {
+/**
+ * Whether this git command brings files in from somewhere other than the open folder's current checkout.
+ * `fetchChecked`: the installed saw checks a fetch from a tracking checkout. An older one fetches nothing.
+ */
+export function gitBringsFiles(command: GitInvocation, fetchChecked = false): boolean {
   const { subcommand, args } = command;
   if (args.some((arg) => UNDO.has(arg))) {
     return false;
@@ -115,8 +118,8 @@ export function gitBringsFiles(command: GitInvocation): boolean {
     case "rebase":
       return true;
     case "fetch":
-      // A fetch writes refs, not files, unless it may move the checked-out branch. What it brings is held when it is merged or checked out.
-      return !args.includes("--dry-run") && (args.includes("--update-head-ok") || args.includes("-u"));
+      // Without saw's check, a fetch still writes only refs, unless it may move the checked-out branch. What it brings is held when it is merged or checked out.
+      return !args.includes("--dry-run") && (fetchChecked || args.includes("--update-head-ok") || args.includes("-u"));
     case "submodule":
       return firstWord(args) === "update";
     case "checkout":

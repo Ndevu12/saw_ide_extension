@@ -119,15 +119,20 @@ click.
 ### Updates wait for a check
 
 When the installed saw can check an incoming update, a pull, checkout, merge, rebase, or a
-GitHub command that lands files waits before it changes an open folder. A fetch writes no files,
-so it runs at once, and what it brings waits when you merge or check it out. If that saw includes its
+GitHub command that lands files waits before it changes an open folder. A fetch waits too when saw
+can check one. With an older saw, a fetch runs at once, and what it brings waits when you merge or
+check it out. If that saw includes its
 git and gh stand-in, the editor places it in front of those commands. The editor's integrated
 terminal is covered, and so is the Git view, except on Windows. Clean and residue are applied.
 While the check runs, the status bar, the saw view, and Chat say saw is checking the update, and
 the step saw names when it names one. The folder is unchanged until the check finishes. Suspicious,
 infected, and a check that could not finish leave the folder as it was, and the saw view says the
-update was held. When saw cannot bring the update in to check it at all, the command runs as you
-typed it, the folder is scanned straight after, and Chat says the change was not checked first.
+update was held. When saw cannot check an update at all, it tells you why, and you decide: run the
+command as you typed it, or leave the folder as it is. The terminal asks you. The Git view asks in a
+dialog. If you run it, the folder is scanned straight after, and Chat says the change was not
+checked first. With no one to ask, the folder is left as it is. To decide ahead, set
+`SAW_GOVERN_DECISION` to `run-as-typed` or `leave-unchanged`, as for saw's own stand-in. A saw
+that does not offer this decision runs the command and scans after.
 The open folder is scanned again after the check finishes. A git command this
 window did not run can still change the folder first. When saw can say whether it let that tree
 in, Chat says the change was not held only when saw did not. A check that runs outside this window
