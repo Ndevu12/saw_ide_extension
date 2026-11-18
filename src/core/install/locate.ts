@@ -1,4 +1,4 @@
-import { accessSync, constants, statSync } from "node:fs";
+import { accessSync, constants, realpathSync, statSync } from "node:fs";
 import * as path from "node:path";
 
 import { runProgram } from "../run";
@@ -20,6 +20,15 @@ export function defaultIsExecutableFile(file: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** The file a path leads to after symlinks, or undefined when it cannot be followed. */
+export function realPath(file: string): string | undefined {
+  try {
+    return realpathSync(file);
+  } catch {
+    return undefined;
   }
 }
 

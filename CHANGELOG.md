@@ -4,7 +4,11 @@
 
 ### Added
 
+- saw stays up to date without an extension release. A new saw release, checked against its signed `SHA256SUMS`, installs on its own 3 days after publishing, or at once for a security release; **Update Now** installs it sooner. The new saw must find a known infection before it replaces the current one, and **saw: Go Back to the Previous saw** undoes an update. A saw you installed yourself, or one `saw.path` names, is never changed. The new setting `saw.autoUpdate` (`auto`, `notify`, or `off`) controls this.
+
 - With a saw that offers the choice (`govern.decision`), an update saw cannot check is yours to decide. saw says why it cannot check it, and you can run the command as you typed it or leave the folder as it is. The terminal asks with a yes/no question that defaults to no. The Git view's pull and sync ask in a dialog. If you run it, the folder is scanned straight after. If no one answers within two minutes, or no one can be asked, the folder is left as it is. `SAW_GOVERN_DECISION=run-as-typed` or `leave-unchanged` decides ahead, as for saw's own stand-in. With that saw, `git fetch` waits for saw's check again, because that saw checks a fetch properly.
+- An update saw holds now says what it found and what to do, and is never a dead end. The terminal lists the strongest findings and next steps, the notification's **See What Was Found** opens **Held update details**, and Chat links to it. That tab shows the update's own findings, the command, and next steps for the verdict. The scan is of the files the update brings, not of the folder's history. You can still let the update in: answer yes in the terminal, or choose **Let In Anyway** when the Git view's dialog asks. For an infected update you type the folder's name. `SAW_GOVERN_DECISION` never lets a held update in. Once it is in, the folder is scanned and Chat says you let it in.
+- A check that ran out of time, a saw that would not start, or an answer that could not be read now asks whether to run the command as typed, instead of holding the update for good.
 
 ### Fixed
 

@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 
+import { isUpdateMode, type UpdateMode } from "./install/updater";
+
 import { configOutsideFolders, isBoolean, isNumber, isString, owned, timeoutMs } from "../core/controls";
 
 export interface Settings {
@@ -9,6 +11,7 @@ export interface Settings {
   scanOnChange: boolean;
   timeoutMs: number;
   autoInstall: boolean;
+  autoUpdate: UpdateMode;
   registerMcpServer: boolean;
   guardAgentCommands: boolean;
   governUpdates: boolean;
@@ -27,6 +30,7 @@ export function readSettings(): Settings {
     scanOnChange: owned(saw.inspect<boolean>("scanOnChange"), true, isBoolean),
     timeoutMs: timeoutMs(owned(saw.inspect<number>("scanTimeoutSeconds"), 120, isNumber)),
     autoInstall: owned(saw.inspect<boolean>("autoInstall"), true, isBoolean),
+    autoUpdate: owned(saw.inspect<UpdateMode>("autoUpdate"), "auto", isUpdateMode),
     registerMcpServer: owned(saw.inspect<boolean>("registerMcpServer"), true, isBoolean),
     guardAgentCommands: owned(saw.inspect<boolean>("guardAgentCommands"), true, isBoolean),
     governUpdates: owned(saw.inspect<boolean>("governUpdates"), true, isBoolean),
