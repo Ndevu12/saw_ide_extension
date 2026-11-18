@@ -201,7 +201,9 @@ verdict never comes from progress.
   otherwise the working directory, and also holds a command that changes an open folder's git
   directory from outside. An alias is checked as the command it runs. A clone cannot be held, so
   one that leaves files in an open folder is followed by a scan and a warning. When saw's own
-  stand-in cannot start, this window's saw check holds the update.
+  stand-in cannot start, this window's saw check holds the update. When `saw govern prepare`
+  answers with a reason and no scan, it judged nothing, so the command runs as typed and is
+  followed by the same scan and warning. A timeout or an unreadable report still holds.
 - **A rating is asked for in Chat, after saw has done something the person can judge.** The decision
   of when to show the card lives in `core/feedback` and is unit-tested. The editor stores a
   dismissal and a rating in global state, and opens the review, star, and issue pages. The issue

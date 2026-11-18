@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `git pull` in the editor's terminal works again. saw 0.17.2 and earlier cannot bring a pull in to check it, because the copy it checks in has no remote, so every pull was held as "the update did not finish cleanly" ([saw#1956](https://github.com/Ndevu12/stayAwakeBot/issues/1956)). When saw answers that it could not bring an update in at all, the command now runs as typed, the folder is scanned straight after, and Chat says the change was not checked first. A suspicious, infected, or unfinished scan still holds the update.
+
 ## [0.7.0] - 2026-11-16
 
 ### Added

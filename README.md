@@ -125,7 +125,9 @@ terminal is covered, and so is the Git view, except on Windows. Clean and residu
 While the check runs, the status bar, the saw view, and Chat say saw is checking the update, and
 the step saw names when it names one. The folder is unchanged until the check finishes. Suspicious,
 infected, and a check that could not finish leave the folder as it was, and the saw view says the
-update was held. The open folder is scanned again after the check finishes. A git command this
+update was held. When saw cannot bring the update in to check it at all, the command runs as you
+typed it, the folder is scanned straight after, and Chat says the change was not checked first.
+The open folder is scanned again after the check finishes. A git command this
 window did not run can still change the folder first. When saw can say whether it let that tree
 in, Chat says the change was not held only when saw did not. A check that runs outside this window
 shows the same checking, applied, or held. When saw can put a folder back, a commit it did
