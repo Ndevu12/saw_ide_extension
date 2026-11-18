@@ -118,8 +118,9 @@ click.
 
 ### Updates wait for a check
 
-When the installed saw can check an incoming update, a pull, fetch, checkout, merge, rebase, or a
-GitHub command that lands files waits before it changes an open folder. If that saw includes its
+When the installed saw can check an incoming update, a pull, checkout, merge, rebase, or a
+GitHub command that lands files waits before it changes an open folder. A fetch writes no files,
+so it runs at once, and what it brings waits when you merge or check it out. If that saw includes its
 git and gh stand-in, the editor places it in front of those commands. The editor's integrated
 terminal is covered, and so is the Git view, except on Windows. Clean and residue are applied.
 While the check runs, the status bar, the saw view, and Chat say saw is checking the update, and

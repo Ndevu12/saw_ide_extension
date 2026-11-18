@@ -33,8 +33,8 @@ describe("the folder a git command acts on", () => {
     expect(plan(config, "git", ["pull"], "/work/app", { env: { GIT_DIR: "/elsewhere/.git" } })).toMatchObject({ kind: "hold", repo: "/work/app" });
   });
 
-  it("holds a fetch into an open folder's git directory from outside it", () => {
-    expect(plan(config, "git", ["--git-dir=/work/app/.git", "fetch"], "/elsewhere")).toMatchObject({ kind: "hold", repo: "/work/app" });
+  it("holds a fetch that may move an open folder's branch from outside its git directory", () => {
+    expect(plan(config, "git", ["--git-dir=/work/app/.git", "fetch", "-u", "origin", "main:main"], "/elsewhere")).toMatchObject({ kind: "hold", repo: "/work/app" });
   });
 
   it("follows GIT_WORK_TREE and GIT_DIR, and a flag wins over them", () => {

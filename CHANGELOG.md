@@ -4,7 +4,8 @@
 
 ### Fixed
 
-- `git pull` in the editor's terminal works again. saw 0.17.2 and earlier cannot bring a pull in to check it, because the copy it checks in has no remote, so every pull was held as "the update did not finish cleanly" ([saw#1956](https://github.com/Ndevu12/stayAwakeBot/issues/1956)). When saw answers that it could not bring an update in at all, the command now runs as typed, the folder is scanned straight after, and Chat says the change was not checked first. A suspicious, infected, or unfinished scan still holds the update.
+- `git pull` in the editor's terminal works again. saw 0.17.2 and earlier cannot bring most updates in to check them, because the copy they are checked in has no remote, upstream, or git identity, so every pull was held as "the update did not finish cleanly" ([saw#1956](https://github.com/Ndevu12/stayAwakeBot/issues/1956)). When saw answers that it could not bring an update in at all, the command now runs as typed, the folder is scanned straight after, and Chat says the change was not checked first. A suspicious, infected, or unfinished scan still holds the update. The same goes for every command saw checks: a rebase, a merge that makes a merge commit, a checkout or switch of a branch that is only on the remote, `gh repo sync`, and `gh pr checkout`.
+- `git fetch` fetches again, from the terminal and from the Git view's sync and background fetch. saw reported it clean but fetched nothing. A fetch writes no files, so it now runs at once, and what it brings waits for saw when you merge or check it out. A fetch with `--update-head-ok`, which can move the checked-out branch, still waits.
 
 ## [0.7.0] - 2026-11-16
 

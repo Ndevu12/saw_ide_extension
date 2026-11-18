@@ -199,7 +199,8 @@ verdict never comes from progress.
   spellings count) and never a file that carries the stand-in mark. When none is left, it runs
   nothing. It finds the folder a command changes as git does: `--work-tree` or `GIT_WORK_TREE`,
   otherwise the working directory, and also holds a command that changes an open folder's git
-  directory from outside. An alias is checked as the command it runs. A clone cannot be held, so
+  directory from outside. A fetch writes refs, not files, so only one with `--update-head-ok`
+  is held. An alias is checked as the command it runs. A clone cannot be held, so
   one that leaves files in an open folder is followed by a scan and a warning. When saw's own
   stand-in cannot start, this window's saw check holds the update. When `saw govern prepare`
   answers with a reason and no scan, it judged nothing, so the command runs as typed and is

@@ -115,7 +115,8 @@ export function gitBringsFiles(command: GitInvocation): boolean {
     case "rebase":
       return true;
     case "fetch":
-      return !args.includes("--dry-run") && !args.includes("-n");
+      // A fetch writes refs, not files, unless it may move the checked-out branch. What it brings is held when it is merged or checked out.
+      return !args.includes("--dry-run") && (args.includes("--update-head-ok") || args.includes("-u"));
     case "submodule":
       return firstWord(args) === "update";
     case "checkout":

@@ -31,10 +31,11 @@ function git(argv: string[], cwd = "/work/app") {
 }
 
 describe("which git commands bring files in", () => {
-  it("holds a pull, fetch, merge, rebase, checkout, switch, and submodule update", () => {
+  it("holds a pull, a fetch that may move the checked-out branch, merge, rebase, checkout, switch, and submodule update", () => {
     for (const argv of [
       ["pull"],
-      ["fetch", "origin"],
+      ["fetch", "--update-head-ok", "origin", "main:main"],
+      ["fetch", "-u", "origin", "main:main"],
       ["merge", "main"],
       ["rebase", "origin/main"],
       ["checkout", "main"],
@@ -46,7 +47,7 @@ describe("which git commands bring files in", () => {
     }
   });
 
-  it("leaves status, commit, push, a path checkout, a new branch, and an abort alone", () => {
+  it("leaves status, commit, push, a fetch, a path checkout, a new branch, and an abort alone", () => {
     for (const argv of [
       ["status"],
       ["diff"],
@@ -58,6 +59,9 @@ describe("which git commands bring files in", () => {
       ["switch", "-c", "feature"],
       ["merge", "--abort"],
       ["rebase", "--quit"],
+      ["fetch"],
+      ["fetch", "origin"],
+      ["fetch", "--all", "--prune"],
       ["fetch", "--dry-run"],
       ["submodule", "status"],
     ]) {
