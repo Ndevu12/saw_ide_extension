@@ -1,10 +1,9 @@
-import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 
 import * as vscode from "vscode";
 
 import { probeCapabilities, type Capabilities } from "../../core/capabilities";
-import { defaultIsExecutableFile, locate, movesToPin, probe, sameInstall, sawToRun, type Probed } from "../../core/install/locate";
+import { defaultIsExecutableFile, locate, movesToPin, probe, realPath, sameInstall, sawToRun, type Probed } from "../../core/install/locate";
 import type { Diagnosis } from "../../core/install/diagnose";
 import { behindPin, moveOrKeep, type Behind } from "../../core/install/upgrade";
 import { atLeast, formatVersion, type Version } from "../../core/version";
@@ -21,7 +20,15 @@ export type Unavailable =
 
 export type Engine =
   /** `behind`: the extension could not move this saw up to the release it pins. */
-  | { kind: "ready"; binary: string; version: string; capabilities: Capabilities; behind?: Behind }
+  | {
+      kind: "ready";
+      binary: string;
+      version: string;
+      capabilities: Capabilities;
+      behind?: Behind;
+      /** Installed by this extension, so it may update it. */
+      ours: boolean;
+    }
   | { kind: "installing" }
   | { kind: "unavailable"; reason: Unavailable; message: string };
 
@@ -107,7 +114,8 @@ export class EngineResolver {
   private moveOrKeep(why: string): Promise<Found> {
     // Held here, not on the resolver, so a reset while the installed saw is listed again cannot lose it.
     let failure: Diagnosis | undefined;
-    return moveOrKeep<Extract<Found, { kind: "ready" }>, Extract<Found, { kind: "unavailable" }>>(this.installer.pinnedSaw, {
+    // pipx installs the release this extension pins; the updater moves on from there.
+    return moveOrKeep<Extract<Found, { kind: "ready" }>, Extract<Found, { kind: "unavailable" }>>(this.installer.packagedSaw, {
       install: async () => {
         const found = await this.installThenFind(why);
         failure = this.takeFailure();
@@ -174,7 +182,7 @@ export class EngineResolver {
     const capabilities = await probeCapabilities(chosen.binary);
     const features = [...capabilities.features].join(", ");
     this.log.info(`Using saw ${chosen.versionText} at ${chosen.binary} (found via ${chosen.from}). Features: ${features || "none it can name"}.`);
-    return { kind: "ready", binary: chosen.binary, version: chosen.versionText, capabilities };
+    return { kind: "ready", binary: chosen.binary, version: chosen.versionText, capabilities, ours: chosen.ours };
   }
 
   private async listReady(): Promise<{ kind: "ready"; candidates: ReadySaw[] } | Extract<Found, { kind: "unavailable" }>> {
@@ -192,13 +200,6 @@ export class EngineResolver {
       return { kind: "unavailable", reason: "missing", message: "saw is not installed on this machine." };
     }
     const installed = this.installer.installedBinary();
-    const canonical = (file: string): string | undefined => {
-      try {
-        return realpathSync(file);
-      } catch {
-        return undefined;
-      }
-    };
     const candidates: ReadySaw[] = [];
     let rejected: Extract<Found, { kind: "unavailable" }> | undefined;
     for (const candidate of located.candidates) {
@@ -208,7 +209,7 @@ export class EngineResolver {
           binary: probed.binary,
           version: probed.version,
           versionText: formatVersion(probed.version),
-          ours: sameInstall(probed.binary, installed, canonical),
+          ours: sameInstall(probed.binary, installed, realPath),
           from: candidate.from,
         });
         continue;

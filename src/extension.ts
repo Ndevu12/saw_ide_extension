@@ -12,6 +12,7 @@ import { Feedback } from "./editor/feedback/feedback";
 import { Governor } from "./editor/govern/governor";
 import { EngineResolver } from "./editor/install/engine";
 import { Installer, readPins } from "./editor/install/installer";
+import { Updater } from "./editor/install/updater";
 import { SawMcpRegistration } from "./editor/agent/mcp";
 import { Model } from "./editor/model";
 import { Reports } from "./editor/view/reports";
@@ -44,6 +45,12 @@ export function activate(context: vscode.ExtensionContext): SawApi {
   const actions = new Actions(model, engines, controller, readSettings, log, context.globalState, reports, decide);
   const govern = new Governor(context, model, controller, installer, alerts, readSettings, log);
   const feedback = new Feedback(context, model);
+  const updater = new Updater(context, log, installer, model, readSettings, async () => {
+    engines.reset();
+    model.setEngine(await engines.resolve());
+    controller.requestAll({ immediate: true });
+    void actions.refreshHooks();
+  });
   installer.exposeToTerminals();
   const folderOf = (arg: unknown): vscode.WorkspaceFolder | undefined => {
     const node = arg as { state?: { folder?: vscode.WorkspaceFolder }; uri?: vscode.Uri } | undefined;
@@ -59,6 +66,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     decide,
     govern,
     feedback,
+    updater,
     new OpenGuard(log),
     new StrictMode(context, model, log),
     cursorGuard,
@@ -89,8 +97,11 @@ export function activate(context: vscode.ExtensionContext): SawApi {
       if (engine.kind === "ready") {
         controller.requestAll({ immediate: true });
         void actions.refreshHooks();
+        void updater.recheck();
       }
     }),
+    vscode.commands.registerCommand("saw.checkForUpdates", () => updater.check(true)),
+    vscode.commands.registerCommand("saw.usePreviousSaw", () => updater.usePrevious()),
     vscode.commands.registerCommand("saw.openReport", async (arg?: unknown) => {
       const kind = (arg as { kind?: unknown } | undefined)?.kind;
       const folder = folderOf(arg);
@@ -142,6 +153,7 @@ export function activate(context: vscode.ExtensionContext): SawApi {
     void engines.resolve().then((engine) => model.setEngine(engine));
   }
   void actions.refreshHooks();
+  updater.start();
   return { model, controller, reports, cursorGuard };
 }
 

@@ -62,7 +62,10 @@
   "main": "./dist/extension.js",
   "saw": {
     "saw": "0.17.1",
-    "pipx": "1.18.4"
+    "pipx": "1.18.4",
+    "signers": [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFj6GX6lYd5XbveJQHEpMfbI7IYflSS5aFakvoWLtBeU"
+    ]
   },
   "extensionKind": [
     "workspace"
@@ -78,6 +81,7 @@
         "saw.path",
         "saw.configPath",
         "saw.autoInstall",
+        "saw.autoUpdate",
         "saw.registerMcpServer"
       ]
     },
@@ -102,6 +106,16 @@
       {
         "command": "saw.install",
         "title": "Install or Repair saw",
+        "category": "saw"
+      },
+      {
+        "command": "saw.checkForUpdates",
+        "title": "Check for saw Updates",
+        "category": "saw"
+      },
+      {
+        "command": "saw.usePreviousSaw",
+        "title": "Go Back to the Previous saw",
         "category": "saw"
       },
       {
@@ -346,6 +360,18 @@
           "default": true,
           "scope": "machine",
           "markdownDescription": "Install saw with pipx when it is missing or too old, installing pipx first when the machine has none. Needs Python 3.11 or later and access to PyPI. Turn it off where software is installed only by an administrator."
+        },
+        "saw.autoUpdate": {
+          "type": "string",
+          "enum": ["auto", "notify", "off"],
+          "enumDescriptions": [
+            "Install a new saw release 3 days after it is published, or at once for a security release. Update Now installs it sooner.",
+            "Say when a new saw release is out, and install it only on Update Now.",
+            "Do not look for newer saw releases. Run saw: Check for saw Updates to look."
+          ],
+          "default": "auto",
+          "scope": "machine",
+          "markdownDescription": "Update the saw this extension installed to saw's latest release, checked against the release's signed `SHA256SUMS`. A saw you installed yourself, or one `saw.path` names, is never changed."
         },
         "saw.registerMcpServer": {
           "type": "boolean",

@@ -90,6 +90,19 @@ This works without administrator rights on every platform, including PEP 668 sys
   is not replaced. When that one already meets the pin, it is still the one that runs. When moving
   to the pin fails, the saw already installed keeps scanning. Each verdict records which saw gave
   it, and every place that shows a verdict says when that saw was older than the pin.
+- **Updated without an extension release:** the updater (`editor/install/updater.ts`) reads saw's
+  latest GitHub release at most once every 20 hours, only for the saw this extension installed.
+  Drafts and pre-releases are never latest, so marking a release pre-release withdraws it. A
+  release waits 3 days after publishing unless its title says `security`; **Update Now** skips the
+  wait. `core/install/download.ts` checks `SHA256SUMS` against the signer pinned in
+  `package.json` (`core/install/sshsig.ts`), then the wheel against it. Dependencies come from a
+  signed `requirements.lock` when the release has one (`pip --require-hashes --no-deps`), otherwise
+  as exact versions from the signed SBOM. `core/install/update.ts` installs into
+  `saw/versions/<version>` with `--only-binary=:all:`, and the new saw must report that version,
+  call a generated infected sample infected and a plain one clean. Only then, while nothing is
+  scanning or fixing, does `installed.json` point at it, keeping the previous saw as the way back.
+  The updater never goes below the newest release this machine ran, and a release someone went
+  back from is not installed on its own again. Changing the signing key needs an extension release.
 - **One install at a time:** a lock directory in global storage keeps two windows from installing
   at once.
 - **Terminals:** integrated terminals get saw's folder on `PATH` through the extension's
