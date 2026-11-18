@@ -46,7 +46,9 @@ test/
 3. The **engine** resolves saw to an absolute path, installing it first when it is missing.
 4. **scan** runs `saw scan <folder> --json` without a shell. **contract** validates the JSON, and
    **verdict** combines it with the exit status. Anything that could not answer, such as a failed
-   start, a timeout or unreadable output, is `incomplete`, never clean.
+   start, a timeout or unreadable output, is `incomplete`, never clean. On POSIX, saw leads its
+   own process group, so a stop reaches the workers it started, and a forced stop follows. A run
+   ends once saw has exited, even if something it left behind still holds its output.
 5. The outcome goes into the **model**. The status bar, the saw view, the Problems panel, alerts
    and reports all render from the model.
 

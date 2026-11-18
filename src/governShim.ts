@@ -267,8 +267,14 @@ async function holdWithSaw(config: GovernConfig, action: Hold, typed: readonly s
     }
   });
   notice(config, action.repo, "checking", []);
+  // saw runs in its own process group, so the terminal's Ctrl-C reaches it only through here. Apply is never interrupted, so the folder is not left half-written.
+  const interrupted = new AbortController();
+  for (const name of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+    process.on(name, () => interrupted.abort());
+  }
   const prepared = await runProgram(config.saw, prepareArgs(action.repo, action.holding, action.tool, action.args, config.progress), {
     timeoutMs: config.timeoutMs,
+    signal: interrupted.signal,
     onOutput: (text, stream) => {
       if (stream === "stderr") {
         steps.feed(text);
@@ -276,6 +282,11 @@ async function holdWithSaw(config: GovernConfig, action: Hold, typed: readonly s
     },
   });
   steps.end();
+  if (prepared.cancelled) {
+    notice(config, action.repo, "finished", []);
+    process.stderr.write("saw stopped checking this update. The folder was not changed.\n");
+    process.exit(130);
+  }
   const reading = readPrepare(prepared.stdout, prepared.exitCode);
   if (reading.unchecked && !prepared.timedOut && !prepared.spawnError) {
     // saw judged nothing, so holding would only stop the operator. The folder is scanned once the command has run.

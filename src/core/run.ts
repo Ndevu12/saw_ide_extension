@@ -37,6 +37,15 @@ export interface RunResult {
 
 const DEFAULT_MAX_OUTPUT = 64 * 1024 * 1024;
 
+/** How long a stopped program has to exit before it and everything it started are killed. */
+const KILL_GRACE_MS = 3000;
+
+/** How long output may stay open after the program exits. Workers it left behind can hold it open for good. */
+const DRAIN_MS = 2000;
+
+// On POSIX the program leads its own process group, so stopping it also stops the workers it started.
+const AS_GROUP = process.platform !== "win32";
+
 // saw reads the target it is given, never its working directory, so a neutral one keeps a
 // workspace from supplying anything by sitting where the process starts.
 const NEUTRAL_CWD = tmpdir();
@@ -66,12 +75,28 @@ export function runProgram(binary: string, args: readonly string[], options: Run
       stdio: [options.input ? "pipe" : "ignore", "pipe", "pipe"],
       shell: false,
       windowsHide: true,
+      detached: AS_GROUP,
     });
 
-    const stop = () => {
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill();
+    const signal = (name: NodeJS.Signals) => {
+      try {
+        if (AS_GROUP && child.pid !== undefined) {
+          process.kill(-child.pid, name);
+        } else if (child.exitCode === null && child.signalCode === null) {
+          child.kill(name);
+        }
+      } catch {
+        // Already gone.
       }
+    };
+    let stopping = false;
+    const stop = () => {
+      if (stopping) {
+        return;
+      }
+      stopping = true;
+      signal("SIGTERM");
+      setTimeout(() => signal("SIGKILL"), KILL_GRACE_MS).unref();
     };
     let holding = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -114,12 +139,14 @@ export function runProgram(binary: string, args: readonly string[], options: Run
       onAbort();
     }
 
+    let drain: ReturnType<typeof setTimeout> | undefined;
     const finish = (exitCode: number | null, spawnError: string | null) => {
       if (settled) {
         return;
       }
       settled = true;
       clearTimeout(timer);
+      clearTimeout(drain);
       options.signal?.removeEventListener("abort", onAbort);
       resolve({
         exitCode,
@@ -163,6 +190,13 @@ export function runProgram(binary: string, args: readonly string[], options: Run
       finish(null, "could not read saw's output");
     }
     child.on("error", (error) => finish(null, error.message));
+    child.on("exit", (code) => {
+      drain = setTimeout(() => {
+        stdout?.destroy();
+        stderr?.destroy();
+        finish(code, null);
+      }, DRAIN_MS);
+    });
     child.on("close", (code) => finish(code, null));
   });
 }
