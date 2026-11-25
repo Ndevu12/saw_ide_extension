@@ -115,6 +115,9 @@ export async function verifyProvenance(bytes: Uint8Array, version: string, commi
   } catch {
     return { kind: "failed", detail: "its build provenance cannot be read." };
   }
+  if (typeof bundle !== "object" || bundle === null || Array.isArray(bundle)) {
+    return { kind: "failed", detail: "its build provenance cannot be read." };
+  }
   const material = bundle.verificationMaterial;
   if (bundle.mediaType !== BUNDLE_V03 || !material || !material.certificate || "x509CertificateChain" in material || "publicKey" in material || !bundle.dsseEnvelope || "messageSignature" in bundle) {
     return { kind: "failed", detail: "its build provenance is not a Sigstore v0.3 bundle with one certificate." };
@@ -153,6 +156,9 @@ export async function verifyProvenance(bytes: Uint8Array, version: string, commi
   try {
     statement = JSON.parse(Buffer.from(envelope.payload, "base64").toString("utf8")) as typeof statement;
   } catch {
+    return { kind: "failed", detail: "its build provenance statement cannot be read." };
+  }
+  if (typeof statement !== "object" || statement === null) {
     return { kind: "failed", detail: "its build provenance statement cannot be read." };
   }
   if (statement.predicateType !== SLSA_PROVENANCE || !Array.isArray(statement.subject)) {

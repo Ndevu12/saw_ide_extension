@@ -55,6 +55,12 @@ describe("saw's build provenance", () => {
     }
   });
 
+  it("is refused, not thrown, when the bundle is not an object", async () => {
+    for (const text of ["null", "[]", "3"]) {
+      expect((await verifyProvenance(Buffer.from(text), version, commit, accepted)).kind, text).toBe("failed");
+    }
+  });
+
   it("is refused when the bundle's signature does not verify", async () => {
     const checked = await verifyProvenance(bundle, version, commit, async () => {
       throw new Error("bad signature");
