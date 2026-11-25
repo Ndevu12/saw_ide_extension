@@ -146,7 +146,12 @@ verdict never comes from progress.
   not start it first. A terminal whose shell or arguments point inside the folder is closed until
   you allow it. Git aimed at an open folder is given `core.fsmonitor=false`, an empty
   `diff.external`, and a `core.hooksPath` outside the folder, and a filter or diff driver whose
-  command is not `git-lfs` is cleared, so the folder's config does not start a program. While a
+  command is not `git-lfs` is cleared, so the folder's config does not start a program. That
+  `core.hooksPath` is the operator's global one when it sits outside every open folder, otherwise
+  `/dev/null` on Linux and macOS: git finds no hook there, and a hook installer that follows
+  `git rev-parse --git-path hooks` cannot create anything. Windows has no such path, so there it is
+  the extension's `empty-hooks` folder, kept empty each time the stand-in is configured: a link, a
+  file, or a folder holding anything is moved aside and logged, never followed. While a
   folder is suspicious, infected, holding an update, or changed by a command saw did not hold,
   `security.workspace.trust.untrustedFiles` is `newWindow`, extension recommendations are ignored,
   and `task.autoDetect` is off. Those user values are put back when nothing open still needs them. Every setting is machine-scoped, and the ones

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- In the editor's terminal, git aimed at an open folder was given the extension's empty hooks folder as `core.hooksPath`, and `git rev-parse --git-path hooks` reported it. A hook installer could put hooks there, and then every governed command in every open folder would run them. On Linux and macOS that path is now `/dev/null`, where nothing can be added. On Windows the folder is kept empty: anything found there, including a link or a file, is moved aside with a warning in the log. The folder an earlier version used is emptied the same way on every system, since a terminal opened before the update still uses it ([#88](https://github.com/Ndevu12/saw_ide_extension/issues/88)).
+
 ## [0.8.0] - 2026-11-18
 
 ### Added
