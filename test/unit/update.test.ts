@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { downloadRelease } from "../../src/core/install/download";
+import { provenanceName, tagObjectUrl, tagRefUrl } from "../../src/core/install/provenance";
 import { chooseUpdate, readRelease, readSums, sbomPins, sha256, UPDATE_WAIT_MS, wheelFor, type SawRelease } from "../../src/core/install/release";
 import { verifySshSignature } from "../../src/core/install/sshsig";
 import { CLEAN_SAMPLE, INFECTED_SAMPLE, installUpdate, type UpdateDeps } from "../../src/core/install/update";
@@ -78,7 +79,7 @@ describe("saw's signed releases", () => {
   });
 });
 
-/** Signs like `ssh-keygen -Y sign -n file`, with a key made for the test. */
+/** Signs like `ssh-keygen -Y sign`, with a key made for the test. */
 function testSigner() {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
   const str = (value: Buffer | string) => {
@@ -91,12 +92,12 @@ function testSigner() {
   const key = Buffer.concat([str("ssh-ed25519"), str(raw)]);
   return {
     line: `ssh-ed25519 ${key.toString("base64")}`,
-    sign: (message: Buffer | string) => {
+    sign: (message: Buffer | string, namespace = "file") => {
       const digest = createHash("sha512").update(message).digest();
-      const signature = sign(null, Buffer.concat([Buffer.from("SSHSIG"), str("file"), str(""), str("sha512"), str(digest)]), privateKey);
+      const signature = sign(null, Buffer.concat([Buffer.from("SSHSIG"), str(namespace), str(""), str("sha512"), str(digest)]), privateKey);
       const version = Buffer.alloc(4);
       version.writeUInt32BE(1);
-      const blob = Buffer.concat([Buffer.from("SSHSIG"), version, str(key), str("file"), str(""), str("sha512"), str(Buffer.concat([str("ssh-ed25519"), str(signature)]))]);
+      const blob = Buffer.concat([Buffer.from("SSHSIG"), version, str(key), str(namespace), str(""), str("sha512"), str(Buffer.concat([str("ssh-ed25519"), str(signature)]))]);
       return `-----BEGIN SSH SIGNATURE-----\n${blob.toString("base64")}\n-----END SSH SIGNATURE-----\n`;
     },
   };
@@ -104,49 +105,74 @@ function testSigner() {
 
 describe("downloading a release", () => {
   const signer = testSigner();
-  const wheelName = "stayawakebot-0.17.3-py3-none-manylinux_2_17_x86_64.whl";
-  const sbomName = "stayawakebot-0.17.3.sbom.cdx.json";
+  const version = "0.17.5";
+  const commit = "91cd5ee621fd4d887a1c0076e7efcc133820fb07";
+  const wheelName = `stayawakebot-${version}-py3-none-manylinux_2_17_x86_64.whl`;
+  const sbomName = `stayawakebot-${version}.sbom.cdx.json`;
+  const realBundle = JSON.parse(readFileSync(path.join(__dirname, "../fixtures/saw-0.17.5", provenanceName(version)), "utf8")) as { dsseEnvelope: { payload: string } };
+  const tagSha = "48483b28cdd69003a41f7687b14dca0caafefd05";
 
-  function served(files: Record<string, string>, change: Record<string, string> = {}) {
-    const base = "https://github.com/Ndevu12/stayAwakeBot/releases/download/v0.17.3/";
-    const sums = Object.entries(files).map(([name, text]) => `${sha256(text)}  ${name}`).join("\n") + "\n";
-    const all: Record<string, string> = { ...files, SHA256SUMS: sums, "SHA256SUMS.sig": signer.sign(sums), ...change };
-    const rel: SawRelease = { version: "0.17.3", publishedAt: PUBLISHED, security: false, notesUrl: "", assets: Object.keys(all).map((name) => ({ name, url: base + name })) };
+  function tagObject(target = commit, name = `v${version}`, key = signer) {
+    const payload = `object ${target}\ntype commit\ntag ${name}\ntagger saw <saw@example.invalid> 1795000000 +0000\n\nrelease\n`;
+    return JSON.stringify({ verification: { payload, signature: key.sign(payload, "git") } });
+  }
+
+  function served(files: Record<string, string>, options: { attested?: Record<string, string>; tag?: string; bundleRejects?: boolean } = {}) {
+    const base = `https://github.com/Ndevu12/stayAwakeBot/releases/download/v${version}/`;
+    const subject = Object.entries(options.attested ?? files).map(([name, text]) => ({ name, digest: { sha256: sha256(text) } }));
+    const statement = { _type: "https://in-toto.io/Statement/v1", predicateType: "https://slsa.dev/provenance/v1", subject };
+    const bundle = { ...realBundle, dsseEnvelope: { ...realBundle.dsseEnvelope, payload: Buffer.from(JSON.stringify(statement)).toString("base64") } };
+    const all: Record<string, string> = { ...files, [provenanceName(version)]: JSON.stringify(bundle) };
+    const rel: SawRelease = { version, publishedAt: PUBLISHED, security: false, notesUrl: "", assets: Object.keys(all).map((name) => ({ name, url: base + name })) };
+    const api: Record<string, string> = {
+      [tagRefUrl(version)]: JSON.stringify({ object: { type: "tag", sha: tagSha } }),
+      [tagObjectUrl(tagSha)]: options.tag ?? tagObject(),
+    };
     const fetch = async (url: string) => {
-      const text = all[url.slice(base.length)];
+      const text = api[url] ?? all[url.slice(base.length)];
       return text === undefined ? undefined : new Uint8Array(Buffer.from(text));
     };
-    return downloadRelease(rel, { fetch, signers: [signer.line], platform: "linux", arch: "x64" });
+    const identities: unknown[] = [];
+    const verifyBundle = async (_bundle: unknown, identity: unknown) => {
+      identities.push(identity);
+      if (options.bundleRejects) {
+        throw new Error("signature does not verify");
+      }
+    };
+    return { result: downloadRelease(rel, { fetch, signers: [signer.line], verifyBundle, platform: "linux", arch: "x64" }), identities };
   }
 
   const sbom = JSON.stringify({ components: [{ name: "aiohttp", version: "3.14.5" }] });
 
-  it("uses a signed lock when the release has one", async () => {
+  it("uses an attested lock when the release has one", async () => {
     const lock = "aiohttp==3.14.5 --hash=sha256:" + "a".repeat(64) + "\n";
-    expect(await served({ [wheelName]: "wheel", "stayawakebot-0.17.3-requirements.lock": lock })).toEqual({
-      kind: "verified", wheelName, wheel: new Uint8Array(Buffer.from("wheel")), dependencies: { lock },
-    });
+    const { result, identities } = served({ [wheelName]: "wheel", [`stayawakebot-${version}-requirements.lock`]: lock });
+    expect(await result).toEqual({ kind: "verified", wheelName, wheel: new Uint8Array(Buffer.from("wheel")), dependencies: { lock } });
+    expect(identities).toEqual([{ certificateIssuer: "https://token.actions.githubusercontent.com", certificateIdentityURI: `https://github.com/Ndevu12/stayAwakeBot/.github/workflows/release.yml@refs/tags/v${version}` }]);
   });
 
-  it("otherwise pins the versions in the signed SBOM", async () => {
-    const result = await served({ [wheelName]: "wheel", [sbomName]: sbom }, { [`${sbomName}.sig`]: signer.sign(sbom) });
-    expect(result).toMatchObject({ kind: "verified", dependencies: { pins: ["aiohttp==3.14.5"] } });
+  it("otherwise pins the versions in the attested SBOM", async () => {
+    expect(await served({ [wheelName]: "wheel", [sbomName]: sbom }).result).toMatchObject({ kind: "verified", dependencies: { pins: ["aiohttp==3.14.5"] } });
   });
 
-  it("refuses a file that does not match what was signed", async () => {
-    const cases: Array<[Record<string, string>, string]> = [
-      [{ "SHA256SUMS.sig": signer.sign("other") }, "not signed"],
-      [{ [wheelName]: "changed" }, "does not match"],
-      [{ [`${sbomName}.sig`]: signer.sign("{}") }, "no signed list"],
+  it("refuses a release whose tag, signature, signer or files do not check out", async () => {
+    const other = testSigner();
+    const cases: Array<[ReturnType<typeof served>, string]> = [
+      [served({ [wheelName]: "wheel", [sbomName]: sbom }, { tag: tagObject(commit, `v${version}`, other) }), "not signed by saw's release key"],
+      [served({ [wheelName]: "wheel", [sbomName]: sbom }, { tag: tagObject("f".repeat(40)) }), "names commit"],
+      [served({ [wheelName]: "wheel", [sbomName]: sbom }, { tag: tagObject(commit, "v0.17.4") }), "does not name a commit of that release"],
+      [served({ [wheelName]: "wheel", [sbomName]: sbom }, { bundleRejects: true }), "not signed by saw's release workflow"],
+      [served({ [wheelName]: "changed", [sbomName]: sbom }, { attested: { [wheelName]: "wheel", [sbomName]: sbom } }), "does not match its attested hash"],
+      [served({ [wheelName]: "wheel", [sbomName]: sbom }, { attested: { [wheelName]: "wheel" } }), "no attested list"],
     ];
-    for (const [change, says] of cases) {
-      const result = await served({ [wheelName]: "wheel", [sbomName]: sbom }, { [`${sbomName}.sig`]: signer.sign(sbom), ...change });
-      expect(result.kind === "failed" && result.detail).toContain(says);
+    for (const [{ result }, says] of cases) {
+      const outcome = await result;
+      expect(outcome.kind === "failed" && outcome.detail, says).toContain(says);
     }
   });
 
   it("finds no package for a machine saw does not build for", async () => {
-    expect(await served({ "stayawakebot-0.17.3-py3-none-macosx_11_0_arm64.whl": "wheel" })).toMatchObject({ kind: "failed" });
+    expect(await served({ [`stayawakebot-${version}-py3-none-macosx_11_0_arm64.whl`]: "wheel" }).result).toMatchObject({ kind: "failed" });
   });
 });
 
