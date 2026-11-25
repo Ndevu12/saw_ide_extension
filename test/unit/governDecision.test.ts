@@ -246,6 +246,14 @@ describe.skipIf(onWindows)("the stand-in, when saw leaves the decision to the op
     expect(made.applyArgs()).not.toContain("--expect");
   }, 30_000);
 
+  it("scans the folder when saw's answer to the apply cannot be read", () => {
+    const made = releasedButNotApplied("released-unreadable", {}, "made_up");
+    const run = spawnSync(process.execPath, [shim, "--config", made.configPath, "--tool", "git", "--", "pull"], { cwd: made.repo, encoding: "utf8", timeout: 15_000, env: { ...process.env, SAW_GOVERN_DECISION: "run-as-typed" } });
+    expect(run.status).toBe(1);
+    expect(existsSync(made.ran)).toBe(false);
+    expect(made.notice()).toMatchObject({ phase: "finished", reasons: [UNCHECKED_UPDATE, "the new objects could not be packed"] });
+  }, 30_000);
+
   it("scans the folder when an earlier apply did not finish", () => {
     const made = releasedButNotApplied("released-interrupted", {}, "folder_may_have_changed");
     const run = spawnSync(process.execPath, [shim, "--config", made.configPath, "--tool", "git", "--", "pull"], { cwd: made.repo, encoding: "utf8", timeout: 15_000, env: { ...process.env, SAW_GOVERN_DECISION: "run-as-typed" } });

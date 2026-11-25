@@ -498,7 +498,7 @@ async function applyChecked(config: GovernConfig, action: Hold, typed: readonly 
       await leaveToOperator(config, action, typed, reason, verdict);
       return;
     }
-    if (result.outcome === "folder_may_have_changed" || applied.timedOut) {
+    if (result.outcome === "folder_may_have_changed" || applied.timedOut || (expect && !result.outcome && !applied.spawnError)) {
       notice(config, action.repo, "finished", [UNCHECKED_UPDATE, reason]);
       process.stderr.write(`saw could not finish bringing in this update: ${reason}. The folder is scanned now.\n`);
       process.exit(1);
