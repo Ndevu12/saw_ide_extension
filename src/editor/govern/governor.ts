@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { homedir } from "node:os";
 import * as nodePath from "node:path";
 
@@ -9,6 +9,7 @@ import { configOutsideFolders } from "../../core/controls";
 import { governFeatures, offersGovernRestore, offersGovernVerdict, openAdmission, readGoverned, readNotice, readRestore, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig, type GovernFeatures, type Governed, type GovernedReading, type GovernNotice } from "../../core/govern/contract";
 import { quietGit, type Tool } from "../../core/govern/command";
 import { answerFileName, ASK_EDITOR_MS, askFileName, commandText, readUpdateAsk, type Decision, type UpdateAsk } from "../../core/govern/decision";
+import { EMPTY_HOOKS, keepHooksFolderEmpty, noHooksPath } from "../../core/govern/emptyHooks";
 import { heldFileName, LET_IN_UPDATE, readHeldRecord } from "../../core/govern/held";
 import { folderKey, governStatusDir, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
 import { diskFiles, findRealProgram, isRealProgram, isStandin } from "../../core/govern/realProgram";
@@ -195,7 +196,9 @@ export class Governor implements vscode.Disposable {
       return;
     }
     this.starting = true;
-    void this.enable(ready.binary, governFeatures(ready.capabilities)).finally(() => {
+    void this.enable(ready.binary, governFeatures(ready.capabilities)).catch((error: unknown) => {
+      this.log.error(`saw could not set up its git stand-in, so the previous setup stays: ${String(error)}`);
+    }).finally(() => {
       this.starting = false;
       if (this.pending) {
         this.pending = false;
@@ -385,8 +388,7 @@ export class Governor implements vscode.Disposable {
    * every open folder. Otherwise an empty directory, so the folder's hooks and hooksPath do not run.
    */
   private async quietHooks(realGit: string): Promise<string> {
-    const empty = nodePath.join(this.root, "empty-hooks");
-    mkdirSync(empty, { recursive: true });
+    const empty = this.noHooks();
     const run = await runProgram(realGit, quietGit(["config", "--global", "--get", "core.hooksPath"], empty), {
       timeoutMs: 10_000,
       maxOutputBytes: 8 * 1024,
@@ -396,6 +398,39 @@ export class Governor implements vscode.Disposable {
       return empty;
     }
     return configOutsideFolders(value, this.folders()) || empty;
+  }
+
+  /**
+   * A hooks path that holds no hook: /dev/null, or on Windows a folder this window keeps empty.
+   * A folder that cannot be emptied is replaced by a new one; with none at all, the setup stops.
+   */
+  private noHooks(): string {
+    const dir = nodePath.join(this.root, EMPTY_HOOKS);
+    const fixed = noHooksPath();
+    if (fixed) {
+      // A terminal that still has an earlier version's setup uses this folder until the next one, so it is emptied too.
+      try {
+        this.emptyHooksFolder(dir);
+      } catch (error) {
+        this.log.error(`saw could not empty its earlier hooks folder ${dir}: ${String(error)}`);
+      }
+      return fixed;
+    }
+    try {
+      this.emptyHooksFolder(dir);
+      return dir;
+    } catch (error) {
+      const fresh = mkdtempSync(nodePath.join(this.root, `${EMPTY_HOOKS}-`));
+      this.log.error(`saw could not empty ${dir} (${String(error)}), so git uses ${fresh} instead.`);
+      return fresh;
+    }
+  }
+
+  private emptyHooksFolder(dir: string): void {
+    const setAside = keepHooksFolderEmpty(dir);
+    if (setAside) {
+      this.log.warn(`saw's empty hooks folder held something git would have run for every governed command. It was moved to ${setAside}.`);
+    }
   }
 
   /** `saw govern install` wrote this directory. Absent when that step has not been run. */
