@@ -7,7 +7,7 @@ import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
 
 import { enclosingFolder, ghBringsFiles, gitBringsFiles, parseGit, quietGit, repoConfigText, silencedRepoConfig } from "../../src/core/govern/command";
-import { governFeatures, mayRelease, offersGovernRestore, offersGovernVerdict, openAdmission, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, UNCHECKED_UPDATE, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
+import { applyArgs, governFeatures, mayRelease, offersGovernRestore, offersGovernVerdict, openAdmission, prepareArgs, readApply, readGoverned, readNotice, readPrepare, readRestore, readVerdict, restoreArgs, sameCheck, shouldRestore, UNCHECKED_UPDATE, unheldAfter, verdictArgs, type GovernConfig } from "../../src/core/govern/contract";
 import { activationEnv, folderKey, governStatusDir, plan, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../src/core/govern/plan";
 import { report, target } from "./helpers";
 
@@ -538,13 +538,22 @@ describe("saw govern's report", () => {
     expect(readApply(JSON.stringify({ schema_version: 1, applied: true }))).toEqual({ applied: true, reason: undefined });
     expect(readApply(JSON.stringify({ schema_version: 1, applied: false, reason: "left unchanged" })).applied).toBe(false);
     expect(readApply("").applied).toBe(false);
+    expect(readApply(JSON.stringify({ schema_version: 1, applied: false, outcome: "not_brought_in", reason: "x" }))).toEqual({ applied: false, reason: "x", outcome: "not_brought_in" });
+    expect(readApply(JSON.stringify({ schema_version: 1, applied: false, outcome: "made_up", reason: "x" })).outcome).toBeUndefined();
+    expect(applyArgs("/r", "/h", "ab12cd34")).toEqual(["govern", "apply", "--json", "--repo", "/r", "--into", "/h", "--expect", "ab12cd34"]);
+    expect(applyArgs("/r", "/h")).not.toContain("--expect");
+    const scan = JSON.parse(report([target()])) as unknown;
+    expect(readPrepare(JSON.stringify({ schema_version: 1, state_id: "ab12cd34ef", scan }), 0).stateId).toBe("ab12cd34ef");
+    expect(readPrepare(JSON.stringify({ schema_version: 1, state_id: "../x", scan }), 0).stateId).toBeUndefined();
   });
 });
 
 describe("govern features", () => {
   it("reads what this saw's govern offers from its capabilities", () => {
     const saw0173 = new Set(["govern.json", "govern.progress.jsonl", "govern.decision", "govern.held.decision", "govern.deadline", "govern.verdict", "govern.restore"]);
-    expect(governFeatures({ features: saw0173, schemas: {} })).toEqual({ progress: true, decides: true, deadline: true });
-    expect(governFeatures({ features: new Set(["govern.json"]), schemas: {} })).toEqual({ progress: false, decides: false, deadline: false });
+    expect(governFeatures({ features: saw0173, schemas: {} })).toEqual({ progress: true, decides: true, deadline: true, exactApply: false });
+    expect(governFeatures({ features: new Set(["govern.json"]), schemas: {} })).toEqual({ progress: false, decides: false, deadline: false, exactApply: false });
+    expect(governFeatures({ features: new Set([...saw0173, "govern.apply.outcome", "govern.apply.expect"]), schemas: {} }).exactApply).toBe(true);
+    expect(governFeatures({ features: new Set([...saw0173, "govern.apply.outcome"]), schemas: {} }).exactApply).toBe(false);
   });
 });

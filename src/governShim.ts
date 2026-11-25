@@ -6,7 +6,7 @@ import { createInterface } from "node:readline";
 
 import { withDeadline } from "./core/deadline";
 import { applyArgs, prepareArgs, readApply, readPrepare, UNCHECKED_CLONE, UNCHECKED_UPDATE, type GovernConfig, type GovernPhase } from "./core/govern/contract";
-import { answerFileName, ASK_EDITOR_MS, askFileName, DECISION_ENV, decisionFromEnv, heldTerminalAnswer, heldTerminalQuestion, readAnswer, terminalAnswer, terminalQuestion, type Decision, type UpdateAsk } from "./core/govern/decision";
+import { answerFileName, ASK_EDITOR_MS, askFileName, DECISION_ENV, decisionFromEnv, heldTerminalAnswer, heldTerminalQuestion, readAnswer, terminalAnswer, terminalQuestion, undecidedReason, type Decision, type UpdateAsk } from "./core/govern/decision";
 import { findingLines, foundSomething, heldFileName, heldNextSteps, LET_IN_UPDATE, readHeldRecord, sawNextSteps } from "./core/govern/held";
 import { activationEnv, folderKey, plan, type Hold } from "./core/govern/plan";
 import { checkRealProgram, diskFiles, pathWithoutStandins } from "./core/govern/realProgram";
@@ -281,20 +281,37 @@ function terminalAnswers(): boolean {
 }
 
 /** The operator's decision about an update saw could not check. With no one to ask, the folder is left as it is. */
-async function decide(config: GovernConfig, action: Hold, typed: readonly string[], reason: string): Promise<Decision> {
+async function decide(config: GovernConfig, action: Hold, typed: readonly string[], reason: string, releasedButNotApplied?: FolderVerdict): Promise<Decision> {
   const ahead = decisionFromEnv(process.env);
   if (ahead) {
     return ahead;
   }
   if (terminalAnswers()) {
-    return askTerminal(terminalQuestion(action.tool, typed, reason), terminalAnswer);
+    return askTerminal(terminalQuestion(action.tool, typed, reason, releasedButNotApplied), terminalAnswer);
   }
+  const why = undecidedReason(reason, releasedButNotApplied);
   if (config.askDir) {
-    const ask = { id: randomUUID(), repo: action.repo, tool: action.tool, args: [...typed], reason, at: Date.now() };
-    return askEditor(config.askDir, ask, `saw cannot check this update: ${reason}.`, "The editor asks whether to run it as typed.");
+    const ask = { id: randomUUID(), repo: action.repo, tool: action.tool, args: [...typed], reason, at: Date.now(), ...(releasedButNotApplied ? { releasedButNotApplied } : {}) };
+    return askEditor(config.askDir, ask, why, "The editor asks whether to run it as typed.");
   }
-  process.stderr.write(`saw cannot check this update: ${reason}.\n`);
+  process.stderr.write(`${why}\n`);
   return "leave-unchanged";
+}
+
+async function leaveToOperator(config: GovernConfig, action: Hold, typed: readonly string[], reason: string, releasedButNotApplied?: FolderVerdict): Promise<void> {
+  const decision = await decide(config, action, typed, reason, releasedButNotApplied);
+  if (decision === "run-as-typed") {
+    process.stderr.write("saw: running it as typed. The folder is scanned straight after.\n");
+    runUnchecked(config, action, typed, reason);
+    return;
+  }
+  notice(config, action.repo, "finished", []);
+  process.stderr.write(`saw left the folder unchanged; ${action.tool} did not run. To run it as typed, answer yes, or set ${DECISION_ENV}=run-as-typed.\n`);
+  process.exit(1);
+}
+
+function runUnchecked(config: GovernConfig, action: Hold, typed: readonly string[], reason: string): void {
+  runRealOrExit(config, action.tool, typed, () => notice(config, action.repo, "finished", [UNCHECKED_UPDATE, reason]));
 }
 
 /**
@@ -407,7 +424,7 @@ async function holdWithSaw(config: GovernConfig, action: Hold, typed: readonly s
   const reading = readPrepare(prepared.stdout, prepared.exitCode);
   const checked = !prepared.timedOut && !prepared.spawnError;
   if (checked && reading.release) {
-    await applyChecked(config, action, reading.verdict, reading.reasons);
+    await applyChecked(config, action, typed, reading.verdict, reading.reasons, reading.stateId);
     return;
   }
   if (checked && reading.scanned && foundSomething(reading.verdict)) {
@@ -419,23 +436,14 @@ async function holdWithSaw(config: GovernConfig, action: Hold, typed: readonly s
     : prepared.timedOut
       ? "the check did not finish in time"
       : reading.reasons[0] ?? reading.verdict;
-  const runUnchecked = () => runRealOrExit(config, action.tool, typed, () => notice(config, action.repo, "finished", [UNCHECKED_UPDATE, reason]));
   if (checked && reading.unchecked && !config.decides) {
     // An older saw cannot check most updates and offers no decision, so holding would only stop the operator.
     process.stderr.write(`saw could not check this update first (${reason}), so it ran unchecked. saw scans the folder now.\n`);
-    runUnchecked();
+    runUnchecked(config, action, typed, reason);
     return;
   }
   // saw judged nothing, so the operator decides: holding for good would stop them working on their own project.
-  const decision = await decide(config, action, typed, reason);
-  if (decision === "run-as-typed") {
-    process.stderr.write("saw: running it as typed. The folder is scanned straight after.\n");
-    runUnchecked();
-    return;
-  }
-  notice(config, action.repo, "finished", []);
-  process.stderr.write(`saw left the folder unchanged; ${action.tool} did not run. To run it as typed, answer yes, or set ${DECISION_ENV}=run-as-typed.\n`);
-  process.exit(1);
+  await leaveToOperator(config, action, typed, reason);
 }
 
 /** saw found something in the update. Keep what it found, say what to do, and let the operator bring it in anyway. */
@@ -476,15 +484,27 @@ async function holdFound(config: GovernConfig, action: Hold, typed: readonly str
   runRealOrExit(config, action.tool, typed, () => notice(config, action.repo, "finished", [LET_IN_UPDATE, `${verdict}: ${reasons[0] ?? "held"}`]));
 }
 
-async function applyChecked(config: GovernConfig, action: Hold, verdict: FolderVerdict, reasons: string[]): Promise<void> {
+async function applyChecked(config: GovernConfig, action: Hold, typed: readonly string[], verdict: FolderVerdict, reasons: string[], stateId: string | undefined): Promise<void> {
+  const marker = path.join(config.markerDir, folderKey(action.repo));
   mkdirSync(config.markerDir, { recursive: true });
-  writeFileSync(path.join(config.markerDir, folderKey(action.repo)), String(Date.now()));
-  const applied = await runProgram(config.saw, applyArgs(action.repo, action.holding), { timeoutMs: config.timeoutMs });
+  writeFileSync(marker, String(Date.now()));
+  const expect = config.exactApply ? stateId : undefined;
+  const applied = await runProgram(config.saw, applyArgs(action.repo, action.holding, expect), { timeoutMs: config.timeoutMs });
   const result = readApply(applied.stdout);
   if (!result.applied || applied.timedOut || applied.spawnError) {
-    const reason = result.reason ?? (applied.timedOut ? "the update did not finish in time" : "saw did not update the folder");
-    notice(config, action.repo, "held", [reason], verdict);
-    process.stderr.write(`saw checked this update (${verdict}) but did not change the folder. ${reason}\n`);
+    rmSync(marker, { force: true });
+    const reason = applied.timedOut ? "the update did not finish in time" : result.reason ?? "saw did not update the folder";
+    if (expect && result.outcome === "not_brought_in" && !applied.timedOut) {
+      await leaveToOperator(config, action, typed, reason, verdict);
+      return;
+    }
+    if (result.outcome === "folder_may_have_changed" || applied.timedOut || (expect && !result.outcome && !applied.spawnError)) {
+      notice(config, action.repo, "finished", [UNCHECKED_UPDATE, reason]);
+      process.stderr.write(`saw could not finish bringing in this update: ${reason}. The folder is scanned now.\n`);
+      process.exit(1);
+    }
+    notice(config, action.repo, "finished", []);
+    process.stderr.write(`saw did not change the folder: ${reason}.\n`);
     process.exit(1);
   }
   notice(config, action.repo, "applied", reasons, verdict);

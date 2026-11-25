@@ -8,7 +8,7 @@ import { FEATURES, supports } from "../../core/capabilities";
 import { configOutsideFolders } from "../../core/controls";
 import { governFeatures, offersGovernRestore, offersGovernVerdict, openAdmission, readGoverned, readNotice, readRestore, restoreArgs, sameCheck, shouldRestore, unheldAfter, verdictArgs, type GovernConfig, type GovernFeatures, type Governed, type GovernedReading, type GovernNotice } from "../../core/govern/contract";
 import { quietGit, type Tool } from "../../core/govern/command";
-import { answerFileName, ASK_EDITOR_MS, askFileName, commandText, readUpdateAsk, type Decision, type UpdateAsk } from "../../core/govern/decision";
+import { answerFileName, ASK_EDITOR_MS, askFileName, commandText, readUpdateAsk, runAsTypedNote, undecidedReason, type Decision, type UpdateAsk } from "../../core/govern/decision";
 import { EMPTY_HOOKS, keepHooksFolderEmpty, noHooksPath } from "../../core/govern/emptyHooks";
 import { heldFileName, LET_IN_UPDATE, readHeldRecord } from "../../core/govern/held";
 import { folderKey, governStatusDir, posixWrapper, standinBeside, systemGovernBin, windowsWrapper } from "../../core/govern/plan";
@@ -255,6 +255,7 @@ export class Governor implements vscode.Disposable {
       standinDirs: this.standinDirs(),
       askDir: this.askDir,
       ...(features.decides ? { decides: true } : {}),
+      ...(features.exactApply ? { exactApply: true } : {}),
     };
     this.writeConfig(config);
     this.coverTerminals(systemBin);
@@ -635,15 +636,18 @@ export class Governor implements vscode.Disposable {
       rmSync(answer, { force: true });
       return;
     }
-    const what = ask.held ? `saw held \`${commandText(ask.tool, ask.args)}\` (${ask.held})` : `saw could not check \`${commandText(ask.tool, ask.args)}\``;
+    const command = `\`${commandText(ask.tool, ask.args)}\``;
+    const what = ask.held
+      ? `saw held ${command} (${ask.held})`
+      : ask.releasedButNotApplied ? `saw checked ${command} (${ask.releasedButNotApplied}) but could not bring it in` : `saw could not check ${command}`;
     this.log.info(`${name}: ${what}; ${decision === "run-as-typed" ? (ask.held ? "let in" : "run as typed") : "left unchanged"}.`);
   }
 
   private async askRun(ask: UpdateAsk, name: string): Promise<Decision> {
     const run = "Run As Typed";
     const picked = await vscode.window.showWarningMessage(
-      `saw can't check this update to ${name}: ${ask.reason}.`,
-      { modal: true, detail: `Run \`${commandText(ask.tool, ask.args)}\` as typed? saw scans the folder straight after. Otherwise the folder stays as it is.` },
+      undecidedReason(ask.reason, ask.releasedButNotApplied, name),
+      { modal: true, detail: `Run \`${commandText(ask.tool, ask.args)}\` as typed? ${runAsTypedNote(ask.releasedButNotApplied)} Otherwise the folder stays as it is.` },
       run,
       "Leave Unchanged",
     );
