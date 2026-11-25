@@ -81,7 +81,7 @@ describe("git aliases", () => {
       kind: "hold",
       tool: "git",
       repo: p("/work/app"),
-      holding: expect.stringContaining("/tmp/holding/") as string,
+      holding: expect.stringContaining(path.join("/tmp", "holding") + path.sep) as string,
       args: ["-c", "alias.up=pull", "pull"],
     });
   });
