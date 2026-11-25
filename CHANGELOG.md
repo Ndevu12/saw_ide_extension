@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- saw updates are checked the way saw now signs its releases: its signed tag and its build provenance ([#99](https://github.com/Ndevu12/saw_ide_extension/issues/99)).
 - A clean update saw cannot bring into the folder is no longer a dead end: you can run the command as typed, and the folder is scanned straight after ([#87](https://github.com/Ndevu12/saw_ide_extension/issues/87)).
 - The extension installs saw 0.17.4, which checks a pull, fetch or checkout in the editor's terminal and brings it in when it is clean.
 - Tools run in the editor's terminal can no longer add git hooks that run in every open folder ([#88](https://github.com/Ndevu12/saw_ide_extension/issues/88)).

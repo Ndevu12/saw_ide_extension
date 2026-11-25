@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import * as path from "node:path";
 
 import * as vscode from "vscode";
+import { verify } from "sigstore";
 
 import { downloadRelease } from "../../core/install/download";
 import { chooseUpdate, LATEST_RELEASE_URL, readRelease, UPDATE_WAIT_MS, wheelFor, type SawRelease } from "../../core/install/release";
@@ -155,7 +156,11 @@ export class Updater implements vscode.Disposable {
   }
 
   private async install(release: SawRelease, asked: boolean): Promise<Installed> {
-    const downloaded = await downloadRelease(release, { fetch: (url) => this.fetch(url), signers: this.signers(), platform: process.platform, arch: process.arch });
+    const tufCachePath = path.join(this.installer.updateRoot, "sigstore");
+    const verifyBundle = async (bundle: unknown, identity: { certificateIssuer: string; certificateIdentityURI: string }) => {
+      await verify(bundle as Parameters<typeof verify>[0], { ...identity, tufCachePath });
+    };
+    const downloaded = await downloadRelease(release, { fetch: (url) => this.fetch(url), signers: this.signers(), verifyBundle, platform: process.platform, arch: process.arch });
     if (downloaded.kind === "failed") {
       return downloaded;
     }
@@ -242,7 +247,7 @@ export class Updater implements vscode.Disposable {
 
   private async fetch(url: string): Promise<Uint8Array | undefined> {
     try {
-      const accept = url === LATEST_RELEASE_URL ? "application/vnd.github+json" : "application/octet-stream";
+      const accept = url.startsWith("https://api.github.com/") ? "application/vnd.github+json" : "application/octet-stream";
       const response = await fetch(url, { signal: AbortSignal.timeout(FETCH_MS), headers: { Accept: accept } });
       return response.ok ? new Uint8Array(await response.arrayBuffer()) : undefined;
     } catch (error) {

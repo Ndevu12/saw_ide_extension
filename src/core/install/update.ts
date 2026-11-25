@@ -31,7 +31,7 @@ export interface UpdateDeps {
   /** Where this version goes; removed again when anything fails. */
   dir: string;
   version: string;
-  /** The wheel, already checked against the signed SHA256SUMS. */
+  /** The wheel, already checked against its attested hash. */
   wheel: string;
   dependencies: Dependencies;
   writeFile: (file: string, text: string) => void;

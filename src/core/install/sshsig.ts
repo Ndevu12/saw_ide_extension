@@ -41,7 +41,7 @@ function isTrusted(publicKey: Buffer, signers: readonly string[]): boolean {
 }
 
 /** True when `signature` is a valid `file` signature over `message` by one of `signers` (`ssh-ed25519 AAAA…` lines). */
-export function verifySshSignature(message: Uint8Array, signature: string, signers: readonly string[]): boolean {
+export function verifySshSignature(message: Uint8Array, signature: string, signers: readonly string[], expectedNamespace = "file"): boolean {
   try {
     const armored = /-----BEGIN SSH SIGNATURE-----([\s\S]+?)-----END SSH SIGNATURE-----/.exec(signature)?.[1];
     if (!armored) {
@@ -57,7 +57,7 @@ export function verifySshSignature(message: Uint8Array, signature: string, signe
     const hashName = blob.bytes().toString();
     const signed = new Reader(blob.bytes());
     const keyReader = new Reader(publicKey);
-    if (!isTrusted(publicKey, signers) || namespace.toString() !== "file" || keyReader.bytes().toString() !== "ssh-ed25519" || signed.bytes().toString() !== "ssh-ed25519") {
+    if (!isTrusted(publicKey, signers) || namespace.toString() !== expectedNamespace || keyReader.bytes().toString() !== "ssh-ed25519" || signed.bytes().toString() !== "ssh-ed25519") {
       return false;
     }
     if (hashName !== "sha512" && hashName !== "sha256") {

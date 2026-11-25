@@ -76,18 +76,6 @@ export function chooseUpdate(release: SawRelease, context: UpdateContext): Updat
   return context.now >= dueAt ? { kind: "due", why: "waited" } : { kind: "waiting", dueAt };
 }
 
-/** `SHA256SUMS`: file name to hash. */
-export function readSums(text: string): Map<string, string> {
-  const sums = new Map<string, string>();
-  for (const line of text.split(/\r?\n/)) {
-    const match = /^([0-9a-f]{64}) [ *]([\w.+-]+)$/.exec(line.trim());
-    if (match?.[1] && match[2]) {
-      sums.set(match[2], match[1]);
-    }
-  }
-  return sums;
-}
-
 export function sha256(data: Uint8Array | string): string {
   return createHash("sha256").update(data).digest("hex");
 }
