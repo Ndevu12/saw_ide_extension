@@ -197,7 +197,7 @@ export class Governor implements vscode.Disposable {
     }
     this.starting = true;
     void this.enable(ready.binary, governFeatures(ready.capabilities)).catch((error: unknown) => {
-      this.log.error(`saw could not set up its git stand-in, so the previous setup stays: ${String(error)}`);
+      this.log.error(`saw could not start checking git commands: ${String(error)}`);
     }).finally(() => {
       this.starting = false;
       if (this.pending) {
@@ -400,19 +400,14 @@ export class Governor implements vscode.Disposable {
     return configOutsideFolders(value, this.folders()) || empty;
   }
 
-  /**
-   * A hooks path that holds no hook: /dev/null, or on Windows a folder this window keeps empty.
-   * A folder that cannot be emptied is replaced by a new one; with none at all, the setup stops.
-   */
   private noHooks(): string {
     const dir = nodePath.join(this.root, EMPTY_HOOKS);
     const fixed = noHooksPath();
     if (fixed) {
-      // A terminal that still has an earlier version's setup uses this folder until the next one, so it is emptied too.
       try {
         this.emptyHooksFolder(dir);
       } catch (error) {
-        this.log.error(`saw could not empty its earlier hooks folder ${dir}: ${String(error)}`);
+        this.log.error(`saw could not empty ${dir}: ${String(error)}`);
       }
       return fixed;
     }
@@ -429,7 +424,7 @@ export class Governor implements vscode.Disposable {
   private emptyHooksFolder(dir: string): void {
     const setAside = keepHooksFolderEmpty(dir);
     if (setAside) {
-      this.log.warn(`saw's empty hooks folder held something git would have run for every governed command. It was moved to ${setAside}.`);
+      this.log.warn(`saw moved files it found in its hooks folder to ${setAside}.`);
     }
   }
 

@@ -8,7 +8,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { keepHooksFolderEmpty, NO_HOOKS, noHooksPath } from "../../src/core/govern/emptyHooks";
 
 const posix = process.platform !== "win32";
-// Permissions do not stop root.
 const asRoot = posix && process.getuid?.() === 0;
 
 describe("a hooks path that holds no hook", () => {
