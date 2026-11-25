@@ -15,6 +15,8 @@ export const FEATURES = {
   /** An update saw cannot check is left to the operator. */
   governDecision: "govern.decision",
   governDeadline: "govern.deadline",
+  governApplyOutcome: "govern.apply.outcome",
+  governApplyExpect: "govern.apply.expect",
   /** `saw fix --ask=jsonl` (stayAwakeBot#1847). Absent until saw can ask without a terminal. */
   fixAsk: "fix.ask.json",
   /** `saw govern`, which checks an incoming update before the open folder changes. */

@@ -7,7 +7,7 @@ import { build } from "esbuild";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { UNCHECKED_UPDATE, readNotice } from "../../src/core/govern/contract";
-import { decisionFromEnv, heldTerminalAnswer, heldTerminalQuestion, readAnswer, readUpdateAsk, terminalAnswer } from "../../src/core/govern/decision";
+import { decisionFromEnv, heldTerminalAnswer, heldTerminalQuestion, readAnswer, readUpdateAsk, terminalAnswer, terminalQuestion, undecidedReason } from "../../src/core/govern/decision";
 import { heldFileName, heldNextSteps, LET_IN_UPDATE, readHeldRecord, sawNextSteps } from "../../src/core/govern/held";
 import { folderKey, plan } from "../../src/core/govern/plan";
 import { finding, onWindows, report, target } from "./helpers";
@@ -166,6 +166,94 @@ describe.skipIf(onWindows)("the stand-in, when saw leaves the decision to the op
     expect(stderr).toContain("letting it in as you asked");
   }, 30_000);
 
+  /** A saw that checked the update and released it clean, but could not bring it into the folder. */
+  function releasedButNotApplied(name: string, extra: Record<string, unknown> = {}, outcome = "not_brought_in") {
+    const made = setup(name, { exactApply: true, ...extra });
+    const dir = path.dirname(made.configPath);
+    writeFileSync(path.join(dir, "prepared.json"), JSON.stringify({ schema_version: 1, state_id: "ab12cd34ef", scan: JSON.parse(report([target()])) }));
+    writeFileSync(path.join(dir, "saw"), [
+      "#!/bin/sh",
+      `if [ "$2" = apply ]; then echo "$@" > '${path.join(dir, "apply-args")}'; echo '{"schema_version":1,"applied":false,"outcome":"${outcome}","reason":"the new objects could not be packed"}'; exit 2; fi`,
+      `cat '${path.join(dir, "prepared.json")}'`,
+      "",
+    ].join("\n"), { mode: 0o755 });
+    const marker = path.join(dir, "mark", folderKey(made.repo));
+    const applyArgs = () => readFileSync(path.join(dir, "apply-args"), "utf8").trim();
+    return { ...made, marker, applyArgs };
+  }
+
+  it("asks the operator about a clean update saw could not bring in, instead of reporting it held", async () => {
+    for (const answer of ["leave-unchanged", "run-as-typed"] as const) {
+      const askDir = path.join(root, `released-${answer}`, "asks");
+      const { repo, ran, configPath, notice, marker } = releasedButNotApplied(`released-${answer}`, { askDir });
+      const child = spawn(process.execPath, [shim, "--config", configPath, "--tool", "git", "--", "pull"], { cwd: repo, env: { ...process.env, SAW_GOVERN_DECISION: "" } });
+      let stderr = "";
+      child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
+      const exited = new Promise<number | null>((resolve) => child.on("exit", resolve));
+      let asked: string | undefined;
+      for (let i = 0; i < 100 && !asked; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        asked = existsSync(askDir) ? readdirSync(askDir).find((file) => file.endsWith(".ask.json")) : undefined;
+      }
+      if (!asked) {
+        throw new Error(`the stand-in did not ask the editor (${answer})`);
+      }
+      const ask = readUpdateAsk(readFileSync(path.join(askDir, asked), "utf8"));
+      expect(ask, answer).toMatchObject({ repo, args: ["pull"], reason: "the new objects could not be packed", releasedButNotApplied: "clean" });
+      expect(ask?.held, answer).toBeUndefined();
+      expect(existsSync(marker), answer).toBe(false);
+      expect(stderr, answer).toContain("saw checked this update (clean) but could not bring it into the folder: the new objects could not be packed.");
+      writeFileSync(path.join(askDir, `${ask?.id ?? ""}.answer`), answer);
+      expect(await exited, answer).toBe(answer === "run-as-typed" ? 0 : 1);
+      expect(existsSync(ran), answer).toBe(answer === "run-as-typed");
+      expect(notice(), answer).toMatchObject(answer === "run-as-typed"
+        ? { phase: "finished", reasons: [UNCHECKED_UPDATE, "the new objects could not be packed"] }
+        : { phase: "finished", reasons: [] });
+    }
+  }, 40_000);
+
+  it("runs a clean update saw could not bring in when SAW_GOVERN_DECISION says so, and leaves it with no one to ask", () => {
+    const ahead = releasedButNotApplied("released-ahead");
+    const run = spawnSync(process.execPath, [shim, "--config", ahead.configPath, "--tool", "git", "--", "pull"], { cwd: ahead.repo, encoding: "utf8", timeout: 15_000, env: { ...process.env, SAW_GOVERN_DECISION: "run-as-typed" } });
+    expect(run.status).toBe(0);
+    expect(readFileSync(ahead.ran, "utf8").trim()).toBe("pull");
+    expect(ahead.applyArgs()).toContain("--expect ab12cd34ef");
+    const nobody = releasedButNotApplied("released-nobody");
+    const left = spawnSync(process.execPath, [shim, "--config", nobody.configPath, "--tool", "git", "--", "pull"], { cwd: nobody.repo, encoding: "utf8", timeout: 15_000, env: { ...process.env, SAW_GOVERN_DECISION: "" } });
+    expect(left.status).toBe(1);
+    expect(existsSync(nobody.ran)).toBe(false);
+    expect(left.stderr).toContain("but could not bring it into the folder: the new objects could not be packed.");
+    expect(left.stderr).toContain("left the folder unchanged");
+    expect(nobody.notice()).toMatchObject({ phase: "finished" });
+  }, 30_000);
+
+  it("never runs an update another check replaced, a held one, or one saw is busy with, whatever SAW_GOVERN_DECISION says", () => {
+    for (const outcome of ["state_changed", "held", "busy", "nothing_to_apply"]) {
+      const made = releasedButNotApplied(`released-${outcome}`, {}, outcome);
+      const run = spawnSync(process.execPath, [shim, "--config", made.configPath, "--tool", "git", "--", "pull"], { cwd: made.repo, encoding: "utf8", timeout: 15_000, env: { ...process.env, SAW_GOVERN_DECISION: "run-as-typed" } });
+      expect(run.status, outcome).toBe(1);
+      expect(existsSync(made.ran), outcome).toBe(false);
+      expect(run.stderr, outcome).toContain("saw did not change the folder: the new objects could not be packed.");
+      expect(made.notice(), outcome).toMatchObject({ phase: "finished", reasons: [] });
+    }
+  }, 60_000);
+
+  it("never asks about a failed apply when saw cannot name its outcome", () => {
+    const made = releasedButNotApplied("released-older-saw", { exactApply: false });
+    const run = spawnSync(process.execPath, [shim, "--config", made.configPath, "--tool", "git", "--", "pull"], { cwd: made.repo, encoding: "utf8", timeout: 15_000, env: { ...process.env, SAW_GOVERN_DECISION: "run-as-typed" } });
+    expect(run.status).toBe(1);
+    expect(existsSync(made.ran)).toBe(false);
+    expect(made.applyArgs()).not.toContain("--expect");
+  }, 30_000);
+
+  it("scans the folder when an earlier apply did not finish", () => {
+    const made = releasedButNotApplied("released-interrupted", {}, "folder_may_have_changed");
+    const run = spawnSync(process.execPath, [shim, "--config", made.configPath, "--tool", "git", "--", "pull"], { cwd: made.repo, encoding: "utf8", timeout: 15_000, env: { ...process.env, SAW_GOVERN_DECISION: "run-as-typed" } });
+    expect(run.status).toBe(1);
+    expect(existsSync(made.ran)).toBe(false);
+    expect(made.notice()).toMatchObject({ phase: "finished", reasons: [UNCHECKED_UPDATE, "the new objects could not be packed"] });
+  }, 30_000);
+
   it("never lets a held update in because of SAW_GOVERN_DECISION", () => {
     const { repo, ran, configPath, notice } = holding("held-ahead", "infected");
     const run = spawnSync(process.execPath, [shim, "--config", configPath, "--tool", "git", "--", "pull"], { cwd: repo, encoding: "utf8", timeout: 15_000, env: { ...process.env, SAW_GOVERN_DECISION: "run-as-typed" } });
@@ -201,5 +289,23 @@ describe("letting in an update saw held", () => {
     expect(readHeldRecord(JSON.stringify({ ...record, scan: { nope: 1 } }))).toBeUndefined();
     expect(readUpdateAsk(JSON.stringify({ id: "a", repo: "/r", tool: "git", args: [], reason: "x", at: 1, held: "infected" }))?.held).toBe("infected");
     expect(readUpdateAsk(JSON.stringify({ id: "a", repo: "/r", tool: "git", args: [], reason: "x", at: 1, held: "clean" }))?.held).toBeUndefined();
+  });
+
+  it("reads a released update only with a verdict that releases one, and never alongside a held one", () => {
+    const ask = { id: "a", repo: "/r", tool: "git", args: [], reason: "x", at: 1 };
+    expect(readUpdateAsk(JSON.stringify({ ...ask, releasedButNotApplied: "clean" }))?.releasedButNotApplied).toBe("clean");
+    expect(readUpdateAsk(JSON.stringify({ ...ask, releasedButNotApplied: "residue" }))?.releasedButNotApplied).toBe("residue");
+    expect(readUpdateAsk(JSON.stringify({ ...ask, releasedButNotApplied: "suspicious" }))?.releasedButNotApplied).toBeUndefined();
+    expect(readUpdateAsk(JSON.stringify({ ...ask, held: "suspicious", releasedButNotApplied: "clean" }))).toMatchObject({ held: "suspicious" });
+    expect(readUpdateAsk(JSON.stringify({ ...ask, held: "suspicious", releasedButNotApplied: "clean" }))?.releasedButNotApplied).toBeUndefined();
+  });
+
+  it("says what saw did, and that running it as typed can bring newer commits", () => {
+    expect(terminalQuestion("git", ["pull"], "no remote")).toBe("saw cannot check this update: no remote.\nRun `git pull` as typed anyway? The folder is scanned straight after. [y/N] ");
+    const question = terminalQuestion("git", ["pull"], "the new objects could not be packed", "clean");
+    expect(question).toContain("saw checked this update (clean) but could not bring it into the folder: the new objects could not be packed.");
+    expect(question).toContain("newer than the ones saw checked");
+    expect(undecidedReason("x", "clean", "app")).toBe("saw checked this update to app (clean) but could not bring it into the folder: x.");
+    expect(undecidedReason("x", undefined, "app")).toBe("saw cannot check this update to app: x.");
   });
 });

@@ -33,6 +33,7 @@ export interface GovernConfig {
   standinDirs?: string[];
   /** This saw checks updates from a tracking checkout, and leaves one it cannot check to the operator (`govern.decision`). */
   decides?: boolean;
+  exactApply?: boolean;
   /** Where the stand-in asks this editor whether to run an update saw could not check, when no terminal can answer. */
   askDir?: string;
 }
@@ -53,6 +54,7 @@ export interface GovernFeatures {
   progress: boolean;
   decides: boolean;
   deadline: boolean;
+  exactApply: boolean;
 }
 
 export function governFeatures(capabilities: Capabilities): GovernFeatures {
@@ -60,6 +62,7 @@ export function governFeatures(capabilities: Capabilities): GovernFeatures {
     progress: supports(capabilities, FEATURES.governProgress),
     decides: supports(capabilities, FEATURES.governDecision),
     deadline: supports(capabilities, FEATURES.governDeadline),
+    exactApply: supports(capabilities, FEATURES.governApplyOutcome) && supports(capabilities, FEATURES.governApplyExpect),
   };
 }
 
@@ -67,8 +70,8 @@ export function prepareArgs(repo: string, into: string, tool: Tool, args: readon
   return ["govern", "prepare", "--json", "--repo", repo, "--into", into, "--tool", tool, ...(progress ? ["--progress=jsonl"] : []), ...extra, "--", ...args];
 }
 
-export function applyArgs(repo: string, into: string): string[] {
-  return ["govern", "apply", "--json", "--repo", repo, "--into", into];
+export function applyArgs(repo: string, into: string, expect?: string): string[] {
+  return ["govern", "apply", "--json", "--repo", repo, "--into", into, ...(expect ? ["--expect", expect] : [])];
 }
 
 export function verdictArgs(repo: string): string[] {
@@ -100,6 +103,7 @@ export interface PrepareReading {
   decision: boolean;
   /** The verdict is saw's scan of the update, not a check that could not run or be read. */
   scanned: boolean;
+  stateId?: string;
 }
 
 type Json = Record<string, unknown>;
@@ -139,7 +143,8 @@ export function readPrepare(stdout: string, exitCode: number | null): PrepareRea
   try {
     const payload = parsePayload(JSON.stringify(scan));
     const judged = judge(payload, exitCode);
-    return { verdict: judged.verdict, reasons: judged.reasons, release: mayRelease(judged.verdict), unchecked: false, decision: false, scanned: true };
+    const stateId = typeof parsed["state_id"] === "string" && /^[0-9a-f]{8,64}$/.test(parsed["state_id"]) ? { stateId: parsed["state_id"] } : {};
+    return { verdict: judged.verdict, reasons: judged.reasons, release: mayRelease(judged.verdict), unchecked: false, decision: false, scanned: true, ...stateId };
   } catch (error) {
     const why = error instanceof ContractError ? error.message : "saw's scan of the update could not be read";
     return { verdict: "incomplete", reasons: [why], release: false, unchecked: false, decision: false, scanned: false };
@@ -154,9 +159,13 @@ function offersRunAsTyped(decision: unknown): boolean {
   return Array.isArray(choices) && choices.includes("run-as-typed");
 }
 
+export const APPLY_OUTCOMES = ["brought_in", "not_brought_in", "held", "state_changed", "nothing_to_apply", "busy", "folder_may_have_changed"] as const;
+export type ApplyOutcome = (typeof APPLY_OUTCOMES)[number];
+
 export interface ApplyReading {
   applied: boolean;
   reason: string | undefined;
+  outcome?: ApplyOutcome;
 }
 
 export type Governed = "let-in" | "not-let-in" | "could-not-answer";
@@ -342,9 +351,12 @@ export function readApply(stdout: string): ApplyReading {
   if (typeof parsed === "string") {
     return { applied: false, reason: parsed };
   }
+  const named = parsed["outcome"];
+  const outcome = APPLY_OUTCOMES.find((known) => known === named);
+  const withOutcome = outcome ? { outcome } : {};
   if (parsed["applied"] === true) {
-    return { applied: true, reason: undefined };
+    return { applied: true, reason: undefined, ...withOutcome };
   }
-  return { applied: false, reason: typeof parsed["reason"] === "string" ? parsed["reason"] : "saw did not update the folder" };
+  return { applied: false, reason: typeof parsed["reason"] === "string" ? parsed["reason"] : "saw did not update the folder", ...withOutcome };
 }
 
