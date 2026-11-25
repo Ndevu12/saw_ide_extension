@@ -1,3 +1,5 @@
+import { X509Certificate as NodeX509Certificate } from "node:crypto";
+
 import { X509Certificate } from "@sigstore/core";
 
 import { verifySshSignature } from "./sshsig";
@@ -30,9 +32,12 @@ const OID = {
 } as const;
 
 const SLSA_PROVENANCE = "https://slsa.dev/provenance/v1";
+const BUNDLE_V03 = "application/vnd.dev.sigstore.bundle.v0.3+json";
 const IN_TOTO = "application/vnd.in-toto+json";
 
 export type VerifyBundle = (bundle: unknown, identity: { certificateIssuer: string; certificateIdentityURI: string }) => Promise<void>;
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export type Checked<T> = ({ kind: "verified" } & T) | { kind: "failed"; detail: string };
 
@@ -104,23 +109,34 @@ function certificateField(certificate: X509Certificate, oid: string): string | u
 }
 
 export async function verifyProvenance(bytes: Uint8Array, version: string, commit: string, verifyBundle: VerifyBundle, signer: ReleaseSigner = SAW_RELEASE_SIGNER): Promise<Checked<{ subjects: ReadonlyMap<string, string> }>> {
-  let bundle: { verificationMaterial?: { certificate?: { rawBytes?: unknown } }; dsseEnvelope?: { payload?: unknown; payloadType?: unknown } };
+  let bundle: { mediaType?: unknown; verificationMaterial?: Record<string, unknown> & { certificate?: { rawBytes?: unknown } }; dsseEnvelope?: { payload?: unknown; payloadType?: unknown }; messageSignature?: unknown };
   try {
     bundle = JSON.parse(Buffer.from(bytes).toString("utf8")) as typeof bundle;
   } catch {
     return { kind: "failed", detail: "its build provenance cannot be read." };
   }
+  const material = bundle.verificationMaterial;
+  if (bundle.mediaType !== BUNDLE_V03 || !material || !material.certificate || "x509CertificateChain" in material || "publicKey" in material || !bundle.dsseEnvelope || "messageSignature" in bundle) {
+    return { kind: "failed", detail: "its build provenance is not a Sigstore v0.3 bundle with one certificate." };
+  }
+  const identity = `${signer.workflow}@refs/tags/v${version}`;
   try {
-    await verifyBundle(bundle, { certificateIssuer: signer.issuer, certificateIdentityURI: `${signer.workflow}@refs/tags/v${version}` });
+    await verifyBundle(bundle, { certificateIssuer: signer.issuer, certificateIdentityURI: `^${escapeRegExp(identity)}$` });
   } catch (error) {
     return { kind: "failed", detail: `its build provenance is not signed by saw's release workflow for v${version} (${String(error)}).` };
   }
-  const raw = bundle.verificationMaterial?.certificate?.rawBytes;
+  const raw = material.certificate.rawBytes;
   let certificate: X509Certificate;
+  let subjectAltName: string | undefined;
   try {
-    certificate = X509Certificate.parse(Buffer.from(typeof raw === "string" ? raw : "", "base64"));
+    const der = Buffer.from(typeof raw === "string" ? raw : "", "base64");
+    certificate = X509Certificate.parse(der);
+    subjectAltName = new NodeX509Certificate(der).subjectAltName;
   } catch {
     return { kind: "failed", detail: "its build provenance has no readable certificate." };
+  }
+  if (subjectAltName !== `URI:${identity}`) {
+    return { kind: "failed", detail: `its build provenance names ${subjectAltName ?? "(none)"}, not ${identity}.` };
   }
   const expected: Record<keyof typeof OID, string> = { issuer: signer.issuer, runner: signer.runner, commit, repositoryId: signer.repositoryId, ownerId: signer.ownerId, trigger: signer.trigger };
   for (const name of Object.keys(OID) as (keyof typeof OID)[]) {
@@ -143,8 +159,8 @@ export async function verifyProvenance(bytes: Uint8Array, version: string, commi
     return { kind: "failed", detail: "its build provenance is not SLSA provenance." };
   }
   const subjects = new Map<string, string>();
-  for (const entry of statement.subject as { name?: unknown; digest?: { sha256?: unknown } }[]) {
-    if (typeof entry.name === "string" && typeof entry.digest?.sha256 === "string" && /^[0-9a-f]{64}$/.test(entry.digest.sha256)) {
+  for (const entry of statement.subject as ({ name?: unknown; digest?: { sha256?: unknown } } | null)[]) {
+    if (entry && typeof entry.name === "string" && typeof entry.digest?.sha256 === "string" && /^[0-9a-f]{64}$/.test(entry.digest.sha256)) {
       subjects.set(entry.name, entry.digest.sha256);
     }
   }

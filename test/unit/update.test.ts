@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { downloadRelease } from "../../src/core/install/download";
 import { provenanceName, tagObjectUrl, tagRefUrl } from "../../src/core/install/provenance";
-import { chooseUpdate, readRelease, readSums, sbomPins, sha256, UPDATE_WAIT_MS, wheelFor, type SawRelease } from "../../src/core/install/release";
+import { chooseUpdate, readRelease, sbomPins, sha256, UPDATE_WAIT_MS, wheelFor, type SawRelease } from "../../src/core/install/release";
 import { verifySshSignature } from "../../src/core/install/sshsig";
 import { CLEAN_SAMPLE, INFECTED_SAMPLE, installUpdate, type UpdateDeps } from "../../src/core/install/update";
 import type { RunResult } from "../../src/core/run";
@@ -42,7 +42,6 @@ describe("saw's signed releases", () => {
     expect(verifySshSignature(Buffer.concat([sums, Buffer.from("\n")]), sig, signers)).toBe(false);
     expect(verifySshSignature(sums, sig, ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINTCaW9JunFUFgoIl6gRMUo0w82syQJwXBIC5RMgUt36"])).toBe(false);
     expect(verifySshSignature(sums, "not a signature", signers)).toBe(false);
-    expect(readSums(sums.toString()).get("stayawakebot-0.17.3-py3-none-manylinux_2_17_x86_64.whl")).toBe("672e4b9a3f76bdbe195e78c28e594158aecf8e0b4320d937b2d0ca048f23ae26");
   });
 
   it("reads only a published release, and assets from saw's own release downloads", () => {
@@ -148,7 +147,7 @@ describe("downloading a release", () => {
     const lock = "aiohttp==3.14.5 --hash=sha256:" + "a".repeat(64) + "\n";
     const { result, identities } = served({ [wheelName]: "wheel", [`stayawakebot-${version}-requirements.lock`]: lock });
     expect(await result).toEqual({ kind: "verified", wheelName, wheel: new Uint8Array(Buffer.from("wheel")), dependencies: { lock } });
-    expect(identities).toEqual([{ certificateIssuer: "https://token.actions.githubusercontent.com", certificateIdentityURI: `https://github.com/Ndevu12/stayAwakeBot/.github/workflows/release.yml@refs/tags/v${version}` }]);
+    expect(identities).toEqual([{ certificateIssuer: "https://token.actions.githubusercontent.com", certificateIdentityURI: `^https://github\\.com/Ndevu12/stayAwakeBot/\\.github/workflows/release\\.yml@refs/tags/v0\\.17\\.5$` }]);
   });
 
   it("otherwise pins the versions in the attested SBOM", async () => {

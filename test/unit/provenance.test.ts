@@ -62,9 +62,21 @@ describe("saw's build provenance", () => {
     expect(checked.kind === "failed" && checked.detail).toContain("not signed by saw's release workflow");
   });
 
+  it("is refused when the bundle is relabelled to carry a certificate Sigstore does not check", async () => {
+    const real = JSON.parse(bundle.toString()) as { verificationMaterial: { certificate: { rawBytes: string } } };
+    const relabelled = {
+      ...real,
+      mediaType: "application/vnd.dev.sigstore.bundle+json;version=0.2",
+      verificationMaterial: { ...real.verificationMaterial, x509CertificateChain: { certificates: [real.verificationMaterial.certificate] } },
+    };
+    const checked = await verifyProvenance(Buffer.from(JSON.stringify(relabelled)), version, commit, accepted);
+    expect(checked.kind === "failed" && checked.detail).toContain("v0.3 bundle with one certificate");
+  });
+
   it("verifies against Sigstore's public trust root, and only for saw's release workflow", async () => {
     expect((await verifyProvenance(bundle, version, commit, sigstore)).kind).toBe("verified");
     const otherWorkflow = { ...SAW_RELEASE_SIGNER, workflow: "https://github.com/Ndevu12/stayAwakeBot/.github/workflows/other.yml" };
     expect((await verifyProvenance(bundle, version, commit, sigstore, otherWorkflow)).kind).toBe("failed");
+    expect((await verifyProvenance(bundle, "0.17", commit, sigstore)).kind).toBe("failed");
   }, 60_000);
 });
