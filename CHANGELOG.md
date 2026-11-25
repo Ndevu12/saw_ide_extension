@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- The extension installs saw 0.17.4, which checks a pull, fetch or checkout in the editor's terminal and brings it in when it is clean.
 - Tools run in the editor's terminal can no longer add git hooks that run in every open folder ([#88](https://github.com/Ndevu12/saw_ide_extension/issues/88)).
 
 ## [0.8.0] - 2026-11-18
