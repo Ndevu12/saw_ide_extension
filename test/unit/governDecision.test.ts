@@ -189,7 +189,7 @@ describe.skipIf(onWindows)("the stand-in, when saw leaves the decision to the op
       const child = spawn(process.execPath, [shim, "--config", configPath, "--tool", "git", "--", "pull"], { cwd: repo, env: { ...process.env, SAW_GOVERN_DECISION: "" } });
       let stderr = "";
       child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
-      const exited = new Promise<number | null>((resolve) => child.on("exit", resolve));
+      const exited = new Promise<number | null>((resolve) => child.on("close", resolve));
       let asked: string | undefined;
       for (let i = 0; i < 100 && !asked; i++) {
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -202,9 +202,9 @@ describe.skipIf(onWindows)("the stand-in, when saw leaves the decision to the op
       expect(ask, answer).toMatchObject({ repo, args: ["pull"], reason: "the new objects could not be packed", releasedButNotApplied: "clean" });
       expect(ask?.held, answer).toBeUndefined();
       expect(existsSync(marker), answer).toBe(false);
-      expect(stderr, answer).toContain("saw checked this update (clean) but could not bring it into the folder: the new objects could not be packed.");
       writeFileSync(path.join(askDir, `${ask?.id ?? ""}.answer`), answer);
       expect(await exited, answer).toBe(answer === "run-as-typed" ? 0 : 1);
+      expect(stderr, answer).toContain("saw checked this update (clean) but could not bring it into the folder: the new objects could not be packed.");
       expect(existsSync(ran), answer).toBe(answer === "run-as-typed");
       expect(notice(), answer).toMatchObject(answer === "run-as-typed"
         ? { phase: "finished", reasons: [UNCHECKED_UPDATE, "the new objects could not be packed"] }
