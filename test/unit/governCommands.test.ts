@@ -1,3 +1,5 @@
+import * as path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { aliasWords, expandAliases, mayBeAlias } from "../../src/core/govern/alias";
@@ -6,6 +8,7 @@ import { parseGit } from "../../src/core/govern/command";
 import type { GovernConfig } from "../../src/core/govern/contract";
 import { plan } from "../../src/core/govern/plan";
 
+const p = (posixPath: string) => path.resolve(posixPath);
 const config: GovernConfig = {
   enabled: true,
   saw: "/usr/local/bin/saw",
@@ -21,31 +24,31 @@ const config: GovernConfig = {
 
 describe("the folder a git command acts on", () => {
   it("is the work tree when one is given, and otherwise the working directory, as git uses it", () => {
-    expect(parseGit(["--git-dir=/work/app/.git", "--work-tree=/work/app", "pull"], "/elsewhere")?.directory).toBe("/work/app");
-    expect(parseGit(["--work-tree", "../app", "pull"], "/work/other")?.directory).toBe("/work/app");
+    expect(parseGit(["--git-dir=/work/app/.git", "--work-tree=/work/app", "pull"], "/elsewhere")?.directory).toBe(p("/work/app"));
+    expect(parseGit(["--work-tree", "../app", "pull"], "/work/other")?.directory).toBe(p("/work/app"));
     // A git directory alone leaves the working directory as the work tree.
-    expect(parseGit(["--git-dir", "/elsewhere/.git", "pull"], "/work/app")).toMatchObject({ directory: "/work/app", gitDirFolder: "/elsewhere" });
-    expect(parseGit(["-C", "/work", "--git-dir=app/.git", "pull"], "/elsewhere")).toMatchObject({ directory: "/work", gitDirFolder: "/work/app" });
+    expect(parseGit(["--git-dir", "/elsewhere/.git", "pull"], "/work/app")).toMatchObject({ directory: p("/work/app"), gitDirFolder: p("/elsewhere") });
+    expect(parseGit(["-C", "/work", "--git-dir=app/.git", "pull"], "/elsewhere")).toMatchObject({ directory: p("/work"), gitDirFolder: p("/work/app") });
   });
 
   it("holds a pull into an open folder through another repository's git directory", () => {
-    expect(plan(config, "git", ["--git-dir=/elsewhere/.git", "pull"], "/work/app")).toMatchObject({ kind: "hold", repo: "/work/app" });
-    expect(plan(config, "git", ["pull"], "/work/app", { env: { GIT_DIR: "/elsewhere/.git" } })).toMatchObject({ kind: "hold", repo: "/work/app" });
+    expect(plan(config, "git", ["--git-dir=/elsewhere/.git", "pull"], "/work/app")).toMatchObject({ kind: "hold", repo: p("/work/app") });
+    expect(plan(config, "git", ["pull"], "/work/app", { env: { GIT_DIR: "/elsewhere/.git" } })).toMatchObject({ kind: "hold", repo: p("/work/app") });
   });
 
   it("holds a fetch that may move an open folder's branch from outside its git directory", () => {
-    expect(plan(config, "git", ["--git-dir=/work/app/.git", "fetch", "-u", "origin", "main:main"], "/elsewhere")).toMatchObject({ kind: "hold", repo: "/work/app" });
+    expect(plan(config, "git", ["--git-dir=/work/app/.git", "fetch", "-u", "origin", "main:main"], "/elsewhere")).toMatchObject({ kind: "hold", repo: p("/work/app") });
   });
 
   it("follows GIT_WORK_TREE and GIT_DIR, and a flag wins over them", () => {
-    expect(parseGit(["pull"], "/elsewhere", { GIT_DIR: "/work/app/.git" })).toMatchObject({ directory: "/elsewhere", gitDirFolder: "/work/app" });
-    expect(parseGit(["pull"], "/elsewhere", { GIT_WORK_TREE: "/work/app", GIT_DIR: "/x/.git" })?.directory).toBe("/work/app");
-    expect(parseGit(["--work-tree=/work/other", "pull"], "/elsewhere", { GIT_WORK_TREE: "/work/app" })?.directory).toBe("/work/other");
+    expect(parseGit(["pull"], "/elsewhere", { GIT_DIR: "/work/app/.git" })).toMatchObject({ directory: p("/elsewhere"), gitDirFolder: p("/work/app") });
+    expect(parseGit(["pull"], "/elsewhere", { GIT_WORK_TREE: "/work/app", GIT_DIR: "/x/.git" })?.directory).toBe(p("/work/app"));
+    expect(parseGit(["--work-tree=/work/other", "pull"], "/elsewhere", { GIT_WORK_TREE: "/work/app" })?.directory).toBe(p("/work/other"));
   });
 
   it("holds a pull aimed at an open folder from outside it", () => {
-    expect(plan(config, "git", ["--git-dir=/work/app/.git", "--work-tree=/work/app", "pull"], "/elsewhere")).toMatchObject({ kind: "hold", repo: "/work/app" });
-    expect(plan(config, "git", ["pull"], "/elsewhere", { env: { GIT_DIR: "/work/app/.git" } })).toMatchObject({ kind: "hold", repo: "/work/app" });
+    expect(plan(config, "git", ["--git-dir=/work/app/.git", "--work-tree=/work/app", "pull"], "/elsewhere")).toMatchObject({ kind: "hold", repo: p("/work/app") });
+    expect(plan(config, "git", ["pull"], "/elsewhere", { env: { GIT_DIR: "/work/app/.git" } })).toMatchObject({ kind: "hold", repo: p("/work/app") });
   });
 });
 
@@ -77,14 +80,14 @@ describe("git aliases", () => {
     expect(plan(config, "git", ["-c", "alias.up=pull", "up"], "/work/app")).toEqual({
       kind: "hold",
       tool: "git",
-      repo: "/work/app",
-      holding: expect.stringContaining("/tmp/holding/") as string,
+      repo: p("/work/app"),
+      holding: expect.stringContaining(path.join("/tmp", "holding") + path.sep) as string,
       args: ["-c", "alias.up=pull", "pull"],
     });
   });
 
   it("hold an alias for pull from the repository's configuration, keeping its own arguments", () => {
-    const aliasOf = (name: string, directory: string) => (name === "up" && directory === "/work/app" ? "pull --rebase" : undefined);
+    const aliasOf = (name: string, directory: string) => (name === "up" && directory === p("/work/app") ? "pull --rebase" : undefined);
     expect(plan(config, "git", ["up", "origin"], "/work/app", { aliasOf })).toMatchObject({ kind: "hold", args: ["pull", "--rebase", "origin"] });
   });
 
@@ -113,17 +116,17 @@ describe("a clone into an open folder", () => {
   };
 
   it("lands in the folder named after the URL, or the one given", () => {
-    expect(clone(["https://example.com/o/lib.git"], "/work/app")).toBe("/work/app/lib");
-    expect(clone(["git@example.com:o/lib.git", "vendor/lib"], "/work/app")).toBe("/work/app/vendor/lib");
-    expect(clone(["/srv/repos/lib/.git"], "/work/app")).toBe("/work/app/lib");
-    expect(clone(["--depth", "1", "-b", "main", "https://example.com/o/lib", "out"], "/work/app")).toBe("/work/app/out");
-    expect(clone(["--revision", "main", "https://example.com/o/lib.git", "/work/app/y"], "/tmp")).toBe("/work/app/y");
-    expect(clone(["-qb", "main", "https://example.com/o/lib.git"], "/work/app")).toBe("/work/app/lib");
+    expect(clone(["https://example.com/o/lib.git"], "/work/app")).toBe(p("/work/app/lib"));
+    expect(clone(["git@example.com:o/lib.git", "vendor/lib"], "/work/app")).toBe(p("/work/app/vendor/lib"));
+    expect(clone(["/srv/repos/lib/.git"], "/work/app")).toBe(p("/work/app/lib"));
+    expect(clone(["--depth", "1", "-b", "main", "https://example.com/o/lib", "out"], "/work/app")).toBe(p("/work/app/out"));
+    expect(clone(["--revision", "main", "https://example.com/o/lib.git", "/work/app/y"], "/tmp")).toBe(p("/work/app/y"));
+    expect(clone(["-qb", "main", "https://example.com/o/lib.git"], "/work/app")).toBe(p("/work/app/lib"));
   });
 
   it("runs, and has the folder scanned once it has, since saw cannot hold a clone", () => {
-    expect(plan(config, "git", ["clone", "https://example.com/o/lib.git"], "/work/app")).toEqual({ kind: "passthrough", program: "/usr/bin/git", scanAfter: "/work/app", landsAt: "/work/app/lib" });
-    expect(plan(config, "git", ["clone", "https://example.com/o/lib.git", "/work/app/vendor/lib"], "/tmp")).toMatchObject({ scanAfter: "/work/app" });
+    expect(plan(config, "git", ["clone", "https://example.com/o/lib.git"], "/work/app")).toEqual({ kind: "passthrough", program: "/usr/bin/git", scanAfter: p("/work/app"), landsAt: p("/work/app/lib") });
+    expect(plan(config, "git", ["clone", "https://example.com/o/lib.git", "/work/app/vendor/lib"], "/tmp")).toMatchObject({ scanAfter: p("/work/app") });
     expect(plan(config, "git", ["clone", "https://example.com/o/lib.git"], "/tmp")).toEqual({ kind: "passthrough", program: "/usr/bin/git" });
   });
 });

@@ -194,7 +194,7 @@ describe("installing a release beside the running saw", () => {
   it("installs by hash when the release signs a lock", async () => {
     const { made, ran } = deps({ dependencies: { lock: "stayawakebot==0.17.3 --hash=sha256:" + "a".repeat(64) + "\n" } });
     await installUpdate(made);
-    expect(ran).toContainEqual([...pip, "--require-hashes", "--no-deps", "--find-links", "/tmp/dl", "-r", "/store/saw/versions/0.17.3/saw.lock.txt"]);
+    expect(ran).toContainEqual([...pip, "--require-hashes", "--no-deps", "--find-links", "/tmp/dl", "-r", path.join("/store/saw/versions/0.17.3", "saw.lock.txt")]);
   });
 
   it("removes what it installed when the new saw is not that release, or misses a check", async () => {
