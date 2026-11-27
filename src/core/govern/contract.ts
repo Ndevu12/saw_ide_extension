@@ -159,7 +159,7 @@ function offersRunAsTyped(decision: unknown): boolean {
   return Array.isArray(choices) && choices.includes("run-as-typed");
 }
 
-export const APPLY_OUTCOMES = ["brought_in", "not_brought_in", "held", "state_changed", "nothing_to_apply", "busy", "folder_may_have_changed"] as const;
+export const APPLY_OUTCOMES = ["brought_in", "not_brought_in", "held", "state_changed", "nothing_to_apply", "busy", "holding_unusable", "folder_may_have_changed"] as const;
 export type ApplyOutcome = (typeof APPLY_OUTCOMES)[number];
 
 export interface ApplyReading {

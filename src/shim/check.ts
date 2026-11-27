@@ -2,6 +2,7 @@ import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 
 import { withDeadline } from "../core/deadline";
+import { nextStep, type ApplyStep } from "../core/govern/applyOutcome";
 import { applyArgs, prepareArgs, readApply, readPrepare, UNCHECKED_UPDATE, type GovernConfig } from "../core/govern/contract";
 import { DECISION_ENV } from "../core/govern/decision";
 import { findingLines, foundSomething, heldFileName, heldNextSteps, LET_IN_UPDATE, readHeldRecord, sawNextSteps } from "../core/govern/held";
@@ -10,8 +11,11 @@ import { runProgram } from "../core/run";
 import { describeProgress, ProgressLines } from "../core/scan/progress";
 import type { FolderVerdict } from "../core/scan/verdict";
 import { decide, decideHeld } from "./ask";
+import { freshHolding } from "./holding";
 import { notice } from "./notice";
 import { runRealOrExit } from "./run";
+
+const BUSY_WAIT_MS = 2000;
 
 export async function leaveToOperator(config: GovernConfig, action: Hold, typed: readonly string[], reason: string, releasedButNotApplied?: FolderVerdict): Promise<void> {
   const decision = await decide(config, action, typed, reason, releasedButNotApplied);
@@ -31,6 +35,21 @@ export function runUnchecked(config: GovernConfig, action: Hold, typed: readonly
 
 /** Ask saw to check the update into a holding folder, and let it into the open folder only when saw says so. `typed` is the command as the operator typed it. */
 export async function holdWithSaw(config: GovernConfig, action: Hold, typed: readonly string[]): Promise<void> {
+  for (let checksAgain = 0; ; checksAgain++) {
+    const holding = freshHolding();
+    if (typeof holding !== "string") {
+      await leaveToOperator(config, action, typed, holding.refused);
+      return;
+    }
+    const again = await checkIn(config, { ...action, holding }, typed, checksAgain);
+    if (!again) {
+      return;
+    }
+    process.stderr.write(`saw: ${again}. Checking the update again.\n`);
+  }
+}
+
+async function checkIn(config: GovernConfig, action: Hold, typed: readonly string[], checksAgain: number): Promise<string | undefined> {
   const steps = new ProgressLines((progress) => {
     if (progress) {
       notice(config, action.repo, "checking", [], undefined, describeProgress(progress));
@@ -61,12 +80,11 @@ export async function holdWithSaw(config: GovernConfig, action: Hold, typed: rea
   const reading = readPrepare(prepared.stdout, prepared.exitCode);
   const checked = !prepared.timedOut && !prepared.spawnError;
   if (checked && reading.release) {
-    await applyChecked(config, action, typed, reading.verdict, reading.reasons, reading.stateId);
-    return;
+    return applyChecked(config, action, typed, reading.verdict, reading.reasons, reading.stateId, checksAgain);
   }
   if (checked && reading.scanned && foundSomething(reading.verdict)) {
     await holdFound(config, action, typed, reading.verdict, reading.reasons, prepared.stdout);
-    return;
+    return undefined;
   }
   const reason = prepared.spawnError
     ? `saw could not be started: ${prepared.spawnError}`
@@ -77,10 +95,11 @@ export async function holdWithSaw(config: GovernConfig, action: Hold, typed: rea
     // An older saw cannot check most updates and offers no decision, so holding would only stop the operator.
     process.stderr.write(`saw could not check this update first (${reason}), so it ran unchecked. saw scans the folder now.\n`);
     runUnchecked(config, action, typed, reason);
-    return;
+    return undefined;
   }
   // saw judged nothing, so the operator decides: holding for good would stop them working on their own project.
   await leaveToOperator(config, action, typed, reason);
+  return undefined;
 }
 
 /** saw found something in the update. Keep what it found, say what to do, and let the operator bring it in anyway. */
@@ -121,29 +140,40 @@ export async function holdFound(config: GovernConfig, action: Hold, typed: reado
   runRealOrExit(config, action.tool, typed, () => notice(config, action.repo, "finished", [LET_IN_UPDATE, `${verdict}: ${reasons[0] ?? "held"}`]));
 }
 
-export async function applyChecked(config: GovernConfig, action: Hold, typed: readonly string[], verdict: FolderVerdict, reasons: string[], stateId: string | undefined): Promise<void> {
+export async function applyChecked(config: GovernConfig, action: Hold, typed: readonly string[], verdict: FolderVerdict, reasons: string[], stateId: string | undefined, checksAgain: number): Promise<string | undefined> {
   const marker = path.join(config.markerDir, folderKey(action.repo));
   mkdirSync(config.markerDir, { recursive: true });
   writeFileSync(marker, String(Date.now()));
   const expect = config.exactApply ? stateId : undefined;
-  const applied = await runProgram(config.saw, applyArgs(action.repo, action.holding, expect), { timeoutMs: config.timeoutMs });
-  const result = readApply(applied.stdout);
-  if (!result.applied || applied.timedOut || applied.spawnError) {
-    rmSync(marker, { force: true });
-    const reason = applied.timedOut ? "the update did not finish in time" : result.reason ?? "saw did not update the folder";
-    if (expect && result.outcome === "not_brought_in" && !applied.timedOut) {
-      await leaveToOperator(config, action, typed, reason, verdict);
-      return;
+  let step: ApplyStep;
+  for (let busyRetries = 0; ; busyRetries++) {
+    const applied = await runProgram(config.saw, applyArgs(action.repo, action.holding, expect), { timeoutMs: config.timeoutMs });
+    step = nextStep({ reading: readApply(applied.stdout), timedOut: applied.timedOut, spawnError: applied.spawnError, exact: Boolean(expect), busyRetries, checksAgain });
+    if (step.kind !== "retry") {
+      break;
     }
-    if (result.outcome === "folder_may_have_changed" || applied.timedOut || (expect && !result.outcome && !applied.spawnError)) {
-      notice(config, action.repo, "finished", [UNCHECKED_UPDATE, reason]);
-      process.stderr.write(`saw could not finish bringing in this update: ${reason}. The folder is scanned now.\n`);
-      process.exit(1);
-    }
-    notice(config, action.repo, "finished", []);
-    process.stderr.write(`saw did not change the folder: ${reason}.\n`);
-    process.exit(1);
+    await new Promise((resolve) => setTimeout(resolve, BUSY_WAIT_MS));
   }
-  notice(config, action.repo, "applied", reasons, verdict);
-  process.exit(0);
+  if (step.kind === "brought-in") {
+    notice(config, action.repo, "applied", reasons, verdict);
+    process.exit(0);
+  }
+  rmSync(marker, { force: true });
+  switch (step.kind) {
+    case "decide":
+      await leaveToOperator(config, action, typed, step.reason, verdict);
+      return undefined;
+    case "check-again":
+      return step.reason;
+    case "check-folder":
+      notice(config, action.repo, "finished", [UNCHECKED_UPDATE, step.reason]);
+      process.stderr.write(`saw could not finish bringing in this update: ${step.reason}. Check the folder before you do anything else; saw scans it now.\n`);
+      process.exit(1);
+      break;
+    default:
+      notice(config, action.repo, "finished", []);
+      process.stderr.write(`saw did not change the folder: ${step.reason}.\n`);
+      process.exit(1);
+  }
+  return undefined;
 }
