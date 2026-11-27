@@ -92,6 +92,10 @@ export function restoreArgs(repo: string): string[] {
   return ["govern", "restore", "--json", "--repo", repo];
 }
 
+export function letInArgs(repo: string): string[] {
+  return ["govern", "let-in", "--repo", repo];
+}
+
 export interface PrepareReading {
   verdict: FolderVerdict;
   reasons: string[];
@@ -171,10 +175,10 @@ export interface ApplyReading {
 export type Governed = "let-in" | "not-let-in" | "could-not-answer";
 
 /** Saw's machine code. `reason` is prose and is not matched. */
-export type GovernCode = "let-in" | "unknown-commit" | "tree-changed" | "could-not-answer";
+export type GovernCode = "let-in" | "let-in-by-you" | "unknown-commit" | "tree-changed" | "could-not-answer";
 
 const GOVERNED = new Set<Governed>(["let-in", "not-let-in", "could-not-answer"]);
-const CODES = new Set<GovernCode>(["let-in", "unknown-commit", "tree-changed", "could-not-answer"]);
+const CODES = new Set<GovernCode>(["let-in", "let-in-by-you", "unknown-commit", "tree-changed", "could-not-answer"]);
 
 export interface GovernedReading {
   answer: Governed;

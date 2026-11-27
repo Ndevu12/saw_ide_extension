@@ -361,7 +361,7 @@ export class Reports implements vscode.FileSystemProvider, vscode.Disposable {
         if (!folder) return "# Held update";
         const held = this.model.get(folder).held;
         const shown = held && !held.released ? held : undefined;
-        return heldReport({ folderName: folder.name, folderPath: folder.uri.fsPath, held: shown, details: shown?.details }, copy);
+        return heldReport({ folderName: folder.name, folderPath: folder.uri.fsPath, held: shown }, copy);
       }
       case "audit": {
         const audit = this.model.machine.audit;

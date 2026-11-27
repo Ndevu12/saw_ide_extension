@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import * as path from "node:path";
 
@@ -7,8 +7,10 @@ import { describe, expect, it } from "vitest";
 
 import { fixArgs, hookArgs, readFix, readHookStatus } from "../../src/core/fix/actions";
 import { NO_CAPABILITIES } from "../../src/core/capabilities";
-import { defaultIsExecutableFile, locate, probe } from "../../src/core/install/locate";
+import { findStandin } from "../../src/core/govern/places";
+import { defaultIsExecutableFile, locate, probe, realPath } from "../../src/core/install/locate";
 import { runProgram } from "../../src/core/run";
+import { atLeast } from "../../src/core/version";
 import { scanFolder } from "../../src/core/scan/scan";
 import { DISGUISED_TASK, tempDir } from "./helpers";
 
@@ -81,5 +83,17 @@ describe.skipIf(!binary && !required)("the installed saw", () => {
   it("answers hook status in a shape this extension reads", async () => {
     const run = await runProgram(binary, hookArgs("status", NO_CAPABILITIES), { timeoutMs: 30_000 });
     expect(readHookStatus(`${run.stdout}\n${run.stderr}`, run.exitCode).kind).not.toBe("unknown");
+  }, 60_000);
+
+  it.runIf(process.platform !== "win32")("carries its git and gh check where the editor looks for it, from 0.18.0", async (context) => {
+    const probed = await probe(binary);
+    if (probed.kind !== "ready" || !atLeast(probed.version, "0.18.0")) {
+      context.skip();
+    }
+    const files = { isExecutableFile: defaultIsExecutableFile, realpath: realPath, list: (dir: string) => existsSync(dir) ? readdirSync(dir) : [] };
+    const standin = findStandin(binary, files);
+    expect(standin).toBeDefined();
+    const status = await runProgram(standin ?? "", ["status"], { timeoutMs: 30_000 });
+    expect(status.exitCode).toBe(0);
   }, 60_000);
 });

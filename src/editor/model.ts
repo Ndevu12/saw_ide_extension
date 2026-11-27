@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 
 import type { AuditDetails, AuditVerdict, HookStatus } from "../core/fix/actions";
-import type { ScanPayload } from "../core/scan/contract";
 import type { ScanOutcome } from "../core/scan/scan";
 import { strongest, type FolderVerdict } from "../core/scan/verdict";
 import type { Engine } from "./install/engine";
@@ -13,14 +12,6 @@ export interface HeldUpdate {
   reasons: string[];
   released: boolean;
   at: number;
-  /** What the stand-in kept about the update: the command, what to do, and saw's scan of it. */
-  details?: HeldDetails;
-}
-
-export interface HeldDetails {
-  command: string;
-  nextSteps: string[];
-  scan: ScanPayload;
 }
 
 export type Settled = Exclude<ScanOutcome, { kind: "cancelled" }>;

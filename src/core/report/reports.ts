@@ -240,34 +240,21 @@ export interface HeldReportInput {
   folderPath: string;
   /** The update held now, or undefined when none is. */
   held: { verdict: FolderVerdict; reasons: string[]; at: number } | undefined;
-  /** What the stand-in kept about it, when it could. */
-  details: { command: string; nextSteps: string[]; scan: { generatedAt: string; results: TargetResult[] } } | undefined;
 }
 
 export function heldReport(input: HeldReportInput, copy: Copy): string {
   const out = [`# Held update: ${prose(input.folderName, 120)}`, ""];
-  const { held, details } = input;
+  const { held } = input;
   if (!held) {
     out.push("No update to this folder is held now.", "", `Folder: ${inline(input.folderPath, 400)}`);
     return out.join("\n");
   }
   out.push(`## ${VERDICT_TITLE[held.verdict]}`, "", `saw checked an update before it landed and held it. The folder was not changed. ${HELD_MEANING[held.verdict] ?? ""}`.trim(), "");
-  out.push(`- Folder: ${inline(input.folderPath, 400)}`, `- Held at ${when(held.at)}`);
-  if (details) {
-    out.push(`- Command: ${inline(details.command, 400)}`);
-  }
-  out.push("", "This scan is of the files the update would bring, not the folder's history.", "");
-  const steps = details?.nextSteps.length ? details.nextSteps : ["Read why below, and run the command again when you are ready."];
-  out.push("## What to do", "", ...steps.map((step) => `- ${prose(step, 600)}`), "",
-    "To bring it in anyway, run the command again and answer the question, or choose **Let In Anyway** when the editor asks. saw scans the folder straight after.", "");
+  out.push(`- Folder: ${inline(input.folderPath, 400)}`, `- Held at ${when(held.at)}`, "");
+  out.push("## What to do", "",
+    "- To review it and bring it in anyway, choose **Let In** on the notification. saw checks it again in a terminal, says what it found, and asks you. saw scans the folder straight after.", "");
   if (held.reasons.length) {
     out.push("## Why it was held", "", ...held.reasons.map((reason) => `- ${prose(reason, 600)}`), "");
-  }
-  if (details) {
-    const sections = resultSections(details.scan.results, copy);
-    out.push(...(sections.length ? sections : ["*saw listed no findings for the update.*", ""]));
-  } else {
-    out.push("*The findings were not kept. Run the command again to see them.*", "");
   }
   out.push(footer(copy, "saw's check of the update", { title: "what these results mean", url: DOCS.verdicts }));
   return out.join("\n");

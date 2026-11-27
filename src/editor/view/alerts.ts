@@ -89,12 +89,14 @@ export class Alerts {
     void vscode.window.showWarningMessage(`saw didn't check this version of ${name} before it arrived, and could not undo it. saw scanned the folder as it is now.`);
   }
 
-  held(folder: vscode.WorkspaceFolder, verdict: FolderVerdict): void {
+  held(folder: vscode.WorkspaceFolder, verdict: FolderVerdict, letIn: () => void): void {
     const message = `saw stopped an update to ${folder.name} (${VERDICT_LABEL[verdict]}). The folder was not changed. See what was found and what to do.`;
     const show = verdict === "infected" ? vscode.window.showErrorMessage : vscode.window.showWarningMessage;
-    void show(message, "See What Was Found").then((choice) => {
+    void show(message, "See What Was Found", "Let In").then((choice) => {
       if (choice === "See What Was Found") {
         void vscode.commands.executeCommand("saw.openReport", { kind: "held", state: { folder } });
+      } else if (choice === "Let In") {
+        letIn();
       }
     });
   }
