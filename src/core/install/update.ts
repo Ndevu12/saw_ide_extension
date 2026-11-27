@@ -23,7 +23,7 @@ export type UpdateResult =
   | { kind: "failed"; step: UpdateStep; detail: string };
 
 /** By hash when the release signs a lock, otherwise exact versions from its signed SBOM. */
-export type Dependencies = { lock: string } | { pins: string[] };
+export type Dependencies = { lock: string };
 
 export interface UpdateDeps {
   env: LocateEnv;
@@ -73,13 +73,9 @@ export async function installUpdate(deps: UpdateDeps): Promise<UpdateResult> {
     deps.removeDir(deps.dir);
     await run("create-venv", python.executable, ["-m", "venv", deps.dir]);
     const pip = [inVenv(deps.dir, "python", deps.env.platform), "-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--only-binary=:all:"] as const;
-    if ("lock" in deps.dependencies) {
-      const lockFile = path.join(deps.dir, "saw.lock.txt");
-      deps.writeFile(lockFile, deps.dependencies.lock);
-      await run("install", pip[0], [...pip.slice(1), "--require-hashes", "--no-deps", "--find-links", path.dirname(deps.wheel), "-r", lockFile]);
-    } else {
-      await run("install", pip[0], [...pip.slice(1), deps.wheel, ...deps.dependencies.pins]);
-    }
+    const lockFile = path.join(deps.dir, "saw.lock.txt");
+    deps.writeFile(lockFile, deps.dependencies.lock);
+    await run("install", pip[0], [...pip.slice(1), "--require-hashes", "--no-deps", "--find-links", path.dirname(deps.wheel), "-r", lockFile]);
     const binary = inVenv(deps.dir, "saw", deps.env.platform);
     const said = await run("check-version", binary, ["--version"]);
     const version = parseVersion(said.stdout);

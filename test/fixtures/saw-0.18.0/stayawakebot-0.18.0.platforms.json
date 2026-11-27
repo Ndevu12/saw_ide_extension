@@ -1,0 +1,50 @@
+{
+  "contract": 1,
+  "version": "0.18.0",
+  "security": false,
+  "requirements_lock": "stayawakebot-0.18.0.requirements.lock",
+  "sbom": "stayawakebot-0.18.0.sbom.cdx.json",
+  "wheels": [
+    {
+      "os": "macos",
+      "arch": "arm64",
+      "minimum": "11.0",
+      "requires_python": ">=3.11",
+      "file": "stayawakebot-0.18.0-py3-none-macosx_11_0_arm64.whl",
+      "sha256": "3f7d6e8d4e102e102860d73bbebaa6c943ce1b5fd602f1a17ce14e7907779ebf"
+    },
+    {
+      "os": "macos",
+      "arch": "x86_64",
+      "minimum": "11.0",
+      "requires_python": ">=3.11",
+      "file": "stayawakebot-0.18.0-py3-none-macosx_11_0_x86_64.whl",
+      "sha256": "bbb90dd59cc7f23cc0ae9041a71595670cf819d97b672c210431227fd4fc4af9"
+    },
+    {
+      "os": "linux",
+      "arch": "arm64",
+      "libc": "glibc",
+      "minimum": "2.28",
+      "requires_python": ">=3.11",
+      "file": "stayawakebot-0.18.0-py3-none-manylinux_2_28_aarch64.whl",
+      "sha256": "e910ecae42d380c5e39802eef4031f9a9d8c31dc6527519b1cd2a7c437889bfb"
+    },
+    {
+      "os": "linux",
+      "arch": "x86_64",
+      "libc": "glibc",
+      "minimum": "2.28",
+      "requires_python": ">=3.11",
+      "file": "stayawakebot-0.18.0-py3-none-manylinux_2_28_x86_64.whl",
+      "sha256": "1ca5330d21c0c13f826b9868b45f09bded07efd1166d4271063113b93843f010"
+    },
+    {
+      "os": "windows",
+      "arch": "x86_64",
+      "requires_python": ">=3.11",
+      "file": "stayawakebot-0.18.0-py3-none-win_amd64.whl",
+      "sha256": "7a335f6edfa4089056c41e0bffecb46a00295a8a2b5df0ff0cd52bb990206aa3"
+    }
+  ]
+}

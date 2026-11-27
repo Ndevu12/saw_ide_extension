@@ -5,8 +5,9 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { verify } from "sigstore";
 
-import { downloadRelease } from "../../core/install/download";
-import { chooseUpdate, LATEST_RELEASE_URL, readRelease, UPDATE_WAIT_MS, wheelFor, type SawRelease } from "../../core/install/release";
+import { downloadRelease, verifyRelease, type DownloadDeps } from "../../core/install/download";
+import { thisMachine } from "../../core/install/manifest";
+import { chooseUpdate, LATEST_RELEASE_URL, readRelease, UPDATE_WAIT_MS, type SawRelease } from "../../core/install/release";
 import { installUpdate, type UpdateStep } from "../../core/install/update";
 import { runProgram } from "../../core/run";
 import { scanFolder } from "../../core/scan/scan";
@@ -94,9 +95,7 @@ export class Updater implements vscode.Disposable {
         ? "saw is not running yet."
         : !engine.ours
           ? `saw at ${engine.binary} was not installed by this extension. Update it the way you installed it.`
-          : !wheelFor(process.platform, process.arch, engine.version)
-            ? `saw publishes no package for ${process.platform} ${process.arch}, so it is not updated here.`
-            : undefined;
+          : undefined;
     const current = engine?.kind === "ready" ? parseRelease(engine.version) : undefined;
     if (skip || !current) {
       this.tell(asked, skip ?? "saw's version could not be read.");
@@ -109,7 +108,16 @@ export class Updater implements vscode.Disposable {
       this.tell(asked, "Could not read saw's latest release. Trying again later.", "warn");
       return;
     }
-    const choice = chooseUpdate(release, { current, highest: this.state.highest, now: Date.now(), declined: asked ? [] : this.state.declined });
+    const context = { current, highest: this.state.highest, now: Date.now(), declined: asked ? [] : this.state.declined };
+    let choice = chooseUpdate(release, context);
+    if (choice.kind === "waiting" && Number.isFinite(choice.dueAt) && mode === "auto") {
+      const verified = await verifyRelease(release, this.downloadDeps());
+      if (verified.kind === "failed") {
+        this.log.warn(`saw ${release.version} could not be checked: ${verified.detail}`);
+      } else if (verified.manifest.security) {
+        choice = chooseUpdate(release, { ...context, security: true });
+      }
+    }
     if (choice.kind === "none") {
       this.tell(asked, `saw ${current.join(".")} is up to date.`);
     } else if (choice.kind === "due" && mode === "auto") {
@@ -156,11 +164,7 @@ export class Updater implements vscode.Disposable {
   }
 
   private async install(release: SawRelease, asked: boolean): Promise<Installed> {
-    const tufCachePath = path.join(this.installer.updateRoot, "sigstore");
-    const verifyBundle = async (bundle: unknown, identity: { certificateIssuer: string; certificateIdentityURI: string }) => {
-      await verify(bundle as Parameters<typeof verify>[0], { ...identity, tufCachePath });
-    };
-    const downloaded = await downloadRelease(release, { fetch: (url) => this.fetch(url), signers: this.signers(), verifyBundle, platform: process.platform, arch: process.arch });
+    const downloaded = await downloadRelease(release, this.downloadDeps());
     if (downloaded.kind === "failed") {
       return downloaded;
     }
@@ -215,6 +219,14 @@ export class Updater implements vscode.Disposable {
     this.log.info(`Went back to saw ${version}.`);
     await this.switched();
     void vscode.window.showInformationMessage(`saw ${version} runs again.${leaving ? ` saw ${leaving} won't be installed on its own again.` : ""}`);
+  }
+
+  private downloadDeps(): DownloadDeps {
+    const tufCachePath = path.join(this.installer.updateRoot, "sigstore");
+    const verifyBundle = async (bundle: unknown, identity: { certificateIssuer: string; certificateIdentityURI: string }) => {
+      await verify(bundle as Parameters<typeof verify>[0], { ...identity, tufCachePath });
+    };
+    return { fetch: (url) => this.fetch(url), signers: this.signers(), verifyBundle, machine: thisMachine() };
   }
 
   private signers(): string[] {
