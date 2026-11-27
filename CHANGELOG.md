@@ -2,22 +2,18 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-27
+
 ### Changed
 
 - The extension installs saw 0.19.0.
 - The editor's terminals and Git view now use saw's own check of incoming git and gh updates, and git in an open folder runs that folder's hooks and other programs only once you keep them with `saw govern trust` ([#106](https://github.com/Ndevu12/saw_ide_extension/issues/106)).
 - Windows terminals and the Git view are checked too.
 
-## [0.9.0] - 2026-11-27
-
 ### Fixed
 
-- With saw 0.18.0, each update check uses its own new folder, a check that saw is still busy with is retried, one that another check replaced is checked again, and one that may have changed the folder tells you to check it first ([#101](https://github.com/Ndevu12/saw_ide_extension/issues/101)).
 - saw updates install again, on Windows too: the extension takes the wheel for this machine and the dependency lock from saw's attested platforms manifest, and treats a release as a security release only when that manifest says so ([#99](https://github.com/Ndevu12/saw_ide_extension/issues/99)).
 - saw updates are checked the way saw now signs its releases: its signed tag and its build provenance ([#99](https://github.com/Ndevu12/saw_ide_extension/issues/99)).
-- A clean update saw cannot bring into the folder is no longer a dead end: you can run the command as typed, and the folder is scanned straight after ([#87](https://github.com/Ndevu12/saw_ide_extension/issues/87)).
-- The extension installs saw 0.18.0.
-- Tools run in the editor's terminal can no longer add git hooks that run in every open folder ([#88](https://github.com/Ndevu12/saw_ide_extension/issues/88)).
 
 ## [0.8.0] - 2026-11-18
 
