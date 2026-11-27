@@ -47,12 +47,27 @@ describe("Markdown from scanned data", () => {
 describe("the held update report", () => {
   const held = { verdict: "infected" as const, reasons: ["a task runs on open"], at: Date.UTC(2026, 10, 18) };
 
-  it("says the folder was not changed, why, and how to let it in", () => {
-    const text = heldReport({ folderName: "web", folderPath: "/work/web", held }, "shown");
+  it("says the folder was not changed, what saw found, what to do, and how to let it in", () => {
+    const details = {
+      command: "git pull",
+      findings: [{ severity: "critical", path: ".vscode/tasks.json", description: "a task runs a hidden script" }],
+      nextSteps: ["Do not bring this update in."],
+      letIn: true,
+    };
+    const text = heldReport({ folderName: "web", folderPath: "/work/web", held: { ...held, details } }, "shown");
     expect(text).toMatch(/^# Held update: web\n/);
     expect(text).toContain("The folder was not changed. Malicious code is in what it would bring.");
+    expect(text).toContain("- Command: `git pull`");
+    expect(text).toContain("- Do not bring this update in\\.");
     expect(text).toContain("**Let In**");
     expect(text).toContain("## Why it was held\n\n- a task runs on open");
+    expect(text).toContain("`.vscode/tasks.json`");
+  });
+
+  it("offers no Let In when saw cannot review the update again", () => {
+    const text = heldReport({ folderName: "web", folderPath: "/work/web", held }, "shown");
+    expect(text).not.toContain("**Let In**");
+    expect(text).toContain("## Why it was held");
   });
 
   it("says when nothing is held", () => {

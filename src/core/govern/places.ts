@@ -3,27 +3,10 @@ import * as path from "node:path";
 export interface ProgramFiles {
   isExecutableFile(file: string): boolean;
   realpath(file: string): string | undefined;
-  list(dir: string): string[];
 }
 
 export const STANDIN_TOOLS = ["git", "gh"] as const;
 export type StandinTool = (typeof STANDIN_TOOLS)[number];
-
-const STANDIN = "saw-git-standin";
-
-/** saw's git and gh stand-in for this saw, where saw itself looks: in its package, then beside saw. */
-export function findStandin(saw: string, files: ProgramFiles): string | undefined {
-  if (!saw) {
-    return undefined;
-  }
-  const program = files.realpath(saw) ?? saw;
-  const lib = path.join(path.dirname(path.dirname(program)), "lib");
-  const packaged = files.list(lib)
-    .filter((name) => /^python\d/.test(name))
-    .map((name) => path.join(lib, name, "site-packages", "stayawake", "bots", "mcp", "bin", STANDIN));
-  const beside = [path.join(path.dirname(program), STANDIN), path.join(path.dirname(saw), STANDIN)];
-  return [...packaged, ...beside].find((file) => files.isExecutableFile(file));
-}
 
 /** Whether `name` is on PATH as a program other than the stand-in. */
 export function realOnPath(name: StandinTool, pathVariable: string | undefined, standin: string, files: ProgramFiles): boolean {

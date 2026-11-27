@@ -162,6 +162,20 @@ export function unheldAfter(answer: Governed | undefined, terminalsCovered: bool
 
 export type GovernPhase = "checking" | "held" | "applied" | "finished";
 
+export interface HeldFinding {
+  severity: string;
+  path: string;
+  description: string;
+}
+
+/** What saw says about an update it held: what it found, the command, what to do, and whether `saw govern let-in` reviews it. */
+export interface HeldDetails {
+  command: string | undefined;
+  findings: HeldFinding[];
+  nextSteps: string[];
+  letIn: boolean;
+}
+
 /** What saw records for a folder while it checks an update, and how that check ended. */
 export interface GovernNotice {
   repo: string;
@@ -170,10 +184,42 @@ export interface GovernNotice {
   verdict?: FolderVerdict;
   reasons: string[];
   at: number;
+  details?: HeldDetails;
 }
 
 const PHASES = new Set<GovernPhase>(["checking", "held", "applied", "finished"]);
 const VERDICTS = new Set<FolderVerdict>(["clean", "residue", "suspicious", "incomplete", "infected"]);
+
+export function strings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+export function readFindings(value: unknown): HeldFinding[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item: unknown) => {
+    if (!item || typeof item !== "object") {
+      return [];
+    }
+    const { severity, path, description } = item as Record<string, unknown>;
+    return typeof severity === "string" && typeof path === "string" && typeof description === "string" ? [{ severity, path, description }] : [];
+  });
+}
+
+function readHeldDetails(record: Record<string, unknown>): HeldDetails | undefined {
+  if (!("findings" in record) && !("next_steps" in record) && !("command" in record) && !("let_in" in record)) {
+    return undefined;
+  }
+  const command = record["command"];
+  const argv = command && typeof command === "object" ? strings((command as Record<string, unknown>)["argv"]) : [];
+  return {
+    command: argv.length ? argv.join(" ") : undefined,
+    findings: readFindings(record["findings"]),
+    nextSteps: strings(record["next_steps"]),
+    letIn: record["let_in"] === true,
+  };
+}
 
 /** Read one of saw's check records. Undefined when the file is not one this extension shows. */
 export function readNotice(text: string): GovernNotice | undefined {
@@ -195,13 +241,14 @@ export function readNotice(text: string): GovernNotice | undefined {
   }
   const verdict = record["verdict"];
   const step = record["step"];
-  const reasons = Array.isArray(record["reasons"]) ? record["reasons"].filter((reason): reason is string => typeof reason === "string") : [];
+  const details = phase === "held" ? readHeldDetails(record) : undefined;
   return {
     repo,
     phase: phase as GovernPhase,
     ...(typeof step === "string" && step !== "" ? { step } : {}),
     ...(typeof verdict === "string" && VERDICTS.has(verdict as FolderVerdict) ? { verdict: verdict as FolderVerdict } : {}),
-    reasons,
+    reasons: strings(record["reasons"]),
     at,
+    ...(details ? { details } : {}),
   };
 }

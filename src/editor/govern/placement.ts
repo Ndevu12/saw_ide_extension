@@ -1,10 +1,11 @@
-import { mkdirSync, readdirSync, renameSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, readdirSync, renameSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import * as nodePath from "node:path";
 
 import * as vscode from "vscode";
 
-import { findStandin, realOnPath, STANDIN_TOOLS, systemGovernBin, type ProgramFiles } from "../../core/govern/places";
+import { realOnPath, STANDIN_TOOLS, systemGovernBin, type ProgramFiles } from "../../core/govern/places";
+import { QUESTIONS_ENV } from "../../core/govern/questions";
 import { defaultIsExecutableFile, realPath } from "../../core/install/locate";
 import type { Installer } from "../install/installer";
 
@@ -20,23 +21,31 @@ const TURNED_ON = "SAW_GOVERN_SYSTEM";
 const SAW = "SAW_BIN";
 const PREVIOUS_GIT_PATH = "govern.previousGitPath";
 const RELOAD_ASKED = "govern.reloadAsked";
+const KEPT = new Set(["bin", "questions"]);
 
-const disk: ProgramFiles = {
-  isExecutableFile: defaultIsExecutableFile,
-  realpath: realPath,
-  list: (dir) => {
-    try {
-      return readdirSync(dir);
-    } catch {
-      return [];
-    }
-  },
-};
+const disk: ProgramFiles = { isExecutableFile: defaultIsExecutableFile, realpath: realPath };
+
+function list(dir: string): string[] {
+  try {
+    return readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+
+function changedAt(file: string): number {
+  try {
+    return statSync(file).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
 
 /** Puts saw's own git and gh check in front of git and gh, for this editor's terminals and Git view. */
 export class Placement {
   private readonly root: string;
   private readonly bin: string;
+  private readonly gitLink: string;
   private readonly hostBefore: Record<string, string | undefined>;
   private state: "placed" | "removed" | undefined;
   private signature = "";
@@ -50,14 +59,18 @@ export class Placement {
   ) {
     this.root = nodePath.join(context.globalStorageUri.fsPath, "govern");
     this.bin = nodePath.join(this.root, "bin");
-    this.hostBefore = { [TURNED_ON]: process.env[TURNED_ON], [SAW]: process.env[SAW] };
+    this.gitLink = nodePath.join(this.bin, "git");
+    this.hostBefore = { [TURNED_ON]: process.env[TURNED_ON], [SAW]: process.env[SAW], [QUESTIONS_ENV]: process.env[QUESTIONS_ENV] };
   }
 
-  /** Whether saw checks git commands in this editor's terminals. The Git view follows with `coverGitView`. */
-  async place(saw: string): Promise<boolean> {
+  /**
+   * Whether saw checks git commands in this editor's terminals. `questions` is the folder where saw
+   * asks this editor about git it runs with no terminal. The Git view follows with `coverGitView`.
+   */
+  async place(saw: string, gitStandin: string | undefined, questions: string | undefined): Promise<boolean> {
     const systemBin = this.systemPlacement();
-    const standin = process.platform === "win32" ? undefined : findStandin(saw, disk);
-    const signature = JSON.stringify({ saw, standin, systemBin, path: process.env["PATH"] });
+    const standin = process.platform === "win32" ? undefined : gitStandin;
+    const signature = JSON.stringify({ saw, standin, built: standin ? changedAt(standin) : 0, questions, systemBin, path: process.env["PATH"] });
     if (this.state === "placed" && signature === this.signature) {
       return this.covered;
     }
@@ -71,13 +84,15 @@ export class Placement {
     if (!git) {
       this.log.warn(standin
         ? "saw cannot check incoming git updates, because git was not found."
-        : `saw cannot check incoming git updates before they change a folder: ${saw} does not include that check on this system.`);
+        : process.platform === "win32"
+          ? "saw does not yet check incoming git updates before they change a folder on Windows."
+          : `saw cannot check incoming git updates before they change a folder: ${saw} does not include that check.`);
       this.restoreHost();
       await this.restoreGit();
       rmSync(this.bin, { recursive: true, force: true });
       return this.covered;
     }
-    this.coverHost(saw);
+    this.coverHost(saw, questions);
     this.gitViewPending = git;
     this.log.info("Incoming git updates in open folders wait for saw, in terminals and the Git view.");
     return this.covered;
@@ -107,6 +122,11 @@ export class Placement {
 
   private link(standin: string): string | undefined {
     mkdirSync(this.bin, { recursive: true });
+    for (const name of list(this.bin)) {
+      if (!(STANDIN_TOOLS as readonly string[]).includes(name)) {
+        rmSync(nodePath.join(this.bin, name), { recursive: true, force: true });
+      }
+    }
     for (const tool of STANDIN_TOOLS) {
       const link = nodePath.join(this.bin, tool);
       if (!realOnPath(tool, process.env["PATH"], standin, disk)) {
@@ -118,13 +138,12 @@ export class Placement {
       symlinkSync(standin, temporary);
       renameSync(temporary, link);
     }
-    const git = nodePath.join(this.bin, "git");
-    return disk.isExecutableFile(git) ? git : undefined;
+    return disk.isExecutableFile(this.gitLink) ? this.gitLink : undefined;
   }
 
   private clearOldFiles(): void {
-    for (const name of disk.list(this.root)) {
-      if (name !== "bin") {
+    for (const name of list(this.root)) {
+      if (!KEPT.has(name)) {
         rmSync(nodePath.join(this.root, name), { recursive: true, force: true });
       }
     }
@@ -155,9 +174,13 @@ export class Placement {
     }
   }
 
-  private coverHost(saw: string): void {
+  private coverHost(saw: string, questions: string | undefined): void {
+    this.restoreHost();
     process.env[TURNED_ON] = "1";
     process.env[SAW] = saw;
+    if (questions) {
+      process.env[QUESTIONS_ENV] = questions;
+    }
   }
 
   private restoreHost(): void {
@@ -171,7 +194,7 @@ export class Placement {
   }
 
   private isOurs(file: string): boolean {
-    return nodePath.resolve(file) === nodePath.join(this.bin, "git");
+    return nodePath.resolve(file) === this.gitLink;
   }
 
   private async pointGit(git: string): Promise<void> {

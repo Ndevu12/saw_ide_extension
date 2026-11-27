@@ -5,7 +5,7 @@
 ### Changed
 
 - The extension installs saw 0.19.0.
-- The editor's terminals and Git view now use saw's own check of incoming git and gh updates ([#106](https://github.com/Ndevu12/saw_ide_extension/issues/106)).
+- The editor's terminals and Git view now use saw's own check of incoming git and gh updates, and git in an open folder runs that folder's hooks and other programs only once you keep them with `saw govern trust`. Windows terminals are not checked for now ([#106](https://github.com/Ndevu12/saw_ide_extension/issues/106)).
 
 ## [0.9.0] - 2026-11-27
 

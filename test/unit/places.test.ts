@@ -1,23 +1,13 @@
-import { chmodSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { findStandin, governStatusDir, realOnPath, systemGovernBin, type ProgramFiles } from "../../src/core/govern/places";
+import { governStatusDir, realOnPath, systemGovernBin, type ProgramFiles } from "../../src/core/govern/places";
 import { defaultIsExecutableFile, realPath } from "../../src/core/install/locate";
 import { tempDir } from "./helpers";
 
-const disk: ProgramFiles = {
-  isExecutableFile: defaultIsExecutableFile,
-  realpath: realPath,
-  list: (dir) => {
-    try {
-      return readdirSync(dir);
-    } catch {
-      return [];
-    }
-  },
-};
+const disk: ProgramFiles = { isExecutableFile: defaultIsExecutableFile, realpath: realPath };
 
 function program(file: string): string {
   mkdirSync(path.dirname(file), { recursive: true });
@@ -26,28 +16,8 @@ function program(file: string): string {
   return file;
 }
 
-describe.runIf(process.platform !== "win32")("where saw's git and gh check is", () => {
-  it("finds it in saw's package, through the link pipx puts on PATH", () => {
-    const root = tempDir();
-    const venv = path.join(root, "venvs", "stayawakebot");
-    const saw = program(path.join(venv, "bin", "saw"));
-    const standin = program(path.join(venv, "lib", "python3.12", "site-packages", "stayawake", "bots", "mcp", "bin", "saw-git-standin"));
-    const onPath = path.join(root, "bin");
-    mkdirSync(onPath);
-    symlinkSync(saw, path.join(onPath, "saw"));
-    expect(findStandin(path.join(onPath, "saw"), disk)).toBe(standin);
-  });
-
-  it("finds it beside saw, and nowhere else", () => {
-    const root = tempDir();
-    const saw = program(path.join(root, "bin", "saw"));
-    expect(findStandin(saw, disk)).toBeUndefined();
-    const standin = program(path.join(root, "bin", "saw-git-standin"));
-    expect(findStandin(saw, disk)).toBe(standin);
-    expect(findStandin("", disk)).toBeUndefined();
-  });
-
-  it("counts a real program on PATH, not one that leads to the check itself", () => {
+describe.runIf(process.platform !== "win32")("git and gh on PATH, on disk", () => {
+  it("counts a real program on PATH, not one that leads to saw's check itself", () => {
     const root = tempDir();
     const standin = program(path.join(root, "saw", "saw-git-standin"));
     const placed = path.join(root, "placed");

@@ -1,5 +1,6 @@
 import { DOCS } from "../docs";
 import type { AmendOutcome, AuditDetails, AuditVerdict, FixDetails, FixOutcome, HookStatus } from "../fix/actions";
+import type { HeldDetails } from "../govern/contract";
 import type { Finding, TargetResult } from "../scan/contract";
 import { block, inline, prose, webLink } from "./markdown";
 import type { ScanOutcome } from "../scan/scan";
@@ -239,7 +240,7 @@ export interface HeldReportInput {
   folderName: string;
   folderPath: string;
   /** The update held now, or undefined when none is. */
-  held: { verdict: FolderVerdict; reasons: string[]; at: number } | undefined;
+  held: { verdict: FolderVerdict; reasons: string[]; at: number; details?: HeldDetails } | undefined;
 }
 
 export function heldReport(input: HeldReportInput, copy: Copy): string {
@@ -249,12 +250,28 @@ export function heldReport(input: HeldReportInput, copy: Copy): string {
     out.push("No update to this folder is held now.", "", `Folder: ${inline(input.folderPath, 400)}`);
     return out.join("\n");
   }
+  const details = held.details;
   out.push(`## ${VERDICT_TITLE[held.verdict]}`, "", `saw checked an update before it landed and held it. The folder was not changed. ${HELD_MEANING[held.verdict] ?? ""}`.trim(), "");
-  out.push(`- Folder: ${inline(input.folderPath, 400)}`, `- Held at ${when(held.at)}`, "");
-  out.push("## What to do", "",
-    "- To review it and bring it in anyway, choose **Let In** on the notification. saw checks it again in a terminal, says what it found, and asks you. saw scans the folder straight after.", "");
+  out.push(`- Folder: ${inline(input.folderPath, 400)}`, `- Held at ${when(held.at)}`);
+  if (details?.command) {
+    out.push(`- Command: ${inline(details.command, 400)}`);
+  }
+  out.push("");
+  const letIn = details?.letIn
+    ? ["To review it and bring it in anyway, choose **Let In** on the notification. saw checks it again in a terminal and asks you. saw scans the folder straight after."]
+    : [];
+  const steps = [...(details?.nextSteps ?? []).map((step) => prose(step, 600)), ...letIn];
+  if (steps.length) {
+    out.push("## What to do", "", ...steps.map((step) => `- ${step}`), "");
+  }
   if (held.reasons.length) {
     out.push("## Why it was held", "", ...held.reasons.map((reason) => `- ${prose(reason, 600)}`), "");
+  }
+  if (details?.findings.length) {
+    out.push("## What saw found in the update", "", ...listed(
+      details.findings.map((finding) => `${prose(finding.severity, 20)}: ${prose(finding.description, 300)} (${inline(finding.path, 300)})`),
+      (line) => line,
+    ), "");
   }
   out.push(footer(copy, "saw's check of the update", { title: "what these results mean", url: DOCS.verdicts }));
   return out.join("\n");

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import type { AuditDetails, AuditVerdict, HookStatus } from "../core/fix/actions";
+import type { HeldDetails } from "../core/govern/contract";
 import type { ScanOutcome } from "../core/scan/scan";
 import { strongest, type FolderVerdict } from "../core/scan/verdict";
 import type { Engine } from "./install/engine";
@@ -12,6 +13,7 @@ export interface HeldUpdate {
   reasons: string[];
   released: boolean;
   at: number;
+  details?: HeldDetails;
 }
 
 export type Settled = Exclude<ScanOutcome, { kind: "cancelled" }>;

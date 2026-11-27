@@ -120,19 +120,23 @@ click.
 
 When the installed saw can check an incoming update, a pull, fetch, checkout, merge, rebase, or a
 GitHub command that lands files waits before it changes an open folder. The editor puts saw's check
-in front of git and gh in its integrated terminal and its Git view, except on Windows, where saw
-does not offer it. Clean and residue are applied.
+in front of git and gh in its integrated terminal and its Git view, except on Windows. Clean and
+residue are applied. Git in an open folder does not run the programs the folder's own git settings
+start, such as its hooks, until you keep them with `saw govern trust`.
 While the check runs, the status bar, the saw view, and Chat say saw is checking the update, and
 the step saw names when it names one. The folder is unchanged until the check finishes. Suspicious,
 infected, and a check that could not finish leave the folder as it was, and the saw view says the
-update was held. The terminal says what to do. You can still let it in: answer yes in the
-terminal, or choose **Let In** on the notification, which opens a terminal where saw checks it
-again and asks you. For an infected update you type the folder's name. `SAW_GOVERN_DECISION`
-never lets a held update in. Once it is in, the folder is scanned and Chat says you let it in.
-When saw cannot check an update at all, it tells you why, and you decide in the terminal: run the
-command as you typed it, or leave the folder as it is. If you run it, the folder is scanned straight
-after. With no one to ask, as in the Git view, the folder is left as it is. To decide ahead, set
-`SAW_GOVERN_DECISION` to `run-as-typed` or `leave-unchanged`.
+update was held. **Held update details** shows what saw found, the command, and what to do. You
+can still let it in: answer yes in the terminal, or choose **Let In Anyway** when the Git view's
+dialog asks. When the update was held where no one could be asked, **Let In** on the notification
+opens a terminal where saw checks it again and asks you. For an infected update you type the
+folder's name. `SAW_GOVERN_DECISION` never lets a held update in. Once it is in, the folder is
+scanned and Chat says you let it in.
+When saw cannot check an update at all, it tells you why, and you decide: run the command as you
+typed it, or leave the folder as it is. The terminal asks you. The Git view asks in a dialog. If you
+run it, the folder is scanned straight after. If no one answers within two minutes, or no one can
+be asked, the folder is left as it is. To decide ahead, set `SAW_GOVERN_DECISION` to
+`run-as-typed` or `leave-unchanged`.
 The open folder is scanned again after the check finishes. A git command this
 window did not run can still change the folder first. When saw can say whether it let that tree
 in, Chat says the change was not held only when saw did not. A check that runs outside this window

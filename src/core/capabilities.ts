@@ -15,6 +15,7 @@ export const FEATURES = {
   fixAsk: "fix.ask.json",
   /** `saw govern`, which checks an incoming update before the open folder changes. */
   govern: "govern.json",
+  governQuestions: "govern.questions",
   mcp: "mcp",
 } as const;
 export type Feature = (typeof FEATURES)[keyof typeof FEATURES];
@@ -30,6 +31,8 @@ export interface Capabilities {
   features: ReadonlySet<string>;
   /** The `schema_version` saw says it writes for each document, when it says. */
   schemas: Readonly<Record<string, number>>;
+  /** Where saw's git and gh stand-in is installed, when this saw has one. */
+  gitStandin?: string;
 }
 
 export const NO_CAPABILITIES: Capabilities = { features: new Set(), schemas: {} };
@@ -46,7 +49,7 @@ export function readCapabilities(stdout: string, exitCode: number | null): Capab
   } catch {
     return NO_CAPABILITIES;
   }
-  const record = (parsed ?? {}) as { features?: unknown; schema_versions?: unknown };
+  const record = (parsed ?? {}) as { features?: unknown; schema_versions?: unknown; programs?: { git_standin?: unknown } | null };
   const features = Array.isArray(record.features) ? record.features.filter((f): f is string => typeof f === "string") : [];
   const schemas: Record<string, number> = {};
   if (record.schema_versions && typeof record.schema_versions === "object") {
@@ -56,7 +59,8 @@ export function readCapabilities(stdout: string, exitCode: number | null): Capab
       }
     }
   }
-  return { features: new Set(features), schemas };
+  const standin = record.programs?.git_standin;
+  return { features: new Set(features), schemas, ...(typeof standin === "string" && standin !== "" ? { gitStandin: standin } : {}) };
 }
 
 export async function probeCapabilities(binary: string, timeoutMs = 10_000): Promise<Capabilities> {

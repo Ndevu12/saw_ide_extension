@@ -4,7 +4,7 @@ import * as nodePath from "node:path";
 
 import * as vscode from "vscode";
 
-import { FEATURES, supports } from "../../core/capabilities";
+import { FEATURES, supports, type Capabilities } from "../../core/capabilities";
 import { mayRelease, offersGovernRestore, offersGovernVerdict, openAdmission, readGoverned, readNotice, readRestore, restoreArgs, shouldRestore, unheldAfter, verdictArgs, type Governed, type GovernedReading, type GovernNotice } from "../../core/govern/contract";
 import { governStatusDir } from "../../core/govern/places";
 import { behindVersion } from "../../core/install/upgrade";
@@ -16,6 +16,7 @@ import type { Settings } from "../settings";
 import type { Alerts } from "../view/alerts";
 import { TerminalLetIn, type LetInChannel } from "./letIn";
 import { Placement } from "./placement";
+import { GitViewQuestions } from "./questions";
 
 type UnheldFrom = "command" | "open" | "let-in";
 
@@ -25,7 +26,10 @@ type UnheldFrom = "command" | "open" | "let-in";
  */
 export class Governor implements vscode.Disposable {
   private readonly placement: Placement;
+  private readonly questions: GitViewQuestions;
   private readonly seen = new Map<string, string>();
+  /** The held update already shown for a folder, so its details arriving does not show it again. */
+  private readonly heldShown = new Map<string, number>();
   /** When saw last said it is checking a folder, until it says how that check ended. */
   private readonly checkingSince = new Map<string, number>();
   private readonly gitMarks = new Map<string, string>();
@@ -56,6 +60,11 @@ export class Governor implements vscode.Disposable {
     private readonly letInChannel: LetInChannel = new TerminalLetIn(),
   ) {
     this.placement = new Placement(context, installer, log);
+    this.questions = new GitViewQuestions(
+      nodePath.join(context.globalStorageUri.fsPath, "govern", "questions"),
+      (folder) => model.get(folder).held?.verdict,
+      log,
+    );
     context.subscriptions.push(
       model.onDidChange(() => this.refresh()),
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
@@ -175,7 +184,7 @@ export class Governor implements vscode.Disposable {
       return;
     }
     this.starting = true;
-    void this.enable(ready.binary).catch((error: unknown) => {
+    void this.enable(ready.binary, ready.capabilities).catch((error: unknown) => {
       this.log.error(`saw could not start checking git commands: ${String(error)}`);
     }).finally(() => {
       this.starting = false;
@@ -186,7 +195,7 @@ export class Governor implements vscode.Disposable {
     });
   }
 
-  private async enable(saw: string): Promise<void> {
+  private async enable(saw: string, capabilities: Capabilities): Promise<void> {
     const first = !this.active || saw !== this.sawBinary;
     this.sawBinary = saw;
     this.statusDir = governStatusDir(process.env["XDG_STATE_HOME"], homedir());
@@ -195,7 +204,8 @@ export class Governor implements vscode.Disposable {
       this.verdictReady = offersGovernVerdict(help);
       this.restoreReady = offersGovernRestore(help);
     }
-    this.covered = await this.placement.place(saw);
+    const questions = supports(capabilities, FEATURES.governQuestions) && this.questions.start() ? this.questions.dir : undefined;
+    this.covered = await this.placement.place(saw, capabilities.gitStandin, questions);
     this.active = true;
     this.watchStatus();
     await this.askOpenFolders();
@@ -361,7 +371,7 @@ export class Governor implements vscode.Disposable {
   private applyNotice(notice: GovernNotice): void {
     const repo = nodePath.resolve(notice.repo);
     const folder = (vscode.workspace.workspaceFolders ?? []).find((item) => nodePath.resolve(item.uri.fsPath) === repo);
-    const mark = `${notice.at}:${notice.phase}:${notice.step ?? ""}`;
+    const mark = `${notice.at}:${notice.phase}:${notice.step ?? ""}:${notice.details ? "details" : ""}`;
     if (!folder || this.seen.get(repo) === mark) {
       return;
     }
@@ -385,8 +395,12 @@ export class Governor implements vscode.Disposable {
       }
     } else if (notice.phase === "held") {
       const verdict = notice.verdict ?? "incomplete";
-      this.model.setHeld(folder, { verdict, reasons: notice.reasons, released: false, at: notice.at });
-      this.alerts.held(folder, verdict, () => this.letIn(folder));
+      this.model.setHeld(folder, { verdict, reasons: notice.reasons, released: false, at: notice.at, ...(notice.details ? { details: notice.details } : {}) });
+      if (this.heldShown.get(repo) === notice.at) {
+        return;
+      }
+      this.heldShown.set(repo, notice.at);
+      this.alerts.held(folder, verdict, notice.details?.letIn ? () => this.letIn(folder) : undefined);
     } else if (notice.reasons.length) {
       this.log.info(`${folder.name}: ${notice.reasons.join(" ")}`);
     }
@@ -408,5 +422,6 @@ export class Governor implements vscode.Disposable {
 
   dispose(): void {
     this.statusWatcher?.close();
+    this.questions.dispose();
   }
 }
