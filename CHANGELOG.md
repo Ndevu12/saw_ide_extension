@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The extension installs saw 0.19.0.
+
 ## [0.9.0] - 2026-11-27
 
 ### Fixed

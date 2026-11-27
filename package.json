@@ -61,7 +61,7 @@
   ],
   "main": "./dist/extension.js",
   "saw": {
-    "saw": "0.18.0",
+    "saw": "0.19.0",
     "pipx": "1.18.4",
     "signers": [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFj6GX6lYd5XbveJQHEpMfbI7IYflSS5aFakvoWLtBeU"
