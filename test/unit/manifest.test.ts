@@ -33,6 +33,11 @@ describe("saw's platforms manifest", () => {
     expect(readManifest(text.replace('"contract": 1', '"contract": 2'), version)).toContain("contract 2");
     expect(readManifest(text, "0.17.9")).toContain("not for this release");
     expect(readManifest("null", version)).toContain("cannot be read");
+    const entry = (over: Record<string, unknown>) => JSON.stringify({ contract: 1, version, security: false, requirements_lock: "l.lock", wheels: [{ os: "linux", arch: "x86_64", libc: "glibc", minimum: "2.28", file: "a.whl", sha256: "a".repeat(64), ...over }] });
+    expect(readManifest(entry({ minimum: 2.28 }), version)).toContain("package entry");
+    expect(readManifest(entry({ minimum: "2.28.x" }), version)).toContain("package entry");
+    expect(readManifest(entry({ libc: undefined }), version)).toContain("package entry");
+    expect(readManifest(entry({ libc: 1 }), version)).toContain("package entry");
   });
 
   it("chooses the wheel this machine can run, and says why when there is none", () => {

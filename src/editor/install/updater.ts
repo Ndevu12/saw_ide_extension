@@ -112,7 +112,9 @@ export class Updater implements vscode.Disposable {
     let choice = chooseUpdate(release, context);
     if (choice.kind === "waiting" && Number.isFinite(choice.dueAt) && mode === "auto") {
       const verified = await verifyRelease(release, this.downloadDeps());
-      if (verified.kind === "verified" && verified.manifest.security) {
+      if (verified.kind === "failed") {
+        this.log.warn(`saw ${release.version} could not be checked: ${verified.detail}`);
+      } else if (verified.manifest.security) {
         choice = chooseUpdate(release, { ...context, security: true });
       }
     }

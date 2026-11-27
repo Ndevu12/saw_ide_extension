@@ -53,15 +53,17 @@ export function readManifest(text: string, version: string): ReleaseManifest | s
   if (parsed["version"] !== version || typeof security !== "boolean" || typeof lock !== "string" || !FILE.test(lock) || !Array.isArray(wheels)) {
     return "its platforms manifest is not for this release.";
   }
-  const read = wheels.flatMap((entry: unknown): ReleaseWheel[] => {
+  const read: ReleaseWheel[] = [];
+  for (const entry of wheels as unknown[]) {
     const w = entry as Record<string, unknown> | null;
-    if (!w || typeof w.os !== "string" || typeof w.arch !== "string" || typeof w.file !== "string" || !FILE.test(w.file) || typeof w.sha256 !== "string" || !HASH.test(w.sha256)) {
-      return [];
+    const valid = w && typeof w.os === "string" && typeof w.arch === "string" && typeof w.file === "string" && FILE.test(w.file) && typeof w.sha256 === "string" && HASH.test(w.sha256)
+      && (w.minimum === undefined || (typeof w.minimum === "string" && VERSION.test(w.minimum)))
+      && (w.libc === undefined ? w.os !== "linux" : typeof w.libc === "string");
+    if (!valid) {
+      return "its platforms manifest has a package entry that cannot be read.";
     }
-    const minimum = typeof w.minimum === "string" && VERSION.test(w.minimum) ? { minimum: w.minimum } : {};
-    const libc = typeof w.libc === "string" ? { libc: w.libc } : {};
-    return [{ os: w.os, arch: w.arch, file: w.file, sha256: w.sha256, ...minimum, ...libc }];
-  });
+    read.push({ os: w.os as string, arch: w.arch as string, file: w.file as string, sha256: w.sha256 as string, ...(typeof w.minimum === "string" ? { minimum: w.minimum } : {}), ...(typeof w.libc === "string" ? { libc: w.libc } : {}) });
+  }
   return { contract, security, requirementsLock: lock, wheels: read };
 }
 
@@ -110,7 +112,12 @@ function macosVersion(darwinRelease: string): string | undefined {
 export function thisMachine(): Machine {
   const osName = { linux: "linux", darwin: "macos", win32: "windows" }[process.platform as "linux" | "darwin" | "win32"] ?? process.platform;
   const arch = { x64: "x86_64", arm64: "arm64" }[process.arch as "x64" | "arm64"] ?? process.arch;
-  const header = (process.report?.getReport() as { header?: { glibcVersionRuntime?: unknown } } | undefined)?.header;
+  let header: { glibcVersionRuntime?: unknown } | undefined;
+  try {
+    header = (process.report?.getReport() as { header?: { glibcVersionRuntime?: unknown } } | undefined)?.header;
+  } catch {
+    header = undefined;
+  }
   const glibc = typeof header?.glibcVersionRuntime === "string" ? { glibc: header.glibcVersionRuntime } : {};
   const macos = osName === "macos" ? macosVersion(os.release()) : undefined;
   return { os: osName, arch, ...glibc, ...(macos ? { macos } : {}) };
