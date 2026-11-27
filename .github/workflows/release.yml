@@ -79,15 +79,10 @@ jobs:
     needs: package
     runs-on: ubuntu-latest
     environment: marketplace
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - name: VSCE_PAT is set
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: |
-          if [ -z "$VSCE_PAT" ]; then
-            echo "::error::VSCE_PAT is not set on the marketplace environment, so this build was not published to the Visual Studio Marketplace."
-            exit 1
-          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -101,9 +96,7 @@ jobs:
         with:
           name: vsix
       - name: Publish
-        run: pnpm exec vsce publish --packagePath saw.vsix --skip-duplicate
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: pnpm exec vsce publish --packagePath saw.vsix --skip-duplicate --oidc
 
   github-release:
     name: Create GitHub Release
