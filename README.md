@@ -120,9 +120,9 @@ click.
 
 When the installed saw can check an incoming update, a pull, fetch, checkout, merge, rebase, or a
 GitHub command that lands files waits before it changes an open folder. The editor puts saw's check
-in front of git and gh in its integrated terminal and its Git view, except on Windows. Clean and
-residue are applied. Git in an open folder does not run the programs the folder's own git settings
-start, such as its hooks, until you keep them with `saw govern trust`.
+in front of git and gh in its integrated terminal and its Git view. Clean and residue are applied.
+Git in an open folder does not run the programs the folder's own git settings start, such as its
+hooks, until you keep them with `saw govern trust`.
 While the check runs, the status bar, the saw view, and Chat say saw is checking the update, and
 the step saw names when it names one. The folder is unchanged until the check finishes. Suspicious,
 infected, and a check that could not finish leave the folder as it was, and the saw view says the
