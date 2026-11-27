@@ -6,8 +6,10 @@ import * as vscode from "vscode";
 
 import { realOnPath, STANDIN_TOOLS, systemGovernBin, type ProgramFiles } from "../../core/govern/places";
 import { QUESTIONS_ENV } from "../../core/govern/questions";
+import { copyName, realOnWindowsPath, sameWindowsPath, windowsStandin } from "../../core/govern/windowsPlaces";
 import { defaultIsExecutableFile, realPath } from "../../core/install/locate";
 import type { Installer } from "../install/installer";
+import { clearCopies, diskCopies, placeCopies, type NotRemoved } from "./standinCopies";
 
 interface GitApi {
   git?: { path: string };
@@ -59,7 +61,7 @@ export class Placement {
   ) {
     this.root = nodePath.join(context.globalStorageUri.fsPath, "govern");
     this.bin = nodePath.join(this.root, "bin");
-    this.gitLink = nodePath.join(this.bin, "git");
+    this.gitLink = nodePath.join(this.bin, process.platform === "win32" ? copyName("git") : "git");
     this.hostBefore = { [TURNED_ON]: process.env[TURNED_ON], [SAW]: process.env[SAW], [QUESTIONS_ENV]: process.env[QUESTIONS_ENV] };
   }
 
@@ -68,8 +70,9 @@ export class Placement {
    * asks this editor about git it runs with no terminal. The Git view follows with `coverGitView`.
    */
   async place(saw: string, gitStandin: string | undefined, questions: string | undefined): Promise<boolean> {
+    const onWindows = process.platform === "win32";
     const systemBin = this.systemPlacement();
-    const standin = process.platform === "win32" ? undefined : gitStandin;
+    const standin = onWindows ? windowsStandin(gitStandin, disk) : gitStandin;
     const signature = JSON.stringify({ saw, standin, built: standin ? changedAt(standin) : 0, questions, systemBin, path: process.env["PATH"] });
     if (this.state === "placed" && signature === this.signature) {
       return this.covered;
@@ -78,18 +81,20 @@ export class Placement {
     this.signature = signature;
     this.gitViewPending = undefined;
     this.clearOldFiles();
-    const git = standin ? this.link(standin) : undefined;
+    const git = standin ? (onWindows ? this.copy(standin) : this.link(standin)) : undefined;
     this.coverTerminals(saw, git ? this.bin : undefined, systemBin);
     this.covered = git !== undefined || systemBin !== undefined;
     if (!git) {
       this.log.warn(standin
         ? "saw cannot check incoming git updates, because git was not found."
-        : process.platform === "win32"
-          ? "saw does not yet check incoming git updates before they change a folder on Windows."
-          : `saw cannot check incoming git updates before they change a folder: ${saw} does not include that check.`);
+        : `saw cannot check incoming git updates before they change a folder: ${saw} does not include that check.`);
       this.restoreHost();
       await this.restoreGit();
-      rmSync(this.bin, { recursive: true, force: true });
+      if (onWindows) {
+        this.warnNotRemoved(clearCopies(this.bin, diskCopies));
+      } else {
+        rmSync(this.bin, { recursive: true, force: true });
+      }
       return this.covered;
     }
     this.coverHost(saw, questions);
@@ -139,6 +144,20 @@ export class Placement {
       renameSync(temporary, link);
     }
     return disk.isExecutableFile(this.gitLink) ? this.gitLink : undefined;
+  }
+
+  private copy(standin: string): string | undefined {
+    const own = { standin, bin: this.bin };
+    const tools = STANDIN_TOOLS.filter((tool) => realOnWindowsPath(tool, process.env["PATH"], process.env["PATHEXT"], own, disk));
+    const copied = placeCopies(standin, this.bin, tools, diskCopies);
+    this.warnNotRemoved(copied.notRemoved);
+    return copied.git;
+  }
+
+  private warnNotRemoved(notRemoved: readonly NotRemoved[]): void {
+    for (const { file, reason } of notRemoved) {
+      this.log.warn(`saw could not remove ${file} yet, and tries again later: ${reason}`);
+    }
   }
 
   private clearOldFiles(): void {
@@ -194,7 +213,7 @@ export class Placement {
   }
 
   private isOurs(file: string): boolean {
-    return nodePath.resolve(file) === this.gitLink;
+    return process.platform === "win32" ? sameWindowsPath(file, this.gitLink) : nodePath.resolve(file) === this.gitLink;
   }
 
   private async pointGit(git: string): Promise<void> {
