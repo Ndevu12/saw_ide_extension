@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-27
+
 ### Fixed
 
 - With saw 0.18.0, each update check uses its own new folder, a check that saw is still busy with is retried, one that another check replaced is checked again, and one that may have changed the folder tells you to check it first ([#101](https://github.com/Ndevu12/saw_ide_extension/issues/101)).
@@ -197,7 +199,8 @@
 - The log of a successful install no longer shows the expected "no pipx yet" check as a warning,
   or a step twice.
 
-[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/Ndevu12/saw_ide_extension/compare/v0.6.0...v0.6.1
