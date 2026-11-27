@@ -118,26 +118,25 @@ click.
 
 ### Updates wait for a check
 
-When the installed saw can check an incoming update, a pull, checkout, merge, rebase, or a
-GitHub command that lands files waits before it changes an open folder. A fetch waits too when saw
-can check one. With an older saw, a fetch runs at once, and what it brings waits when you merge or
-check it out. If that saw includes its
-git and gh stand-in, the editor places it in front of those commands. The editor's integrated
-terminal is covered, and so is the Git view, except on Windows. Clean and residue are applied.
+When the installed saw can check an incoming update, a pull, fetch, checkout, merge, rebase, or a
+GitHub command that lands files waits before it changes an open folder. The editor puts saw's check
+in front of git and gh in its integrated terminal and its Git view, except on Windows. Clean and
+residue are applied. Git in an open folder does not run the programs the folder's own git settings
+start, such as its hooks, until you keep them with `saw govern trust`.
 While the check runs, the status bar, the saw view, and Chat say saw is checking the update, and
 the step saw names when it names one. The folder is unchanged until the check finishes. Suspicious,
 infected, and a check that could not finish leave the folder as it was, and the saw view says the
-update was held. The terminal lists what saw found and what to do, and **Held update details**
-shows the update's findings in full. That scan is of the files the update brings, not of the
-folder's history. You can still let it in: answer yes in the terminal, or choose **Let In Anyway**
-when the editor asks. For an infected update you type the folder's name. `SAW_GOVERN_DECISION`
-never lets a held update in. Once it is in, the folder is scanned and Chat says you let it in.
-When saw cannot check an update at all, it tells you why, and you decide: run the
-command as you typed it, or leave the folder as it is. The terminal asks you. The Git view asks in a
-dialog. If you run it, the folder is scanned straight after, and Chat says the change was not
-checked first. With no one to ask, the folder is left as it is. To decide ahead, set
-`SAW_GOVERN_DECISION` to `run-as-typed` or `leave-unchanged`, as for saw's own stand-in. A saw
-that does not offer this decision runs the command and scans after.
+update was held. **Held update details** shows what saw found, the command, and what to do. You
+can still let it in: answer yes in the terminal, or choose **Let In Anyway** when the Git view's
+dialog asks. When the update was held where no one could be asked, **Let In** on the notification
+opens a terminal where saw checks it again and asks you. For an infected update you type the
+folder's name. `SAW_GOVERN_DECISION` never lets a held update in. Once it is in, the folder is
+scanned and Chat says you let it in.
+When saw cannot check an update at all, it tells you why, and you decide: run the command as you
+typed it, or leave the folder as it is. The terminal asks you. The Git view asks in a dialog. If you
+run it, the folder is scanned straight after. If no one answers within two minutes, or no one can
+be asked, the folder is left as it is. To decide ahead, set `SAW_GOVERN_DECISION` to
+`run-as-typed` or `leave-unchanged`.
 The open folder is scanned again after the check finishes. A git command this
 window did not run can still change the folder first. When saw can say whether it let that tree
 in, Chat says the change was not held only when saw did not. A check that runs outside this window
@@ -152,9 +151,8 @@ changed. A commit saw did not let in is put back when saw can. No answer, includ
 no commit yet, leaves the folder as it is. A folder that stays, and was not put back, is described
 as not a commit saw let in.
 
-Git in an open folder does not run that folder's fsmonitor, external diff, hooks, or a filter
-whose command is not `git-lfs`. While a folder is not in the clear, extension recommendations
-stay quiet and task detection stays off.
+While a folder is not in the clear, extension recommendations stay quiet and task detection stays
+off.
 
 When you have asked saw to cover your terminals, the editor's terminal uses that and does not
 check the same command again. The Git view still checks. A terminal saw does not cover keeps

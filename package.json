@@ -389,7 +389,7 @@
           "type": "boolean",
           "default": true,
           "scope": "machine",
-          "markdownDescription": "When the installed saw can check an incoming update, wait for that check before a pull, checkout, or similar command changes an open folder. Clean updates, and those with only traces left, are applied. Anything else leaves the folder as it was. Covers the editor's integrated terminal and, except on Windows, its Git view."
+          "markdownDescription": "When the installed saw can check an incoming update, wait for that check before a pull, checkout, or similar command changes an open folder. Clean updates, and those with only traces left, are applied. Anything else leaves the folder as it was. Covers the editor's integrated terminal and its Git view, except on Windows."
         },
         "saw.configPath": {
           "type": "string",

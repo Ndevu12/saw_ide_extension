@@ -6,9 +6,10 @@ import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { fixArgs, hookArgs, readFix, readHookStatus } from "../../src/core/fix/actions";
-import { NO_CAPABILITIES } from "../../src/core/capabilities";
+import { FEATURES, NO_CAPABILITIES, probeCapabilities, supports } from "../../src/core/capabilities";
 import { defaultIsExecutableFile, locate, probe } from "../../src/core/install/locate";
 import { runProgram } from "../../src/core/run";
+import { atLeast } from "../../src/core/version";
 import { scanFolder } from "../../src/core/scan/scan";
 import { DISGUISED_TASK, tempDir } from "./helpers";
 
@@ -81,5 +82,17 @@ describe.skipIf(!binary && !required)("the installed saw", () => {
   it("answers hook status in a shape this extension reads", async () => {
     const run = await runProgram(binary, hookArgs("status", NO_CAPABILITIES), { timeoutMs: 30_000 });
     expect(readHookStatus(`${run.stdout}\n${run.stderr}`, run.exitCode).kind).not.toBe("unknown");
+  }, 60_000);
+
+  it.runIf(process.platform !== "win32")("names its git and gh check, from 0.19.0", async (context) => {
+    const probed = await probe(binary);
+    if (probed.kind !== "ready" || !atLeast(probed.version, "0.19.0")) {
+      context.skip();
+    }
+    const capabilities = await probeCapabilities(binary);
+    expect(supports(capabilities, FEATURES.governQuestions)).toBe(true);
+    expect(capabilities.gitStandin && defaultIsExecutableFile(capabilities.gitStandin)).toBe(true);
+    const status = await runProgram(capabilities.gitStandin ?? "", ["status"], { timeoutMs: 30_000 });
+    expect(status.exitCode).toBe(0);
   }, 60_000);
 });

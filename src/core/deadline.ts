@@ -2,7 +2,7 @@
 export const DEADLINE_GRACE_MS = 15_000;
 
 /**
- * `--deadline` for a saw that takes it (`scan.deadline`, `govern.deadline`), so saw stops itself in
+ * `--deadline` for a saw that takes it (`scan.deadline`), so saw stops itself in
  * time and reports the run as unfinished, and how long to wait before stopping saw from outside.
  */
 export function withDeadline(timeoutMs: number, offered: boolean): { args: string[]; timeoutMs: number } {
