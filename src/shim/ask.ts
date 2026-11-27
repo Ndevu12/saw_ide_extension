@@ -27,6 +27,7 @@ export function terminalAnswers(): boolean {
 export async function decide(config: GovernConfig, action: Hold, typed: readonly string[], reason: string, releasedButNotApplied?: FolderVerdict): Promise<Decision> {
   const ahead = decisionFromEnv(process.env);
   if (ahead) {
+    process.stderr.write(`${undecidedReason(reason, releasedButNotApplied)}\n`);
     return ahead;
   }
   if (terminalAnswers()) {

@@ -1,10 +1,10 @@
-import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { freshHolding, insideRepository } from "../../src/shim/holding";
+import { freshHolding } from "../../src/shim/holding";
 
 describe("the holding folder for a check", () => {
   const roots: string[] = [];
@@ -29,12 +29,7 @@ describe("the holding folder for a check", () => {
     expect(readdirSync(first as string)).toEqual([]);
   });
 
-  it("is refused inside a git repository, with the reason", () => {
-    const repo = root();
-    mkdirSync(path.join(repo, ".git"));
-    const base = path.join(repo, "tmp");
-    mkdirSync(base);
-    expect(insideRepository(base)).toBe(repo);
-    expect(freshHolding(base)).toEqual({ refused: expect.stringContaining(`inside the git repository ${repo}`) as string });
+  it("is refused, with the reason, when no folder can be made there", () => {
+    expect(freshHolding(path.join(root(), "missing"))).toEqual({ refused: expect.stringContaining("could not make a holding folder") as string });
   });
 });

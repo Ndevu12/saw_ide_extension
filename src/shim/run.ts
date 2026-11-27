@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { constants } from "node:os";
 import { readdirSync, readFileSync } from "node:fs";
 
 import type { GovernConfig } from "../core/govern/contract";
@@ -38,7 +39,7 @@ export function runPlaced(config: GovernConfig, tool: Tool, args: readonly strin
       return;
     }
     if (signal) {
-      process.kill(process.pid, signal);
+      exitBySignal(signal);
       return;
     }
     onExit(code ?? 1, false);
@@ -115,9 +116,14 @@ export function runReal(program: string, args: readonly string[], env: NodeJS.Pr
   child.on("exit", (code, signal) => {
     after?.();
     if (signal) {
-      process.kill(process.pid, signal);
+      exitBySignal(signal);
       return;
     }
     process.exit(code ?? 1);
   });
+}
+
+function exitBySignal(signal: NodeJS.Signals): void {
+  process.kill(process.pid, signal);
+  setImmediate(() => process.exit(128 + (constants.signals[signal] ?? 0)));
 }

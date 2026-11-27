@@ -2,6 +2,7 @@ import { UNCHECKED_CLONE } from "./core/govern/contract";
 import { plan } from "./core/govern/plan";
 import { describeProgress, ProgressLines } from "./core/scan/progress";
 import { holdWithSaw } from "./shim/check";
+import { freshHolding } from "./shim/holding";
 import { commandArgs, flag, readConfig, withRealPrograms } from "./shim/config";
 import { notice } from "./shim/notice";
 import { aliasOf, entriesIn, guardGit, landed, runPlaced, runReal, runRealOrExit } from "./shim/run";
@@ -37,7 +38,7 @@ async function main(): Promise<void> {
     }
     : undefined;
   if (config.standin && action.kind === "passthrough") {
-    runPlaced(config, tool, args, config.holdingRoot, () => undefined, (code, spawnFailed) => {
+    runPlaced(config, tool, args, holdingFor(config.holdingRoot), () => undefined, (code, spawnFailed) => {
       if (spawnFailed) {
         runRealOrExit(config, tool, args, after);
         return;
@@ -56,7 +57,7 @@ async function main(): Promise<void> {
     });
     let stderr = "";
     notice(config, action.repo, "checking", []);
-    runPlaced(config, tool, args, action.holding, (text) => {
+    runPlaced(config, tool, args, holdingFor(action.holding), (text) => {
       stderr += text;
       steps.feed(text);
     }, (code, spawnFailed) => {
@@ -86,6 +87,11 @@ async function main(): Promise<void> {
     return;
   }
   await holdWithSaw(config, action, args);
+}
+
+function holdingFor(shared: string): string {
+  const fresh = freshHolding();
+  return typeof fresh === "string" ? fresh : shared;
 }
 
 void main();
