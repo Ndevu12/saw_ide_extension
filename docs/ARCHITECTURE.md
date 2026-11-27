@@ -10,15 +10,13 @@ it in the editor.
 src/
   extension.ts          composition root: builds the parts below and registers commands
   cursorHook.ts         Cursor's beforeShellExecution hook, bundled as dist/cursor-hook.js
-  governShim.ts         the git and gh stand-in, bundled as dist/govern-shim.js
   core/                 no `vscode` import (lint-enforced), unit-tested
     run · text · version · capabilities · docs · controls · openRun
     scan/               scan, contract, verdict, progress, schedule
     fix/                what `fix`, `audit`, `hook` and `watch status` reported; `--ask=jsonl` questions
     install/            locate saw, find Python, pipx install, the packages that fit this machine, diagnose a failure,
                         keep the installed saw when moving to the pin fails
-    govern/             which git and gh commands bring files in (aliases, --git-dir, clones), the real git and gh
-                        behind the stand-in, the stand-in's wrappers, saw govern's answers
+    govern/             saw govern's answers
     report/             Markdown reports, with scanned text kept literal
     agent/              what agents are told, `saw mcp`, the Cursor hook's answer
     feedback/           when Chat may ask for a rating, and the links that ask opens
@@ -184,11 +182,10 @@ verdict never comes from progress.
 - **A notification never holds up a scan.** Alerts are not awaited, so an unanswered notification
   cannot queue later scans behind it.
 - **An incoming update is checked before the open folder changes**, when saw lists `govern.json`.
-  When that saw includes its stand-in beside its own program, the editor places it and turns it on
+  When that saw includes its stand-in, the editor places it and turns it on
   for this window. When `saw govern install` has already put a stand-in ahead of git for terminals,
   the integrated terminal uses that one directory and does not add a second. The Git view still
-  uses this window's stand-in, and the real git it calls is not the terminal one. Otherwise the
-  editor's own stand-in asks saw. Either way the folder itself is
+  uses this window's stand-in. The folder itself is
   unchanged until the check finishes. Clean and residue are applied by saw.
   Anything else is shown as held. While the check runs, the status bar, the saw view, and Chat say
   saw is checking the update. The open folder is scanned again after that check finishes. A change
@@ -203,39 +200,12 @@ verdict never comes from progress.
   ready and before Git is pointed at it. `let-in` clears the arrival. `unknown-commit` is put back
   when `restore` is offered; without it, and for `tree-changed`, the arrival is marked. No answer
   leaves the folder alone, and the terminal stand-in's quiet case does not apply. The checking
-  line says saw is checking whether it let this folder in. A marker covers the restore, then the
+  line says saw is checking whether it let this folder in. The
   folder is scanned and the HEAD mark is seeded so that restore is not later called unheld. saw
   writes one record per open folder under `$XDG_STATE_HOME/saw/govern/status`
   (otherwise `~/.local/state/saw/govern/status`). The editor reads those with the same notice
-  reader. Two notices for one phase a few seconds apart are one check. Git the stand-in did not
+  reader. Git the stand-in did not
   run is still scanned by the scan-on-clone hooks.
-- **The stand-in never runs itself, and holds what git would change.** It runs the real git and gh
-  only by full path, outside every stand-in folder (matched on disk, so symlinks and other
-  spellings count) and never a file that carries the stand-in mark. When none is left, it runs
-  nothing. It finds the folder a command changes as git does: `--work-tree` or `GIT_WORK_TREE`,
-  otherwise the working directory, and also holds a command that changes an open folder's git
-  directory from outside. A fetch is held when saw offers `govern.decision`, the release that
-  checks a fetch from a tracking checkout. With an older saw, which fetches nothing, only a fetch
-  with `--update-head-ok` is held. An alias is checked as the command it runs. A clone cannot be held, so
-  one that leaves files in an open folder is followed by a scan and a warning. When saw's own
-  stand-in cannot start, this window's saw check holds the update. When `saw govern prepare`
-  answers with a reason and a `decision` (`govern.decision`), the operator decides: in that order,
-  `SAW_GOVERN_DECISION`, a question in the terminal, or, with no terminal, a question file under
-  the extension's `govern/asks` that this window answers with a modal. The stand-in waits two
-  minutes for the answer. No answer leaves the folder unchanged. Running it is followed by the
-  same scan and warning. A saw without `govern.decision` that answers with a reason and no scan
-  judged nothing, so the command runs as typed. A timeout, an unreadable report, saw failing to
-  start, or a reason with no decision from a saw that offers decisions is asked about the same
-  way: saw judged nothing, and holding for good would stop the operator working on their project.
-  When saw scans the update and finds it suspicious, infected, or not verified, the stand-in keeps
-  that scan, the command, and the next steps (saw's `next_steps` when it gives them) in
-  `govern/results/<folder>.held`, writes the held notice, and prints the strongest findings and
-  next steps. It then asks whether to let it in: yes for suspicious or not verified, the folder's
-  name for infected, in the terminal or, with none, through an ask with `held` set, which this
-  window answers by opening **Held update details** and a modal. `SAW_GOVERN_DECISION` never
-  answers this. A let-in update runs as typed, and its finished notice starts with the let-in
-  reason, so the folder is marked as let in rather than missed. With an editor to ask, holds no
-  longer go through saw's own stand-in, which cannot offer this.
 - **A rating is asked for in Chat, after saw has done something the person can judge.** The decision
   of when to show the card lives in `core/feedback` and is unit-tested. The editor stores a
   dismissal and a rating in global state, and opens the review, star, and issue pages. The issue

@@ -46,7 +46,7 @@ function contributedFiles(value: unknown): string[] {
 describe("the packaged extension", () => {
   it("carries every bundle and file the extension loads", async () => {
     const files = loaded();
-    expect(files).toEqual(expect.arrayContaining(["dist/extension.js", "dist/cursor-hook.js", "dist/govern-shim.js", "media/verdict-light.svg", "media/verdict-dark.svg"]));
+    expect(files).toEqual(expect.arrayContaining(["dist/extension.js", "dist/cursor-hook.js", "media/verdict-light.svg", "media/verdict-dark.svg"]));
     const dir = mkdtempSync(path.join(tmpdir(), "saw-package-"));
     try {
       copyFileSync(path.join(ROOT, "package.json"), path.join(dir, "package.json"));
