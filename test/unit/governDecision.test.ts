@@ -166,6 +166,72 @@ describe.skipIf(onWindows)("the stand-in, when saw leaves the decision to the op
     expect(stderr).toContain("letting it in as you asked");
   }, 30_000);
 
+  /** A saw that releases the update clean, records each prepare's holding folder, and answers each apply in turn. */
+  function sequenced(name: string, outcomes: string[]) {
+    const made = setup(name, { exactApply: true });
+    const dir = path.dirname(made.configPath);
+    writeFileSync(path.join(dir, "prepared.json"), JSON.stringify({ schema_version: 1, state_id: "ab12cd34ef", scan: JSON.parse(report([target()])) }));
+    outcomes.forEach((outcome, i) => {
+      const answer = outcome === "brought_in" ? { schema_version: 1, applied: true, outcome } : { schema_version: 1, applied: false, outcome, reason: `answer ${i}` };
+      writeFileSync(path.join(dir, `apply-${i}.json`), JSON.stringify(answer));
+    });
+    const holdings = path.join(dir, "holdings");
+    const count = path.join(dir, "applies");
+    writeFileSync(path.join(dir, "saw"), [
+      "#!/bin/sh",
+      `if [ "$2" = prepare ]; then while [ "$1" != "--into" ]; do shift; done; echo "$2" >> '${holdings}'; cat '${path.join(dir, "prepared.json")}'; exit 0; fi`,
+      `n=0; [ -f '${count}' ] && read n < '${count}'; echo $((n + 1)) > '${count}'`,
+      `cat '${dir}'/apply-$n.json; exit 2`,
+      "",
+    ].join("\n"), { mode: 0o755 });
+    const run = () => spawnSync(process.execPath, [shim, "--config", made.configPath, "--tool", "git", "--", "pull"], { cwd: made.repo, encoding: "utf8", timeout: 30_000, env: { ...process.env, SAW_GOVERN_DECISION: "" } });
+    const into = () => readFileSync(holdings, "utf8").trim().split("\n");
+    const applies = () => Number(readFileSync(count, "utf8").trim());
+    return { ...made, run, into, applies };
+  }
+
+  it("retries an apply while another saw run holds the folder, then brings the update in", () => {
+    const made = sequenced("busy-then-in", ["busy", "busy", "brought_in"]);
+    const run = made.run();
+    expect(run.status).toBe(0);
+    expect(made.applies()).toBe(3);
+    expect(made.into()).toHaveLength(1);
+    expect(made.notice()).toMatchObject({ phase: "applied" });
+  }, 30_000);
+
+  it("leaves the folder unchanged when saw stays busy", () => {
+    const made = sequenced("busy-for-good", ["busy", "busy", "busy"]);
+    const run = made.run();
+    expect(run.status).toBe(1);
+    expect(made.applies()).toBe(3);
+    expect(run.stderr).toContain("saw did not change the folder: answer 2.");
+  }, 30_000);
+
+  it("checks the update again in a new holding folder outside the repository when the first cannot be used", () => {
+    for (const first of ["state_changed", "holding_unusable"]) {
+      const made = sequenced(`again-${first}`, [first, "brought_in"]);
+      const run = made.run();
+      expect(run.status, first).toBe(0);
+      expect(run.stderr, first).toContain("Checking the update again.");
+      const into = made.into();
+      expect(into, first).toHaveLength(2);
+      expect(new Set(into).size, first).toBe(2);
+      for (const holding of into) {
+        expect(holding.startsWith(made.repo), first).toBe(false);
+        expect(existsSync(holding), first).toBe(false);
+      }
+    }
+  }, 30_000);
+
+  it("tells the operator to check the folder when an apply may have changed it", () => {
+    const made = sequenced("may-have-changed", ["folder_may_have_changed"]);
+    const run = made.run();
+    expect(run.status).toBe(1);
+    expect(existsSync(made.ran)).toBe(false);
+    expect(run.stderr).toContain("Check the folder before you do anything else");
+    expect(made.notice()).toMatchObject({ phase: "finished", reasons: [UNCHECKED_UPDATE, "answer 0"] });
+  }, 30_000);
+
   /** A saw that checked the update and released it clean, but could not bring it into the folder. */
   function releasedButNotApplied(name: string, extra: Record<string, unknown> = {}, outcome = "not_brought_in") {
     const made = setup(name, { exactApply: true, ...extra });
